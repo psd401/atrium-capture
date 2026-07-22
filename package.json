@@ -1,0 +1,14 @@
+{
+  "name": "atrium-capture",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "description": "Browser-first workflow capture for Atrium, with a native-ready Mac companion architecture.",
+  "scripts": {
+    "check": "pnpm --recursive --if-present check",
+    "lint": "pnpm --recursive --if-present lint",
+    "test": "pnpm --recursive --if-present test",
+    "typecheck": "pnpm --recursive --if-present typecheck"
+  }
+}
+

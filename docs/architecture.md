@@ -1,0 +1,71 @@
+# Architecture
+
+## Decision
+
+Build Atrium Capture as a greenfield, browser-first monorepo with language-neutral contracts. The Chrome extension ships first. A native Swift Mac app follows without changing the capture or publication model.
+
+## Browser runtime
+
+```text
+page events
+  -> content script (semantic observation only)
+  -> validated message
+  -> service worker (state machine + screenshot + persistence)
+  -> IndexedDB (session, images, durable publish outbox)
+  -> side panel/review editor
+  -> flattened publishable images
+  -> AtriumGateway
+  -> Atrium private draft / internal publication
+```
+
+The content script never receives OAuth tokens and cannot publish. The service worker persists before acknowledging events because Manifest V3 may suspend it between events. Screenshot requests are serialized and low-value events are merged.
+
+## Mac runtime
+
+```text
+ScreenCaptureKit + Accessibility events
+  -> native platform adapter
+  -> CaptureSession v1
+  -> Swift editor using the shared command model
+  -> flattened publishable images
+  -> native AtriumGateway + Keychain-backed OAuth
+```
+
+SwiftUI owns ordinary application UI. AppKit owns floating windows, always-on-top pins, click-through behavior, and global shortcuts. Core Graphics renders publishable images.
+
+## Cross-platform boundary
+
+The browser and Mac applications share:
+
+- JSON Schemas and generated models.
+- Normalized action semantics and migration rules.
+- Annotation/redaction command shapes.
+- Markdown generation rules.
+- Atrium OpenAPI contracts and error semantics.
+- Synthetic golden fixtures.
+
+They do not attempt to share browser Canvas, IndexedDB, Chrome APIs, AppKit, Accessibility objects, ScreenCaptureKit frames, or Keychain implementations.
+
+## Optional native messaging
+
+The Mac app may register a Chrome native messaging host after the browser product ships. The bridge is for control and DOM semantic enrichment only. Images remain on the platform that captured them and upload directly to Atrium. This avoids Chrome's native-message size ceiling and keeps a single owner for each local asset.
+
+## Atrium publication transaction
+
+The durable `PublishJob` advances through these resumable phases:
+
+1. Create a private, bodyless Atrium object with an idempotency key.
+2. Upload only publishable screenshot assets.
+3. Create the Markdown version referencing immutable Atrium asset IDs.
+4. Leave the result as a private draft by default.
+5. If the user explicitly selected internal publication, publish to the intranet destination.
+
+Every phase persists its remote IDs before continuing. A retry reuses the same idempotency keys and never creates duplicate content.
+
+## Technology choices
+
+- Browser: WXT, React, TypeScript, Manifest V3, Chrome Side Panel, IndexedDB.
+- Mac: Swift, SwiftUI, AppKit, ScreenCaptureKit, Accessibility, Core Graphics, Keychain, AuthenticationServices.
+- Workspace: pnpm monorepo for TypeScript; Xcode/Swift Package Manager for native code.
+- Testing: Vitest/unit tests, extension-loaded Playwright, JSON Schema contract fixtures, Swift XCTest, and image goldens.
+

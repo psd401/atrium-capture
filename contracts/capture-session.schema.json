@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:atrium-capture:contract:capture-session:1.0",
+  "title": "Atrium Capture session",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "sessionId",
+    "revision",
+    "state",
+    "title",
+    "recorder",
+    "policy",
+    "steps",
+    "assets",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "sessionId": { "type": "string", "format": "uuid" },
+    "revision": { "type": "integer", "minimum": 0 },
+    "state": {
+      "type": "string",
+      "enum": ["recording", "paused", "review", "publishable", "submitted", "archived"]
+    },
+    "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "recorder": { "$ref": "#/$defs/recorder" },
+    "policy": { "$ref": "#/$defs/policy" },
+    "steps": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/step" }
+    },
+    "assets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/asset" }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  },
+  "$defs": {
+    "recorder": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["surface", "appVersion"],
+      "properties": {
+        "surface": { "type": "string", "enum": ["browser", "macos", "hybrid"] },
+        "appVersion": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "browserName": { "type": "string", "maxLength": 100 },
+        "browserVersion": { "type": "string", "maxLength": 100 },
+        "osVersion": { "type": "string", "maxLength": 100 }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policyVersion", "sourceUrlRetention", "reviewStatus"],
+      "properties": {
+        "policyVersion": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "sourceUrlRetention": { "type": "string", "enum": ["none", "origin", "full"] },
+        "reviewStatus": { "type": "string", "enum": ["not_reviewed", "in_review", "approved"] },
+        "denyReason": { "type": "string", "maxLength": 500 }
+      }
+    },
+    "rect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "size": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["width", "height"],
+      "properties": {
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "height": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role": { "type": "string", "maxLength": 100 },
+        "accessibleName": { "type": "string", "maxLength": 500 },
+        "bounds": { "$ref": "#/$defs/rect" },
+        "browser": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["origin", "viewportCss", "devicePixelRatio"],
+          "properties": {
+            "origin": { "type": "string", "format": "uri", "maxLength": 2048 },
+            "path": { "type": "string", "maxLength": 2048 },
+            "pageTitle": { "type": "string", "maxLength": 500 },
+            "viewportCss": { "$ref": "#/$defs/size" },
+            "devicePixelRatio": { "type": "number", "exclusiveMinimum": 0 },
+            "selectors": {
+              "type": "array",
+              "maxItems": 5,
+              "items": { "type": "string", "maxLength": 1000 }
+            }
+          }
+        },
+        "macos": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["bundleId", "appName", "backingScaleFactor"],
+          "properties": {
+            "bundleId": { "type": "string", "maxLength": 255 },
+            "appName": { "type": "string", "maxLength": 255 },
+            "windowTitle": { "type": "string", "maxLength": 500 },
+            "accessibilityRole": { "type": "string", "maxLength": 100 },
+            "backingScaleFactor": { "type": "number", "exclusiveMinimum": 0 }
+          }
+        }
+      }
+    },
+    "instruction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generatedText", "source", "userEdited"],
+      "properties": {
+        "generatedText": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "editedText": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "source": { "type": "string", "enum": ["rules", "user", "district_ai"] },
+        "userEdited": { "type": "boolean" }
+      }
+    },
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "geometry"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "kind": { "type": "string", "enum": ["arrow", "rectangle", "text", "highlight", "blur", "mosaic", "redaction"] },
+        "geometry": { "$ref": "#/$defs/rect" },
+        "text": { "type": "string", "maxLength": 1000 },
+        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
+      }
+    },
+    "step": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stepId", "sequence", "occurredAt", "action", "instruction", "privacyReview"],
+      "properties": {
+        "stepId": { "type": "string", "format": "uuid" },
+        "sequence": { "type": "integer", "minimum": 0 },
+        "occurredAt": { "type": "string", "format": "date-time" },
+        "action": {
+          "type": "string",
+          "enum": ["click", "input", "select", "submit", "navigate", "shortcut", "drag", "scroll", "manual"]
+        },
+        "target": { "$ref": "#/$defs/target" },
+        "instruction": { "$ref": "#/$defs/instruction" },
+        "screenshotAssetId": { "type": "string", "format": "uuid" },
+        "crop": { "$ref": "#/$defs/rect" },
+        "annotations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/annotation" }
+        },
+        "privacyReview": {
+          "type": "string",
+          "enum": ["not_reviewed", "flagged", "approved"]
+        }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assetId", "sha256", "mimeType", "pixelWidth", "pixelHeight", "state", "localKey"],
+      "properties": {
+        "assetId": { "type": "string", "format": "uuid" },
+        "sha256": { "type": "string", "pattern": "^[0-9A-Fa-f]{64}$" },
+        "mimeType": { "type": "string", "enum": ["image/png", "image/jpeg", "image/webp"] },
+        "pixelWidth": { "type": "integer", "minimum": 1 },
+        "pixelHeight": { "type": "integer", "minimum": 1 },
+        "state": { "type": "string", "enum": ["raw_local", "redacted_local", "publishable_local", "uploaded", "deleted"] },
+        "localKey": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "derivedFromAssetId": { "type": "string", "format": "uuid" },
+        "annotations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/annotation" }
+        }
+      }
+    }
+  }
+}

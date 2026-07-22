@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:atrium-capture:contract:publish-job:1.0",
+  "title": "Atrium Capture publish job",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "jobId",
+    "sessionId",
+    "phase",
+    "attemptCount",
+    "createIdempotencyKey",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "jobId": { "type": "string", "format": "uuid" },
+    "sessionId": { "type": "string", "format": "uuid" },
+    "phase": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "creating_object",
+        "uploading_assets",
+        "creating_version",
+        "ready_as_draft",
+        "publishing_internal",
+        "complete",
+        "needs_attention"
+      ]
+    },
+    "attemptCount": { "type": "integer", "minimum": 0 },
+    "createIdempotencyKey": { "type": "string", "minLength": 16, "maxLength": 128 },
+    "contentObjectId": { "type": "string", "format": "uuid" },
+    "currentVersionId": { "type": "string", "format": "uuid" },
+    "collectionId": { "type": "string", "format": "uuid" },
+    "assetUploads": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["localAssetId", "idempotencyKey", "state"],
+        "properties": {
+          "localAssetId": { "type": "string", "format": "uuid" },
+          "remoteAssetId": { "type": "string", "format": "uuid" },
+          "idempotencyKey": { "type": "string", "minLength": 16, "maxLength": 128 },
+          "state": {
+            "type": "string",
+            "enum": ["pending", "uploading", "processing", "ready", "failed"]
+          }
+        }
+      }
+    },
+    "lastError": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": { "type": "string", "maxLength": 100 },
+        "message": { "type": "string", "maxLength": 1000 },
+        "retryable": { "type": "boolean" },
+        "requestId": { "type": "string", "maxLength": 200 }
+      }
+    },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "updatedAt": { "type": "string", "format": "date-time" }
+  }
+}

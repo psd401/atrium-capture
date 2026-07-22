@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:atrium-capture:contract:native-bridge:1.0",
+  "title": "Atrium Capture native bridge message",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["protocolVersion", "messageId", "type", "sentAt", "payload"],
+  "properties": {
+    "protocolVersion": { "const": 1 },
+    "messageId": { "type": "string", "format": "uuid" },
+    "correlationId": { "type": "string", "format": "uuid" },
+    "type": {
+      "type": "string",
+      "enum": [
+        "hello",
+        "hello_ack",
+        "start_session",
+        "pause_session",
+        "resume_session",
+        "stop_session",
+        "dom_step",
+        "session_state",
+        "error"
+      ]
+    },
+    "sentAt": { "type": "string", "format": "date-time" },
+    "payload": {
+      "type": "object",
+      "maxProperties": 64,
+      "description": "Semantic/control metadata only. Screenshot bytes and bearer tokens are prohibited."
+    }
+  }
+}
