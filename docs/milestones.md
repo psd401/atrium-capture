@@ -1,5 +1,7 @@
 # Milestones
 
+Verification evidence is recorded in [verification.md](verification.md). M0 is complete; later milestones remain open until their exit gates pass.
+
 ## M0 — Contracts and repository foundation
 
 - Validate `CaptureSession`, `PublishJob`, and native bridge schemas.

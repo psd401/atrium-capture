@@ -1,0 +1,12 @@
+{
+  "schemaVersion": "1.0",
+  "jobId": "50000000-0000-4000-8000-000000000001",
+  "sessionId": "10000000-0000-4000-8000-000000000001",
+  "phase": "queued",
+  "attemptCount": 0,
+  "createIdempotencyKey": "fixture-create-10000000-0000-4000-8000-000000000001",
+  "collectionId": "60000000-0000-4000-8000-000000000001",
+  "assetUploads": [],
+  "createdAt": "2026-01-15T15:05:00.000Z",
+  "updatedAt": "2026-01-15T15:05:00.000Z"
+}

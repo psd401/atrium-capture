@@ -39,4 +39,3 @@ Mac permissions are staged and explained at point of use: Screen Recording for p
 ## Network boundary
 
 Atrium is the only production data destination. No analytics, external AI provider, image host, or crash reporter may receive capture content without a separate approved privacy decision.
-

@@ -12,4 +12,3 @@ Contract versioning rules:
 - Removing, renaming, retyping, or changing semantics requires a new major schema version and a migration.
 - Persisted data is validated on read and migrated before use.
 - TypeScript and Swift must share the same fixture corpus before either platform ships.
-

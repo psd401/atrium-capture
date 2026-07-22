@@ -138,7 +138,10 @@
       "required": ["id", "kind", "geometry"],
       "properties": {
         "id": { "type": "string", "format": "uuid" },
-        "kind": { "type": "string", "enum": ["arrow", "rectangle", "text", "highlight", "blur", "mosaic", "redaction"] },
+        "kind": {
+          "type": "string",
+          "enum": ["arrow", "rectangle", "text", "highlight", "blur", "mosaic", "redaction"]
+        },
         "geometry": { "$ref": "#/$defs/rect" },
         "text": { "type": "string", "maxLength": 1000 },
         "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
@@ -154,7 +157,17 @@
         "occurredAt": { "type": "string", "format": "date-time" },
         "action": {
           "type": "string",
-          "enum": ["click", "input", "select", "submit", "navigate", "shortcut", "drag", "scroll", "manual"]
+          "enum": [
+            "click",
+            "input",
+            "select",
+            "submit",
+            "navigate",
+            "shortcut",
+            "drag",
+            "scroll",
+            "manual"
+          ]
         },
         "target": { "$ref": "#/$defs/target" },
         "instruction": { "$ref": "#/$defs/instruction" },
@@ -173,14 +186,25 @@
     "asset": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["assetId", "sha256", "mimeType", "pixelWidth", "pixelHeight", "state", "localKey"],
+      "required": [
+        "assetId",
+        "sha256",
+        "mimeType",
+        "pixelWidth",
+        "pixelHeight",
+        "state",
+        "localKey"
+      ],
       "properties": {
         "assetId": { "type": "string", "format": "uuid" },
         "sha256": { "type": "string", "pattern": "^[0-9A-Fa-f]{64}$" },
         "mimeType": { "type": "string", "enum": ["image/png", "image/jpeg", "image/webp"] },
         "pixelWidth": { "type": "integer", "minimum": 1 },
         "pixelHeight": { "type": "integer", "minimum": 1 },
-        "state": { "type": "string", "enum": ["raw_local", "redacted_local", "publishable_local", "uploaded", "deleted"] },
+        "state": {
+          "type": "string",
+          "enum": ["raw_local", "redacted_local", "publishable_local", "uploaded", "deleted"]
+        },
         "localKey": { "type": "string", "minLength": 1, "maxLength": 500 },
         "derivedFromAssetId": { "type": "string", "format": "uuid" },
         "annotations": {

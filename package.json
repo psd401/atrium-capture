@@ -2,13 +2,39 @@
   "name": "atrium-capture",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "license": "MIT",
   "description": "Browser-first workflow capture for Atrium, with a native-ready Mac companion architecture.",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@9.15.2",
   "scripts": {
-    "check": "pnpm --recursive --if-present check",
-    "lint": "pnpm --recursive --if-present lint",
-    "test": "pnpm --recursive --if-present test",
-    "typecheck": "pnpm --recursive --if-present typecheck"
+    "build": "pnpm --recursive --if-present build",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm contracts:check && pnpm test && pnpm swift:test && pnpm licenses:check",
+    "contracts:check": "pnpm contracts:generate --check && pnpm contracts:validate",
+    "contracts:generate": "node scripts/generate-contracts.mjs",
+    "contracts:validate": "node scripts/validate-contracts.mjs",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "licenses:check": "node scripts/check-licenses.mjs",
+    "lint": "eslint . --max-warnings 0",
+    "security:audit": "pnpm audit --audit-level high",
+    "swift:test": "swift test --package-path apps/macos",
+    "test": "vitest run",
+    "typecheck": "tsc -b"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/node": "26.1.1",
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "eslint": "10.7.0",
+    "globals": "17.7.0",
+    "prettier": "3.9.6",
+    "quicktype-core": "26.0.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.65.0",
+    "vitest": "4.1.10"
   }
 }
-

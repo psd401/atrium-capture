@@ -9,4 +9,3 @@ Responsibilities:
 - Side panel/full review: show recording state, edit/reorder steps, flatten redactions, and submit reviewed content.
 
 The first implementation should use synthetic fixture pages and a local fake Atrium gateway. Do not begin remote publishing until the asset and production OAuth contracts are available.
-

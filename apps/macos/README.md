@@ -4,5 +4,4 @@ Planned stack: SwiftUI shell, AppKit overlay/window management, ScreenCaptureKit
 
 The Mac phase starts from the same `CaptureSession` and `PublishJob` contracts as the browser. It uploads screenshots directly to Atrium; a Chrome native messaging bridge is optional enrichment for DOM semantics and carries no image bytes.
 
-Do not create the Xcode project until the district's minimum supported macOS version, bundle identifier, signing team, and MDM distribution path are recorded.
-
+The shared-contract Swift package targets macOS 14. The bundle identifier, OAuth callback, signing boundary, and MDM distribution path are recorded in [ADR 0001](../../docs/adr/0001-platform-identifiers-and-support.md). An Xcode application project is deferred until the native application milestone; contract decoding remains independently testable with Swift Package Manager.

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Atrium Capture synthetic fixture</title>
+    <style>
+      body {
+        max-width: 48rem;
+        margin: 4rem auto;
+        padding: 0 1.5rem;
+        color: #17223b;
+        font:
+          16px/1.5 system-ui,
+          sans-serif;
+      }
+      form {
+        display: grid;
+        gap: 1rem;
+        padding: 1.5rem;
+        border: 1px solid #b7c5d8;
+        border-radius: 0.75rem;
+      }
+      label {
+        display: grid;
+        gap: 0.35rem;
+      }
+      input,
+      select,
+      button {
+        min-height: 2.75rem;
+        padding: 0.6rem;
+        font: inherit;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Synthetic library request</h1>
+      <p>This local-only page contains invented values for extension integration tests.</p>
+      <form action="/complete.html" method="get">
+        <button id="begin-request" type="button">Begin synthetic request</button>
+        <label>
+          Synthetic request label
+          <input id="request-label" name="label" autocomplete="off" />
+        </label>
+        <label>
+          Test-only password
+          <input
+            id="fixture-password"
+            name="fixture-password"
+            type="password"
+            value="not-a-secret"
+          />
+        </label>
+        <label>
+          Synthetic destination
+          <select id="destination" name="destination">
+            <option value="north">North fixture shelf</option>
+            <option value="south">South fixture shelf</option>
+          </select>
+        </label>
+        <button id="submit-request" type="submit">Submit synthetic request</button>
+      </form>
+    </main>
+  </body>
+</html>
