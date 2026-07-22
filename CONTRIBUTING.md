@@ -11,4 +11,3 @@ Before opening a pull request:
 5. Explain any new browser permission, macOS entitlement, network destination, data-retention behavior, or Atrium scope in the pull request.
 
 Never use real district data in development or tests.
-

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+coverage/
+.wxt/
+.output/
+apps/macos/.build/
+apps/macos/Sources/AtriumCaptureContracts/Generated/
+pnpm-lock.yaml

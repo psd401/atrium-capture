@@ -10,7 +10,7 @@ Atrium Capture records a workflow, turns meaningful actions into an editable vis
 
 ## Status
 
-Planning and contract scaffold. No production application code has been added yet.
+M0 is complete: schemas generate TypeScript and Swift models, the same synthetic fixtures validate/decode on both platforms, and repository quality/security gates are active. Browser and Mac application milestones remain pre-release.
 
 ## Repository map
 
@@ -37,9 +37,8 @@ docs/                  Architecture, milestones, security, and Atrium integratio
 - Browser content scripts are untrusted. Validate every privileged message in the extension service worker.
 - The browser and Mac implementations share versioned contracts and fixtures, not platform-specific implementation code.
 
-See [docs/architecture.md](docs/architecture.md), [docs/milestones.md](docs/milestones.md), and [docs/security-and-privacy.md](docs/security-and-privacy.md).
+See [docs/architecture.md](docs/architecture.md), [docs/milestones.md](docs/milestones.md), [docs/development.md](docs/development.md), and [docs/security-and-privacy.md](docs/security-and-privacy.md).
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
-

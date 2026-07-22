@@ -1,0 +1,107 @@
+{
+  "schemaVersion": "1.0",
+  "sessionId": "10000000-0000-4000-8000-000000000001",
+  "revision": 7,
+  "state": "review",
+  "title": "Synthetic library-card workflow",
+  "recorder": {
+    "surface": "browser",
+    "appVersion": "0.1.0",
+    "browserName": "Chromium",
+    "browserVersion": "fixture"
+  },
+  "policy": {
+    "policyVersion": "fixture-v1",
+    "sourceUrlRetention": "origin",
+    "reviewStatus": "in_review"
+  },
+  "steps": [
+    {
+      "stepId": "20000000-0000-4000-8000-000000000001",
+      "sequence": 0,
+      "occurredAt": "2026-01-15T15:00:00.000Z",
+      "action": "click",
+      "target": {
+        "role": "button",
+        "accessibleName": "Begin synthetic request",
+        "bounds": { "x": 32, "y": 84, "width": 180, "height": 40 },
+        "browser": {
+          "origin": "http://127.0.0.1:4173",
+          "path": "/index.html",
+          "pageTitle": "Atrium Capture synthetic fixture",
+          "viewportCss": { "width": 1280, "height": 720 },
+          "devicePixelRatio": 2,
+          "selectors": ["#begin-request"]
+        }
+      },
+      "instruction": {
+        "generatedText": "Select Begin synthetic request.",
+        "source": "rules",
+        "userEdited": false
+      },
+      "screenshotAssetId": "30000000-0000-4000-8000-000000000001",
+      "annotations": [],
+      "privacyReview": "approved"
+    },
+    {
+      "stepId": "20000000-0000-4000-8000-000000000002",
+      "sequence": 1,
+      "occurredAt": "2026-01-15T15:00:01.000Z",
+      "action": "input",
+      "target": {
+        "role": "textbox",
+        "accessibleName": "Synthetic request label",
+        "bounds": { "x": 32, "y": 152, "width": 320, "height": 36 },
+        "browser": {
+          "origin": "http://127.0.0.1:4173",
+          "path": "/index.html",
+          "pageTitle": "Atrium Capture synthetic fixture",
+          "viewportCss": { "width": 1280, "height": 720 },
+          "devicePixelRatio": 2,
+          "selectors": ["#request-label"]
+        }
+      },
+      "instruction": {
+        "generatedText": "Enter the requested value in Synthetic request label.",
+        "source": "rules",
+        "userEdited": false
+      },
+      "privacyReview": "flagged"
+    },
+    {
+      "stepId": "20000000-0000-4000-8000-000000000003",
+      "sequence": 2,
+      "occurredAt": "2026-01-15T15:00:02.000Z",
+      "action": "navigate",
+      "target": {
+        "browser": {
+          "origin": "http://127.0.0.1:4173",
+          "path": "/complete.html",
+          "pageTitle": "Synthetic request complete",
+          "viewportCss": { "width": 1280, "height": 720 },
+          "devicePixelRatio": 2
+        }
+      },
+      "instruction": {
+        "generatedText": "Continue to Synthetic request complete.",
+        "source": "rules",
+        "userEdited": false
+      },
+      "privacyReview": "approved"
+    }
+  ],
+  "assets": [
+    {
+      "assetId": "30000000-0000-4000-8000-000000000001",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "mimeType": "image/png",
+      "pixelWidth": 2560,
+      "pixelHeight": 1440,
+      "state": "raw_local",
+      "localKey": "fixture/session-1/raw/step-1.png",
+      "annotations": []
+    }
+  ],
+  "createdAt": "2026-01-15T15:00:00.000Z",
+  "updatedAt": "2026-01-15T15:00:03.000Z"
+}

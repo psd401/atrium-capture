@@ -48,4 +48,3 @@ Build a browser-first workflow recorder that publishes reviewed visual guides in
 - Use protected `main` with short-lived feature branches and pull requests.
 - Keep commits scoped and explain privacy/security implications when applicable.
 - Do not create remote repositories, issues, releases, or deployments without explicit user approval.
-

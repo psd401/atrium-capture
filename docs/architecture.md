@@ -68,4 +68,3 @@ Every phase persists its remote IDs before continuing. A retry reuses the same i
 - Mac: Swift, SwiftUI, AppKit, ScreenCaptureKit, Accessibility, Core Graphics, Keychain, AuthenticationServices.
 - Workspace: pnpm monorepo for TypeScript; Xcode/Swift Package Manager for native code.
 - Testing: Vitest/unit tests, extension-loaded Playwright, JSON Schema contract fixtures, Swift XCTest, and image goldens.
-
