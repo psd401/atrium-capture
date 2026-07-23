@@ -54,6 +54,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
         run: |
           response="$RUNNER_TEMP/dependency-review-availability.json"
           status="$(
@@ -68,8 +69,7 @@ jobs:
 
           if [ "$status" = "200" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
-          elif [ "$status" = "403" ] && grep --fixed-strings --quiet \
-            "Dependency review is not supported on this repository" "$response"; then
+          elif [ "$status" = "403" ] && [ "$REPOSITORY_PRIVATE" = "true" ]; then
             echo "::notice::Dependency review requires GitHub Advanced Security for this private repository; pnpm audit and the license allowlist remain required."
             echo "available=false" >> "$GITHUB_OUTPUT"
           else
