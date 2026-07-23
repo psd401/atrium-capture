@@ -1,6 +1,6 @@
 # Milestones
 
-Verification evidence is recorded in [verification.md](verification.md). M0 through M4 are locally complete; later milestones remain open until their exit gates pass. Live Atrium dependencies remain capability-gated as documented below.
+Verification evidence is recorded in [verification.md](verification.md). M0 through M5 are locally complete; native milestones remain open until their exit gates pass. Live Atrium dependencies remain capability-gated as documented below.
 
 ## M0 — Contracts and repository foundation
 
@@ -58,6 +58,8 @@ Local status: engineering-approved for synthetic/unpublished evaluation. Authent
 - Store/managed-distribution packaging, release signing, telemetry-free operational health, and documentation.
 
 Exit gate: v1 release artifact passes automated and manual acceptance on district-supported Chrome/macOS combinations.
+
+Local status: the `1.0.0` unsigned artifact passes automated production-Chromium acceptance and has a district Chrome/macOS ring checklist. Signing, store upload, and managed deployment require explicit approval and remain unperformed.
 
 ## M6 — Mac recorder companion
 

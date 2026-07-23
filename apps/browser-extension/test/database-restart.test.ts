@@ -100,6 +100,23 @@ describe('IndexedDB restart recovery', () => {
       sessionCount: 0,
     });
   });
+
+  it('bounds the telemetry-free operational health ring to the latest 100 codes', async () => {
+    const current = repository();
+    for (let index = 0; index < 120; index += 1) {
+      await current.recordHealthEvent(
+        'worker_started',
+        'info',
+        new Date(Date.UTC(2026, 0, 1, 0, 0, index)),
+      );
+    }
+
+    const events = await current.listHealthEvents(100);
+    expect(events).toHaveLength(100);
+    expect(events[0]?.occurredAt).toBe('2026-01-01T00:01:59.000Z');
+    expect(events.at(-1)?.occurredAt).toBe('2026-01-01T00:00:20.000Z');
+    expect(JSON.stringify(events)).not.toMatch(/title|instruction|url|token|image/i);
+  });
 });
 
 async function openLegacyDatabase(name: string): Promise<IDBDatabase> {

@@ -29,6 +29,11 @@ describe('privacy-safe support diagnostics', () => {
         },
       },
     });
+    await repository.recordHealthEvent(
+      'screenshot_capture_failed',
+      'warning',
+      new Date('2026-07-22T19:59:00.000Z'),
+    );
     const managed = new ManagedPolicyProvider({
       async get() {
         return {};
@@ -54,6 +59,13 @@ describe('privacy-safe support diagnostics', () => {
 
     expect(snapshot.capture).toMatchObject({ state: 'recording', stepCount: 1 });
     expect(snapshot.privacy).toEqual({ captureContentIncluded: false, telemetryEnabled: false });
+    expect(snapshot.health.events).toEqual([
+      {
+        code: 'screenshot_capture_failed',
+        occurredAt: '2026-07-22T19:59:00.000Z',
+        severity: 'warning',
+      },
+    ]);
     expect(serialized).not.toContain('SYNTHETIC-PRIVATE');
     expect(serialized).not.toContain('private.example.test');
     expect(serialized).not.toContain('10000000-');

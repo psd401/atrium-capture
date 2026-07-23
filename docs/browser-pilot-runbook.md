@@ -58,6 +58,8 @@ No permission reads cookies, browsing history, page storage, network traffic, pa
 
 Promote an immutable, signed artifact through engineering, support, and pilot rings. At each ring, verify the manifest extension ID/version, SHA-256 digest, policy schema compatibility, automated gates, synthetic fixture workflow, diagnostics export, and rollback. Chrome Enterprise reports that `ExtensionSettings` updates generally apply without restart, but an ongoing recording may retain its original session policy; Atrium Capture always applies a newly stricter restriction immediately.
 
+The v1 packaging and acceptance record is [browser-v1-release.md](browser-v1-release.md).
+
 ## Manual accessibility acceptance
 
 - Navigate every control with keyboard only and confirm a visible focus indicator.

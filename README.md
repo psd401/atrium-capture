@@ -2,6 +2,8 @@
 
 Atrium Capture records a workflow, turns meaningful actions into an editable visual guide, and saves the reviewed result as an Atrium draft. The first application is a Chrome extension; the same capture contract is designed for an immediate Mac companion phase.
 
+Browser v1 source and an automated unsigned package are complete. Live Atrium publication remains visibly capability-gated until its documented production contracts are available.
+
 ## Product boundary
 
 - Browser v1: record browser workflows, review steps, permanently redact and annotate screenshots, then save a private Atrium draft or publish internally.

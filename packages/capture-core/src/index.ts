@@ -111,14 +111,14 @@ export function reduceCaptureEvent(
   }
 
   const previous = session.steps.at(-1);
-  const delta = previous ? event.occurredAt.getTime() - previous.occurredAt.getTime() : undefined;
+  const merge = previous ? mergeBehavior(previous, event) : undefined;
 
-  if (previous && delta !== undefined && delta >= 0 && sameTarget(previous.target, event.target)) {
-    if (previous.action === event.action && isDiscardableDuplicate(event.action, delta)) {
+  if (previous) {
+    if (merge === 'discard') {
       return { disposition: 'merged', session, stepId: previous.stepId };
     }
 
-    if (previous.action === Action.Input && event.action === Action.Input && delta <= 1_250) {
+    if (merge === 'update') {
       const updatedStep = {
         ...previous,
         ...makeStep(event, previous.sequence, previous.stepId),
@@ -144,6 +144,34 @@ export function reduceCaptureEvent(
     },
     stepId: step.stepId,
   };
+}
+
+export function classifyCaptureEvent(
+  session: AtriumCaptureSession,
+  event: NormalizedCaptureEvent,
+): EventDisposition {
+  if (session.state !== AtriumCaptureSessionState.Recording) {
+    return 'ignored';
+  }
+  const previous = session.steps.at(-1);
+  return previous && mergeBehavior(previous, event) ? 'merged' : 'recorded';
+}
+
+function mergeBehavior(
+  previous: StepElement,
+  event: NormalizedCaptureEvent,
+): 'discard' | 'update' | undefined {
+  const delta = event.occurredAt.getTime() - previous.occurredAt.getTime();
+  if (delta < 0 || !sameTarget(previous.target, event.target)) {
+    return undefined;
+  }
+  if (previous.action === event.action && isDiscardableDuplicate(event.action, delta)) {
+    return 'discard';
+  }
+  if (previous.action === Action.Input && event.action === Action.Input && delta <= 1_250) {
+    return 'update';
+  }
+  return undefined;
 }
 
 function isDiscardableDuplicate(action: Action, deltaMilliseconds: number): boolean {

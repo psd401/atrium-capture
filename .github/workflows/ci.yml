@@ -30,6 +30,7 @@ jobs:
       - run: pnpm build
       - run: pnpm --filter @atrium-capture/browser-extension exec playwright install --with-deps chromium
       - run: pnpm test:extension
+      - run: pnpm package:browser
       - run: pnpm licenses:check
       - run: pnpm security:audit
 
