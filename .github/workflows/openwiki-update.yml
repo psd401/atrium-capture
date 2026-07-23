@@ -22,6 +22,10 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    # A merged rolling PR changes only generated documentation. Do not turn that
+    # marker update into another rolling PR; code/config pushes still run.
+    paths-ignore:
+      - 'openwiki/**'
   schedule:
     # 08:00 UTC is midnight PST. Monday is a backstop for skipped push runs.
     - cron: '0 8 * * 1'
