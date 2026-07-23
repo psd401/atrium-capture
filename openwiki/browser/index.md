@@ -1,7 +1,7 @@
 ---
 type: Documentation Index
-title: "Browser"
-description: "Files and subdirectories in Browser."
+title: 'Browser'
+description: 'Files and subdirectories in Browser.'
 ---
 
 # Files

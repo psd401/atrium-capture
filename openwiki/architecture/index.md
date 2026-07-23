@@ -1,7 +1,7 @@
 ---
 type: Documentation Index
-title: "Architecture"
-description: "Files and subdirectories in Architecture."
+title: 'Architecture'
+description: 'Files and subdirectories in Architecture.'
 ---
 
 # Files
