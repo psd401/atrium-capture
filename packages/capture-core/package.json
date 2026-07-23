@@ -1,5 +1,5 @@
 {
-  "name": "@atrium-capture/contracts",
+  "name": "@atrium-capture/capture-core",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -9,6 +9,9 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     }
+  },
+  "dependencies": {
+    "@atrium-capture/contracts": "workspace:*"
   },
   "scripts": {
     "test": "vitest run",

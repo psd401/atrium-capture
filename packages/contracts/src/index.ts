@@ -1,1 +1,1 @@
-export type * from './generated/contracts.js';
+export * from './generated/contracts.js';

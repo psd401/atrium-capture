@@ -1,0 +1,8 @@
+{
+  "name": "fx-runner",
+  "version": "1.4.0-atrium-disabled",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": "./src/index.js"
+}

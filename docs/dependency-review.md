@@ -13,7 +13,16 @@ Review date: 2026-07-22. Registry metadata was checked before the initial instal
 | typescript-eslint                |          8.65.0 | MIT        | Current release supporting ESLint 10 and TypeScript below 6.1                            |
 | Prettier                         |           3.9.6 | MIT        | Current deterministic formatter                                                          |
 | Node type declarations / globals | 26.1.1 / 17.7.0 | MIT        | Build-time declarations only                                                             |
+| WXT / React module               | 0.20.27 / 1.2.2 | MIT        | Maintained Manifest V3 build system and official React integration                       |
+| React / React DOM                |          19.2.8 | MIT        | Side-panel UI only; no page-context or network access                                    |
+| idb                              |           8.0.3 | ISC        | Small maintained IndexedDB promise wrapper for transactional persistence                 |
+| Playwright                       |          1.61.1 | Apache-2.0 | Extension-loaded Chromium integration and service-worker restart tests                   |
+| fake-indexeddb                   |           6.2.5 | Apache-2.0 | Test-only IndexedDB implementation for deterministic recovery tests                      |
 
 `quicktype-core` is used only during generation; generated files remain MIT-licensed project output. No dependency receives runtime capture data. A dependency upgrade requires re-running `pnpm licenses:check`, `pnpm security:audit`, all contract tests, and the affected application test suite.
 
 The resolved development graph also includes `minimatch` under the permissive Blue Oak Model License 1.0.0 and `lightningcss` under MPL-2.0. Both are unmodified build-time dependencies: Blue Oak is permissive, and MPL-2.0 obligations remain file-scoped inside the dependency. Neither changes the MIT license of Atrium Capture source or generated artifacts.
+
+WXT's development-only packaging graph includes a small number of dual-license expressions. Atrium Capture selects the permissive alternative for JSZip (MIT), node-forge (BSD-3-Clause), `rc` (BSD-2-Clause/MIT/Apache-2.0), and type-fest (MIT/CC0); pako's combined MIT and Zlib terms are both permissive. `winreg@0.0.12` declares the legacy identifier `BSD` rather than a modern SPDX variant and is used only by cross-platform development tooling; that exact package/version is explicitly reviewed. The license checker allows these exact expressions so a new or changed expression still fails closed.
+
+WXT 0.20.27's Firefox runner requested vulnerable historical ranges of `adm-zip`, `shell-quote`, `tmp`, and a notification-only `uuid` dependency. Root pnpm overrides select patched `adm-zip@0.6.0`, `tmp@0.2.7`, and `uuid@11.1.1`. No patched `shell-quote` release exists, so the Chrome-only workspace replaces the unused `fx-runner` package with a dependency-free, fail-closed local module; Firefox development is deliberately unavailable. A root `esbuild@0.28.1` override also closes the development-server advisory inherited through Vite. The Chrome build and extension-loaded test are rerun against these resolutions, and none of the disabled Firefox runner code is present in the production extension bundle.

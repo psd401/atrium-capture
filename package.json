@@ -9,9 +9,18 @@
     "node": ">=24"
   },
   "packageManager": "pnpm@9.15.2",
+  "pnpm": {
+    "overrides": {
+      "adm-zip": "0.6.0",
+      "esbuild": "0.28.1",
+      "fx-runner": "link:packages/fx-runner-disabled",
+      "tmp": "0.2.7",
+      "uuid": "11.1.1"
+    }
+  },
   "scripts": {
     "build": "pnpm --recursive --if-present build",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm contracts:check && pnpm test && pnpm swift:test && pnpm licenses:check",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm contracts:check && pnpm messages:check && pnpm test && pnpm build && pnpm test:extension && pnpm swift:test && pnpm licenses:check",
     "contracts:check": "pnpm contracts:generate --check && pnpm contracts:validate",
     "contracts:generate": "node scripts/generate-contracts.mjs",
     "contracts:validate": "node scripts/validate-contracts.mjs",
@@ -19,10 +28,13 @@
     "format:check": "prettier --check .",
     "licenses:check": "node scripts/check-licenses.mjs",
     "lint": "eslint . --max-warnings 0",
+    "messages:check": "node scripts/generate-extension-message-validator.mjs --check",
+    "messages:generate": "node scripts/generate-extension-message-validator.mjs",
     "security:audit": "pnpm audit --audit-level high",
     "swift:test": "swift test --package-path apps/macos",
     "test": "vitest run",
-    "typecheck": "tsc -b"
+    "test:extension": "pnpm --filter @atrium-capture/browser-extension test:extension",
+    "typecheck": "pnpm --recursive --if-present typecheck"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

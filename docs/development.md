@@ -17,7 +17,10 @@ pnpm format:check
 pnpm lint
 pnpm typecheck
 pnpm contracts:check
+pnpm messages:check
 pnpm test
+pnpm build
+pnpm test:extension
 pnpm licenses:check
 pnpm security:audit
 swift test --package-path apps/macos
@@ -25,7 +28,13 @@ swift test --package-path apps/macos
 
 `pnpm contracts:generate` updates both generated TypeScript and Swift models. Never edit either generated file directly. Contract fixtures under `packages/test-fixtures/fixtures` are decoded by both platforms.
 
+`pnpm messages:generate` compiles the extension trust-boundary JSON Schema into a committed standalone validator. Runtime AJV compilation is intentionally forbidden because Manifest V3 disallows dynamic code generation. Install bundled Chromium once with `pnpm --filter @atrium-capture/browser-extension exec playwright install chromium`; the extension test launches the production MV3 build in a persistent profile and uses only the synthetic local fixture.
+
 The browser fixture site is entirely synthetic. Serve `packages/test-fixtures/site` at `http://127.0.0.1:4173`; no real district information belongs in local fixtures, test recordings, or golden images.
+
+## Browser permission rationale
+
+Chrome requires the literal `<all_urls>` host permission (or a short-lived `activeTab` grant) for `captureVisibleTab`. Atrium Capture uses `<all_urls>` because a user-started workflow may cross origins and still needs correctly associated screenshots. The content script itself matches only HTTP/HTTPS pages, asks the trusted worker for current policy, and attaches observation listeners only while a session is actively recording and the site is allowed. It never reads cookies, page storage, network traffic, password values, or ordinary typed values. M4 adds administrator allow/deny policy on top of this invariant.
 
 ## Local secrets and data
 
