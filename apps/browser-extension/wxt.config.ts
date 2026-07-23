@@ -14,6 +14,6 @@ export default defineConfig({
     key: manifestPublicKey,
     minimum_chrome_version: '116',
     name: 'Atrium Capture',
-    permissions: ['sidePanel', 'storage', 'unlimitedStorage'],
+    permissions: ['identity', 'sidePanel', 'storage', 'unlimitedStorage'],
   },
 });

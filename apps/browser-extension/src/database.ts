@@ -4,6 +4,7 @@ import {
   MIMEType,
   ReviewStatus,
   type AssetElement,
+  type AtriumCapturePublishJob,
   type AtriumCaptureSession,
 } from '@atrium-capture/contracts';
 import {
@@ -80,6 +81,11 @@ interface CaptureDatabaseSchema extends DBSchema {
     key: string;
     value: MetaRecord;
   };
+  publishJobs: {
+    indexes: { 'by-session': string };
+    key: string;
+    value: AtriumCapturePublishJob;
+  };
   receipts: {
     indexes: { 'by-session': string };
     key: string;
@@ -100,7 +106,7 @@ export class CaptureRepository {
   ) {}
 
   private open(): Promise<IDBPDatabase<CaptureDatabaseSchema>> {
-    this.database ??= openDB<CaptureDatabaseSchema>(this.databaseName, 2, {
+    this.database ??= openDB<CaptureDatabaseSchema>(this.databaseName, 3, {
       upgrade(database) {
         if (!database.objectStoreNames.contains('assets')) {
           database.createObjectStore('assets', { keyPath: 'assetId' });
@@ -110,6 +116,10 @@ export class CaptureRepository {
         }
         if (!database.objectStoreNames.contains('meta')) {
           database.createObjectStore('meta', { keyPath: 'key' });
+        }
+        if (!database.objectStoreNames.contains('publishJobs')) {
+          const publishJobs = database.createObjectStore('publishJobs', { keyPath: 'jobId' });
+          publishJobs.createIndex('by-session', 'sessionId');
         }
         if (!database.objectStoreNames.contains('receipts')) {
           const receipts = database.createObjectStore('receipts', { keyPath: 'eventId' });
@@ -185,6 +195,45 @@ export class CaptureRepository {
     const database = await this.open();
     const active = await database.get('meta', activeSessionKey);
     return active ? database.get('sessions', active.value) : undefined;
+  }
+
+  async getSession(sessionId: string): Promise<AtriumCaptureSession | undefined> {
+    return (await this.open()).get('sessions', sessionId);
+  }
+
+  async markSessionSubmitted(sessionId: string, now = new Date()): Promise<void> {
+    const database = await this.open();
+    const transaction = database.transaction('sessions', 'readwrite');
+    const store = transaction.objectStore('sessions');
+    const session = await store.get(sessionId);
+    if (session && session.state === AtriumCaptureSessionState.Publishable) {
+      await store.put({
+        ...session,
+        revision: session.revision + 1,
+        state: AtriumCaptureSessionState.Submitted,
+        updatedAt: now,
+      });
+    }
+    await transaction.done;
+  }
+
+  async getPublishJob(jobId: string): Promise<AtriumCapturePublishJob | undefined> {
+    return (await this.open()).get('publishJobs', jobId);
+  }
+
+  async getLatestPublishJobForSession(
+    sessionId: string,
+  ): Promise<AtriumCapturePublishJob | undefined> {
+    const jobs = await (await this.open()).getAllFromIndex('publishJobs', 'by-session', sessionId);
+    return jobs.sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())[0];
+  }
+
+  async listPublishJobs(): Promise<AtriumCapturePublishJob[]> {
+    return (await this.open()).getAll('publishJobs');
+  }
+
+  async putPublishJob(job: AtriumCapturePublishJob): Promise<void> {
+    await (await this.open()).put('publishJobs', job);
   }
 
   async getStoredAsset(assetId: string): Promise<StoredAsset | undefined> {

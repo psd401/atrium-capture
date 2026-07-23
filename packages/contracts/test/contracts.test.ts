@@ -38,4 +38,13 @@ describe('generated contract fixtures', () => {
     expect(job.phase).toBe('queued');
     expect(job.contentObjectId).toBeUndefined();
   });
+
+  it('loads the shared ready-draft reader link', async () => {
+    const job = await readFixture<AtriumCapturePublishJob>('publish-job-ready-v1.json');
+
+    expect(job.phase).toBe('ready_as_draft');
+    expect(job.readerUrl).toBe(
+      'https://atrium.example.test/reader/70000000-0000-4000-8000-000000000001',
+    );
+  });
 });

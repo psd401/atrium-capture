@@ -1052,6 +1052,7 @@ public struct AtriumCapturePublishJob: Codable {
     public let jobID: String
     public let lastError: LastError?
     public let phase: Phase
+    public let readerURL: String?
     public let schemaVersion: SchemaVersion
     public let sessionID: String
     public let updatedAt: Date
@@ -1067,12 +1068,13 @@ public struct AtriumCapturePublishJob: Codable {
         case jobID = "jobId"
         case lastError = "lastError"
         case phase = "phase"
+        case readerURL = "readerUrl"
         case schemaVersion = "schemaVersion"
         case sessionID = "sessionId"
         case updatedAt = "updatedAt"
     }
 
-    public init(assetUploads: [AssetUpload]?, attemptCount: Int, collectionID: String?, contentObjectID: String?, createdAt: Date, createIdempotencyKey: String, currentVersionID: String?, jobID: String, lastError: LastError?, phase: Phase, schemaVersion: SchemaVersion, sessionID: String, updatedAt: Date) {
+    public init(assetUploads: [AssetUpload]?, attemptCount: Int, collectionID: String?, contentObjectID: String?, createdAt: Date, createIdempotencyKey: String, currentVersionID: String?, jobID: String, lastError: LastError?, phase: Phase, readerURL: String?, schemaVersion: SchemaVersion, sessionID: String, updatedAt: Date) {
         self.assetUploads = assetUploads
         self.attemptCount = attemptCount
         self.collectionID = collectionID
@@ -1083,6 +1085,7 @@ public struct AtriumCapturePublishJob: Codable {
         self.jobID = jobID
         self.lastError = lastError
         self.phase = phase
+        self.readerURL = readerURL
         self.schemaVersion = schemaVersion
         self.sessionID = sessionID
         self.updatedAt = updatedAt
@@ -1118,6 +1121,7 @@ public extension AtriumCapturePublishJob {
         jobID: String? = nil,
         lastError: LastError?? = nil,
         phase: Phase? = nil,
+        readerURL: String?? = nil,
         schemaVersion: SchemaVersion? = nil,
         sessionID: String? = nil,
         updatedAt: Date? = nil
@@ -1133,6 +1137,7 @@ public extension AtriumCapturePublishJob {
             jobID: jobID ?? self.jobID,
             lastError: lastError ?? self.lastError,
             phase: phase ?? self.phase,
+            readerURL: readerURL ?? self.readerURL,
             schemaVersion: schemaVersion ?? self.schemaVersion,
             sessionID: sessionID ?? self.sessionID,
             updatedAt: updatedAt ?? self.updatedAt

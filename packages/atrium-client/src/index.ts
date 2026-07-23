@@ -1,0 +1,524 @@
+import {
+  AssetState,
+  AssetUploadState,
+  AtriumCaptureSessionState,
+  Phase,
+  ReviewStatus,
+  SchemaVersion,
+  type AssetElement,
+  type AtriumCapturePublishJob,
+  type AtriumCaptureSession,
+  type LastError,
+} from '@atrium-capture/contracts';
+
+export interface AtriumCapabilities {
+  collectionDiscovery: boolean;
+  idempotentWrites: boolean;
+  immutableAssets: boolean;
+  internalPublication: boolean;
+  mode: 'live' | 'live_unavailable' | 'mock';
+  oauth: boolean;
+  reasons: string[];
+}
+
+export interface AtriumCollection {
+  collectionId: string;
+  name: string;
+}
+
+export interface CollectionChoices {
+  collections: AtriumCollection[];
+  source: 'discovery' | 'managed_default';
+}
+
+export interface CreatePrivateObjectRequest {
+  collectionId?: string;
+  idempotencyKey: string;
+  title: string;
+  visibility: 'private';
+}
+
+export interface UploadImmutableAssetRequest {
+  bytes: Blob;
+  contentObjectId: string;
+  idempotencyKey: string;
+  localAssetId: string;
+  mimeType: string;
+  sha256: string;
+}
+
+export interface CreateMarkdownVersionRequest {
+  contentObjectId: string;
+  idempotencyKey: string;
+  markdown: string;
+}
+
+export interface AtriumGateway {
+  capabilities(): Promise<AtriumCapabilities>;
+  createMarkdownVersion(
+    request: CreateMarkdownVersionRequest,
+  ): Promise<{ readerUrl: string; versionId: string }>;
+  createPrivateObject(request: CreatePrivateObjectRequest): Promise<{ contentObjectId: string }>;
+  formatAssetMarkdown(remoteAssetId: string, altText: string): string;
+  listCollections(): Promise<AtriumCollection[]>;
+  publishInternal(request: { contentObjectId: string; idempotencyKey: string }): Promise<void>;
+  uploadImmutableAsset(request: UploadImmutableAssetRequest): Promise<{ remoteAssetId: string }>;
+}
+
+export interface PublishJobStore {
+  load(jobId: string): Promise<AtriumCapturePublishJob | undefined>;
+  save(job: AtriumCapturePublishJob): Promise<void>;
+}
+
+export interface PublicationSource {
+  loadAsset(assetId: string): Promise<Blob | undefined>;
+  loadSession(sessionId: string): Promise<AtriumCaptureSession | undefined>;
+}
+
+export interface CreatePublishJobOptions {
+  collectionId?: string;
+  idFactory?: () => string;
+  now?: Date;
+}
+
+export class GatewayError extends Error {
+  constructor(
+    public readonly code: string,
+    public readonly retryable: boolean,
+    message = code,
+    public readonly requestId?: string,
+  ) {
+    super(message);
+    this.name = 'GatewayError';
+  }
+}
+
+export class UnavailableAtriumGateway implements AtriumGateway {
+  async capabilities(): Promise<AtriumCapabilities> {
+    return {
+      collectionDiscovery: false,
+      idempotentWrites: false,
+      immutableAssets: false,
+      internalPublication: false,
+      mode: 'live_unavailable',
+      oauth: false,
+      reasons: [
+        'Atrium production OAuth, immutable asset, and idempotent content contracts are not available.',
+      ],
+    };
+  }
+
+  async createMarkdownVersion(): Promise<never> {
+    return unavailable();
+  }
+
+  async createPrivateObject(): Promise<never> {
+    return unavailable();
+  }
+
+  formatAssetMarkdown(): never {
+    throw new GatewayError('live_integration_unavailable', false);
+  }
+
+  async listCollections(): Promise<never> {
+    return unavailable();
+  }
+
+  async publishInternal(): Promise<never> {
+    return unavailable();
+  }
+
+  async uploadImmutableAsset(): Promise<never> {
+    return unavailable();
+  }
+}
+
+export async function loadCollectionChoices(
+  gateway: AtriumGateway,
+  managedDefaultCollectionId?: string,
+): Promise<CollectionChoices> {
+  const capabilities = await gateway.capabilities();
+  if (capabilities.collectionDiscovery) {
+    return { collections: await gateway.listCollections(), source: 'discovery' };
+  }
+  if (managedDefaultCollectionId) {
+    return {
+      collections: [{ collectionId: managedDefaultCollectionId, name: 'Managed default' }],
+      source: 'managed_default',
+    };
+  }
+  throw new GatewayError('collection_selection_unavailable', false);
+}
+
+export function createPublishJob(
+  session: AtriumCaptureSession,
+  options: CreatePublishJobOptions = {},
+): AtriumCapturePublishJob {
+  assertPublishableSession(session);
+  const idFactory = options.idFactory ?? (() => crypto.randomUUID());
+  const jobId = idFactory();
+  const now = options.now ?? new Date();
+  const assets = publishableAssets(session);
+  return {
+    assetUploads: assets.map((asset) => ({
+      idempotencyKey: idempotencyKey(jobId, `asset:${asset.assetId}`),
+      localAssetId: asset.assetId,
+      state: AssetUploadState.Pending,
+    })),
+    attemptCount: 0,
+    createIdempotencyKey: idempotencyKey(jobId, 'create'),
+    createdAt: now,
+    jobId,
+    phase: Phase.Queued,
+    schemaVersion: SchemaVersion.The10,
+    sessionId: session.sessionId,
+    updatedAt: now,
+    ...(options.collectionId ? { collectionId: options.collectionId } : {}),
+  };
+}
+
+export class DurablePublisher {
+  constructor(
+    private readonly gateway: AtriumGateway,
+    private readonly jobs: PublishJobStore,
+    private readonly source: PublicationSource,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
+
+  async enqueue(
+    session: AtriumCaptureSession,
+    options: CreatePublishJobOptions = {},
+  ): Promise<AtriumCapturePublishJob> {
+    const job = createPublishJob(session, options);
+    await this.jobs.save(job);
+    return job;
+  }
+
+  async resume(jobId: string): Promise<AtriumCapturePublishJob> {
+    let job = await this.requireJob(jobId);
+    if (job.phase === Phase.Complete || job.phase === Phase.ReadyAsDraft) {
+      return job;
+    }
+    const jobWithoutLastError = { ...job };
+    delete jobWithoutLastError.lastError;
+    job = await this.save({
+      ...jobWithoutLastError,
+      attemptCount: job.attemptCount + 1,
+    });
+    try {
+      while (true) {
+        switch (job.phase) {
+          case Phase.Queued:
+            job = await this.save({ ...job, phase: Phase.CreatingObject });
+            break;
+          case Phase.CreatingObject:
+            job = await this.createObject(job);
+            break;
+          case Phase.UploadingAssets:
+            job = await this.uploadAssets(job);
+            break;
+          case Phase.CreatingVersion:
+            job = await this.createVersion(job);
+            break;
+          case Phase.PublishingInternal:
+            job = await this.publishInternal(job);
+            break;
+          case Phase.ReadyAsDraft:
+          case Phase.Complete:
+          case Phase.NeedsAttention:
+            return job;
+        }
+      }
+    } catch (error) {
+      const normalized = normalizeError(error);
+      const latest = (await this.jobs.load(jobId)) ?? job;
+      return this.save({
+        ...latest,
+        lastError: normalized,
+        ...(normalized.retryable ? {} : { phase: Phase.NeedsAttention }),
+      });
+    }
+  }
+
+  async requestInternalPublication(jobId: string): Promise<AtriumCapturePublishJob> {
+    let job = await this.requireJob(jobId);
+    if (job.phase === Phase.Complete) {
+      return job;
+    }
+    if (job.phase === Phase.PublishingInternal) {
+      return this.resume(job.jobId);
+    }
+    if (job.phase !== Phase.ReadyAsDraft || !job.contentObjectId) {
+      throw new Error('draft_not_ready');
+    }
+    job = await this.save({ ...job, phase: Phase.PublishingInternal });
+    return this.resume(job.jobId);
+  }
+
+  private async createObject(job: AtriumCapturePublishJob): Promise<AtriumCapturePublishJob> {
+    if (job.contentObjectId) {
+      return this.save({ ...job, phase: Phase.UploadingAssets });
+    }
+    await this.requireCapability('idempotentWrites');
+    const session = await this.requireSession(job.sessionId);
+    const response = await this.gateway.createPrivateObject({
+      idempotencyKey: job.createIdempotencyKey,
+      title: session.title,
+      visibility: 'private',
+      ...(job.collectionId ? { collectionId: job.collectionId } : {}),
+    });
+    return this.save({
+      ...job,
+      contentObjectId: response.contentObjectId,
+      phase: Phase.UploadingAssets,
+    });
+  }
+
+  private async uploadAssets(job: AtriumCapturePublishJob): Promise<AtriumCapturePublishJob> {
+    if (!job.contentObjectId) {
+      throw new GatewayError('content_object_missing', false);
+    }
+    const contentObjectId = job.contentObjectId;
+    await this.requireCapability('immutableAssets');
+    const session = await this.requireSession(job.sessionId);
+    let uploads = job.assetUploads ?? [];
+    for (let index = 0; index < uploads.length; index += 1) {
+      const upload = uploads[index];
+      if (!upload || (upload.state === AssetUploadState.Ready && upload.remoteAssetId)) {
+        continue;
+      }
+      const asset = requirePublishableAsset(session, upload.localAssetId);
+      const bytes = await this.source.loadAsset(asset.assetId);
+      if (!bytes) {
+        throw new GatewayError('publishable_asset_missing', false);
+      }
+      uploads = replaceUpload(uploads, index, { ...upload, state: AssetUploadState.Uploading });
+      job = await this.save({ ...job, assetUploads: uploads });
+      const response = await this.gateway.uploadImmutableAsset({
+        bytes,
+        contentObjectId,
+        idempotencyKey: upload.idempotencyKey,
+        localAssetId: asset.assetId,
+        mimeType: asset.mimeType,
+        sha256: asset.sha256,
+      });
+      uploads = replaceUpload(uploads, index, {
+        ...upload,
+        remoteAssetId: response.remoteAssetId,
+        state: AssetUploadState.Ready,
+      });
+      job = await this.save({ ...job, assetUploads: uploads });
+    }
+    return this.save({ ...job, assetUploads: uploads, phase: Phase.CreatingVersion });
+  }
+
+  private async createVersion(job: AtriumCapturePublishJob): Promise<AtriumCapturePublishJob> {
+    if (!job.contentObjectId) {
+      throw new GatewayError('content_object_missing', false);
+    }
+    if (job.currentVersionId && job.readerUrl) {
+      return this.save({ ...job, phase: Phase.ReadyAsDraft });
+    }
+    await this.requireCapability('idempotentWrites');
+    const session = await this.requireSession(job.sessionId);
+    const markdown = generateMarkdown(session, job, this.gateway);
+    const response = await this.gateway.createMarkdownVersion({
+      contentObjectId: job.contentObjectId,
+      idempotencyKey: idempotencyKey(job.jobId, 'version'),
+      markdown,
+    });
+    return this.save({
+      ...job,
+      currentVersionId: response.versionId,
+      phase: Phase.ReadyAsDraft,
+      readerUrl: response.readerUrl,
+    });
+  }
+
+  private async publishInternal(job: AtriumCapturePublishJob): Promise<AtriumCapturePublishJob> {
+    if (!job.contentObjectId) {
+      throw new GatewayError('content_object_missing', false);
+    }
+    await this.requireCapability('internalPublication');
+    await this.gateway.publishInternal({
+      contentObjectId: job.contentObjectId,
+      idempotencyKey: idempotencyKey(job.jobId, 'publish-internal'),
+    });
+    return this.save({ ...job, phase: Phase.Complete });
+  }
+
+  private async requireJob(jobId: string): Promise<AtriumCapturePublishJob> {
+    const job = await this.jobs.load(jobId);
+    if (!job) {
+      throw new Error('publish_job_not_found');
+    }
+    return job;
+  }
+
+  private async requireSession(sessionId: string): Promise<AtriumCaptureSession> {
+    const session = await this.source.loadSession(sessionId);
+    if (!session) {
+      throw new GatewayError('publish_session_missing', false);
+    }
+    assertPublishableSession(session);
+    return session;
+  }
+
+  private async save(job: AtriumCapturePublishJob): Promise<AtriumCapturePublishJob> {
+    const next = { ...job, updatedAt: this.now() };
+    await this.jobs.save(next);
+    return next;
+  }
+
+  private async requireCapability(
+    capability: 'idempotentWrites' | 'immutableAssets' | 'internalPublication',
+  ): Promise<void> {
+    if (!(await this.gateway.capabilities())[capability]) {
+      throw new GatewayError(`atrium_${capability}_unavailable`, false);
+    }
+  }
+}
+
+export interface PkceAuthorizationConfig {
+  authorizationEndpoint: string;
+  clientId: string;
+  redirectUri: string;
+  scopes: readonly string[];
+}
+
+export interface PkceRequest {
+  authorizationUrl: string;
+  codeChallenge: string;
+  codeVerifier: string;
+  state: string;
+}
+
+export async function createPkceRequest(
+  config: PkceAuthorizationConfig,
+  randomBytes: (length: number) => Uint8Array = secureRandomBytes,
+): Promise<PkceRequest> {
+  const codeVerifier = base64Url(randomBytes(32));
+  const state = base64Url(randomBytes(24));
+  const challengeBytes = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(codeVerifier),
+  );
+  const codeChallenge = base64Url(new Uint8Array(challengeBytes));
+  const url = new URL(config.authorizationEndpoint);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('client_id', config.clientId);
+  url.searchParams.set('redirect_uri', config.redirectUri);
+  url.searchParams.set('scope', config.scopes.join(' '));
+  url.searchParams.set('state', state);
+  url.searchParams.set('code_challenge', codeChallenge);
+  url.searchParams.set('code_challenge_method', 'S256');
+  return { authorizationUrl: url.toString(), codeChallenge, codeVerifier, state };
+}
+
+export function parseAuthorizationCallback(callbackUrl: string, expectedState: string): string {
+  const url = new URL(callbackUrl);
+  if (url.searchParams.get('state') !== expectedState) {
+    throw new Error('oauth_state_mismatch');
+  }
+  const oauthError = url.searchParams.get('error');
+  if (oauthError) {
+    throw new Error('oauth_authorization_denied');
+  }
+  const code = url.searchParams.get('code');
+  if (!code) {
+    throw new Error('oauth_code_missing');
+  }
+  return code;
+}
+
+export function generateMarkdown(
+  session: AtriumCaptureSession,
+  job: AtriumCapturePublishJob,
+  gateway: Pick<AtriumGateway, 'formatAssetMarkdown'>,
+): string {
+  const remoteByLocal = new Map(
+    (job.assetUploads ?? [])
+      .filter((upload) => upload.remoteAssetId)
+      .map((upload) => [upload.localAssetId, upload.remoteAssetId as string]),
+  );
+  const lines = [`# ${escapeMarkdown(session.title)}`, ''];
+  for (const step of session.steps) {
+    lines.push(
+      `## Step ${step.sequence + 1}`,
+      '',
+      escapeMarkdown(step.instruction.editedText ?? step.instruction.generatedText),
+      '',
+    );
+    if (step.screenshotAssetId) {
+      const remoteAssetId = remoteByLocal.get(step.screenshotAssetId);
+      if (!remoteAssetId) {
+        throw new GatewayError('remote_asset_missing', false);
+      }
+      lines.push(gateway.formatAssetMarkdown(remoteAssetId, `Step ${step.sequence + 1}`), '');
+    }
+  }
+  return lines.join('\n').trimEnd() + '\n';
+}
+
+function assertPublishableSession(session: AtriumCaptureSession): void {
+  if (
+    session.state !== AtriumCaptureSessionState.Publishable ||
+    session.policy.reviewStatus !== ReviewStatus.Approved
+  ) {
+    throw new Error('session_not_publishable');
+  }
+}
+
+function publishableAssets(session: AtriumCaptureSession): AssetElement[] {
+  return session.assets.filter((asset) => asset.state === AssetState.PublishableLocal);
+}
+
+function requirePublishableAsset(session: AtriumCaptureSession, assetId: string): AssetElement {
+  const asset = session.assets.find(
+    (candidate) => candidate.assetId === assetId && candidate.state === AssetState.PublishableLocal,
+  );
+  if (!asset) {
+    throw new GatewayError('asset_not_publishable', false);
+  }
+  return asset;
+}
+
+function replaceUpload<T>(uploads: readonly T[], index: number, value: T): T[] {
+  return uploads.map((candidate, candidateIndex) => (candidateIndex === index ? value : candidate));
+}
+
+function idempotencyKey(jobId: string, operation: string): string {
+  return `capture:${jobId}:${operation}`;
+}
+
+function normalizeError(error: unknown): LastError {
+  if (error instanceof GatewayError) {
+    return {
+      code: error.code,
+      message: error.message.slice(0, 1_000),
+      retryable: error.retryable,
+      ...(error.requestId ? { requestId: error.requestId } : {}),
+    };
+  }
+  return { code: 'network_error', message: 'Atrium request failed.', retryable: true };
+}
+
+function escapeMarkdown(value: string): string {
+  return value.replace(/([\\`*_{}[\]()#+.!|>-])/g, '\\$1');
+}
+
+function secureRandomBytes(length: number): Uint8Array {
+  return crypto.getRandomValues(new Uint8Array(length));
+}
+
+function base64Url(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function unavailable(): Promise<never> {
+  return Promise.reject(new GatewayError('live_integration_unavailable', false));
+}

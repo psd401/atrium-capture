@@ -1,6 +1,6 @@
 # Milestones
 
-Verification evidence is recorded in [verification.md](verification.md). M0 through M2 are complete; later milestones remain open until their exit gates pass.
+Verification evidence is recorded in [verification.md](verification.md). M0 through M3 are locally complete; later milestones remain open until their exit gates pass. M3's live Atrium dependency remains capability-gated as documented below.
 
 ## M0 — Contracts and repository foundation
 

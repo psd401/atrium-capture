@@ -220,6 +220,7 @@ export interface AtriumCapturePublishJob {
   jobId: string;
   lastError?: LastError;
   phase: Phase;
+  readerUrl?: string;
   schemaVersion: SchemaVersion;
   sessionId: string;
   updatedAt: Date;

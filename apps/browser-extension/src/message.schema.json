@@ -123,6 +123,57 @@
           "properties": { "assetId": { "type": "string", "format": "uuid" } }
         }
       }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": { "kind": { "const": "publisher.snapshot" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "payload"],
+      "properties": {
+        "kind": { "const": "publisher.enqueue" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["commandId"],
+          "properties": {
+            "commandId": { "type": "string", "format": "uuid" },
+            "collectionId": { "type": "string", "format": "uuid" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "payload"],
+      "properties": {
+        "kind": { "const": "publisher.retry" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["jobId"],
+          "properties": { "jobId": { "type": "string", "format": "uuid" } }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "payload"],
+      "properties": {
+        "kind": { "const": "publisher.publish-internal" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["jobId"],
+          "properties": { "jobId": { "type": "string", "format": "uuid" } }
+        }
+      }
     }
   ],
   "$defs": {

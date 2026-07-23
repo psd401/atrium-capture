@@ -1,8 +1,10 @@
 import { browser } from 'wxt/browser';
+import { UnavailableAtriumGateway } from '@atrium-capture/atrium-client';
 
 import { CaptureRepository } from '../src/database.js';
 import { EditorService } from '../src/editor-service.js';
 import { parseIncomingMessage } from '../src/messages.js';
+import { BrowserPublicationService } from '../src/publication-service.js';
 import { RecorderService } from '../src/recorder-service.js';
 import { SerializedScreenshotCapture } from '../src/screenshot.js';
 
@@ -32,6 +34,9 @@ export default defineBackground(() => {
     browser.runtime.getManifest().version,
   );
   const editor = new EditorService(repository, broadcastChanged);
+  const publication = new BrowserPublicationService(repository, new UnavailableAtriumGateway());
+
+  void publication.resumePending().catch(() => undefined);
 
   browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => undefined);
 
@@ -80,6 +85,26 @@ export default defineBackground(() => {
           throw new Error('content_cannot_read_asset');
         }
         return editor.assetDataUrl(message.payload.assetId);
+      case 'publisher.snapshot':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_read_publisher');
+        }
+        return publication.snapshot();
+      case 'publisher.enqueue':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_publish');
+        }
+        return publication.enqueue(message.payload.collectionId);
+      case 'publisher.retry':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_publish');
+        }
+        return publication.resume(message.payload.jobId);
+      case 'publisher.publish-internal':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_publish');
+        }
+        return publication.publishInternal(message.payload.jobId);
     }
   };
 

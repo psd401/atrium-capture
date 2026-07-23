@@ -61,6 +61,25 @@ export interface EditorAssetMessage {
   payload: { assetId: string };
 }
 
+export interface PublisherSnapshotMessage {
+  kind: 'publisher.snapshot';
+}
+
+export interface PublisherEnqueueMessage {
+  kind: 'publisher.enqueue';
+  payload: { collectionId?: string; commandId: string };
+}
+
+export interface PublisherRetryMessage {
+  kind: 'publisher.retry';
+  payload: { jobId: string };
+}
+
+export interface PublisherPublishInternalMessage {
+  kind: 'publisher.publish-internal';
+  payload: { jobId: string };
+}
+
 export type IncomingMessage =
   | CaptureEventMessage
   | RecorderCommandMessage
@@ -68,7 +87,11 @@ export type IncomingMessage =
   | ContentStateMessage
   | EditorCommandMessage
   | EditorFinalizeMessage
-  | EditorAssetMessage;
+  | EditorAssetMessage
+  | PublisherSnapshotMessage
+  | PublisherEnqueueMessage
+  | PublisherRetryMessage
+  | PublisherPublishInternalMessage;
 
 export function parseIncomingMessage(value: unknown): IncomingMessage | undefined {
   return validateMessage(value) ? (value as IncomingMessage) : undefined;
