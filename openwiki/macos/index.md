@@ -1,7 +1,7 @@
 ---
 type: Documentation Index
-title: 'Macos'
-description: 'Files and subdirectories in Macos.'
+title: 'macOS'
+description: 'Files and subdirectories in macOS.'
 ---
 
 # Files

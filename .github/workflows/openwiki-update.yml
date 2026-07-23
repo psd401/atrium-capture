@@ -87,9 +87,11 @@ jobs:
           OPENWIKI_TELEMETRY_DISABLED: '1'
           DO_NOT_TRACK: '1'
 
-      - name: Normalize OpenWiki formatting
+      - name: Normalize OpenWiki output
         if: steps.gate.outputs.configured == 'true'
-        run: prettier --write openwiki
+        run: |
+          node scripts/normalize-openwiki.mjs
+          prettier --write openwiki
 
       - name: Create OpenWiki update pull request
         if: steps.gate.outputs.configured == 'true'
