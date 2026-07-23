@@ -1,9 +1,9 @@
 ---
 type: Documentation Index
-title: 'Privacy and Security'
-description: 'Capture minimization, trust boundaries, screenshot lifecycle, authentication, and network limits.'
+title: "Privacy"
+description: "Files and subdirectories in Privacy."
 ---
 
 # Files
 
-- [Security and privacy model](security-and-privacy.md) - Non-negotiable capture, image, token, diagnostics, and network controls.
+- [Security and Privacy Model](security-and-privacy.md) - Privacy is enforced by value-free semantics, trusted-context state ownership, irreversible image export, and an Atrium-only production boundary.
