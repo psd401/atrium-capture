@@ -18,6 +18,7 @@ Review date: 2026-07-22. Registry metadata was checked before the initial instal
 | idb                              |           8.0.3 | ISC        | Small maintained IndexedDB promise wrapper for transactional persistence                 |
 | Playwright                       |          1.61.1 | Apache-2.0 | Extension-loaded Chromium integration and service-worker restart tests                   |
 | fake-indexeddb                   |           6.2.5 | Apache-2.0 | Test-only IndexedDB implementation for deterministic recovery tests                      |
+| esbuild                          |          0.28.1 | MIT        | Patched browser-test bundler and WXT/Vite transitive resolution; development only        |
 
 `quicktype-core` is used only during generation; generated files remain MIT-licensed project output. No dependency receives runtime capture data. A dependency upgrade requires re-running `pnpm licenses:check`, `pnpm security:audit`, all contract tests, and the affected application test suite.
 
