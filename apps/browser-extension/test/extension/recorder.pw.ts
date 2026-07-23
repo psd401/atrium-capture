@@ -111,6 +111,36 @@ test('records a multi-page workflow across a forced service-worker stop', async 
   await expect(
     panel.getByText('Typed values are omitted. Password fields are never captured.'),
   ).toBeVisible();
+
+  const flaggedStep = panel
+    .locator('.step-select')
+    .filter({ hasText: 'redaction required' })
+    .first();
+  await expect(flaggedStep).toBeVisible();
+  await flaggedStep.click();
+  const zoom = panel.getByLabel('Screenshot zoom');
+  await expect(zoom).toBeVisible();
+  await zoom.fill('1.5');
+  await expect(zoom).toHaveValue('1.5');
+  for (const tool of ['Crop', 'Arrow', 'Rectangle', 'Text', 'Highlight', 'Mosaic', 'Redact']) {
+    await expect(panel.getByRole('button', { name: tool, exact: true })).toBeVisible();
+  }
+  await panel.getByRole('button', { name: 'Add suggested redaction' }).click();
+  const approveStep = panel.getByRole('button', { name: 'Approve this step' });
+  await expect(approveStep).toBeEnabled();
+  await approveStep.click();
+  await panel.getByRole('button', { name: 'Approve all clear steps' }).click();
+  const prepare = panel.getByRole('button', { name: 'Prepare publishable images' });
+  await expect(prepare).toBeEnabled({ timeout: 30_000 });
+  await prepare.click();
+  await expect
+    .poll(async () => (await snapshot(panel))?.state, { timeout: 30_000 })
+    .toBe('publishable');
+  const publishable = await snapshot(panel);
+  expect(publishable?.assets.some((asset) => asset.state === 'publishable_local')).toBe(true);
+  expect(publishable?.assets.filter((asset) => asset.state === 'raw_local')).toHaveLength(0);
+  await expect(panel.getByRole('status')).toContainText('Privacy approved');
+  await expect(panel.getByText('raw source bytes were deleted', { exact: false })).toBeVisible();
 });
 
 async function extensionWorker(browserContext: BrowserContext): Promise<Worker> {
@@ -152,7 +182,7 @@ async function snapshot(page: Page): Promise<RecorderSnapshot | undefined> {
 }
 
 interface RecorderSnapshot {
-  assets: unknown[];
+  assets: Array<{ state: string }>;
   state: string;
   steps: Array<{ stepId: string }>;
 }

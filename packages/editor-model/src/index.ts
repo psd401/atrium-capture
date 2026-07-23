@@ -280,10 +280,7 @@ function mapStep(
 }
 
 function assertEditable(session: AtriumCaptureSession): void {
-  if (
-    session.state !== AtriumCaptureSessionState.Review &&
-    session.state !== AtriumCaptureSessionState.Publishable
-  ) {
+  if (session.state !== AtriumCaptureSessionState.Review) {
     throw new Error('session_not_editable');
   }
 }

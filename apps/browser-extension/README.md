@@ -6,6 +6,6 @@ Responsibilities:
 
 - Content script: observe permitted page events and extract bounded semantic context.
 - Service worker: owns the capture state machine, screenshots, durable storage/outbox, OAuth, and Atrium gateway.
-- Side panel/review: shows recording state and live steps; M2 adds editing and flattened redaction.
+- Side panel/review: edits, reorders, merges, inserts, crops, annotates, reviews, and flattens steps into publishable PNG derivatives.
 
-Run `pnpm --filter @atrium-capture/browser-extension build` for the production extension and `pnpm test:extension` for the extension-loaded Chromium workflow. Tests use only synthetic fixture pages. Live publication remains disabled until documented Atrium asset and production OAuth capabilities are available.
+Run `pnpm --filter @atrium-capture/browser-extension build` for the production extension and `pnpm test:extension` for the extension-loaded Chromium workflow and image goldens. Tests use only synthetic fixture pages and pixels. Live publication remains disabled until documented Atrium asset and production OAuth capabilities are available.

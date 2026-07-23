@@ -1,6 +1,8 @@
 import {
   AssetState,
+  AtriumCaptureSessionState,
   MIMEType,
+  ReviewStatus,
   type AssetElement,
   type AtriumCaptureSession,
 } from '@atrium-capture/contracts';
@@ -12,6 +14,11 @@ import {
   type NormalizedCaptureEvent,
   type RecorderCommand,
 } from '@atrium-capture/capture-core';
+import {
+  applyEditorCommand as reduceEditorCommand,
+  canFinalizeReview,
+  type EditorCommand,
+} from '@atrium-capture/editor-model';
 import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb';
 
 const activeSessionKey = 'activeSessionId';
@@ -38,6 +45,23 @@ export interface StoredAsset {
   localKey: string;
 }
 
+export interface EditorCommandReceipt {
+  commandId: string;
+  revision: number;
+  sessionId: string;
+  type: 'edit' | 'finalize';
+}
+
+export interface FinalizeDerivative {
+  assetId: string;
+  localKey: string;
+  prepared: PreparedScreenshot;
+  sourceAssetId: string;
+  stepId: string;
+}
+
+export type RawImageRetention = 'delete_after_flatten' | 'delete_after_submit';
+
 interface MetaRecord {
   key: string;
   value: string;
@@ -47,6 +71,10 @@ interface CaptureDatabaseSchema extends DBSchema {
   assets: {
     key: string;
     value: StoredAsset;
+  };
+  commands: {
+    key: string;
+    value: EditorCommandReceipt;
   };
   meta: {
     key: string;
@@ -72,13 +100,24 @@ export class CaptureRepository {
   ) {}
 
   private open(): Promise<IDBPDatabase<CaptureDatabaseSchema>> {
-    this.database ??= openDB<CaptureDatabaseSchema>(this.databaseName, 1, {
+    this.database ??= openDB<CaptureDatabaseSchema>(this.databaseName, 2, {
       upgrade(database) {
-        database.createObjectStore('assets', { keyPath: 'assetId' });
-        database.createObjectStore('meta', { keyPath: 'key' });
-        const receipts = database.createObjectStore('receipts', { keyPath: 'eventId' });
-        receipts.createIndex('by-session', 'sessionId');
-        database.createObjectStore('sessions', { keyPath: 'sessionId' });
+        if (!database.objectStoreNames.contains('assets')) {
+          database.createObjectStore('assets', { keyPath: 'assetId' });
+        }
+        if (!database.objectStoreNames.contains('commands')) {
+          database.createObjectStore('commands', { keyPath: 'commandId' });
+        }
+        if (!database.objectStoreNames.contains('meta')) {
+          database.createObjectStore('meta', { keyPath: 'key' });
+        }
+        if (!database.objectStoreNames.contains('receipts')) {
+          const receipts = database.createObjectStore('receipts', { keyPath: 'eventId' });
+          receipts.createIndex('by-session', 'sessionId');
+        }
+        if (!database.objectStoreNames.contains('sessions')) {
+          database.createObjectStore('sessions', { keyPath: 'sessionId' });
+        }
       },
     });
     return this.database;
@@ -146,6 +185,129 @@ export class CaptureRepository {
     const database = await this.open();
     const active = await database.get('meta', activeSessionKey);
     return active ? database.get('sessions', active.value) : undefined;
+  }
+
+  async getStoredAsset(assetId: string): Promise<StoredAsset | undefined> {
+    return (await this.open()).get('assets', assetId);
+  }
+
+  async getEditorCommandReceipt(commandId: string): Promise<EditorCommandReceipt | undefined> {
+    return (await this.open()).get('commands', commandId);
+  }
+
+  async applyEditorCommand(
+    commandId: string,
+    command: EditorCommand,
+    now = new Date(),
+  ): Promise<AtriumCaptureSession> {
+    const database = await this.open();
+    const transaction = database.transaction(['commands', 'meta', 'sessions'], 'readwrite');
+    const commandStore = transaction.objectStore('commands');
+    const existing = await commandStore.get(commandId);
+    const active = await transaction.objectStore('meta').get(activeSessionKey);
+    const sessionStore = transaction.objectStore('sessions');
+    const session = active ? await sessionStore.get(active.value) : undefined;
+    if (!session) {
+      throw new Error('session_not_found');
+    }
+    if (existing) {
+      await transaction.done;
+      return session;
+    }
+    const next = reduceEditorCommand(session, command, { idFactory: this.idFactory, now });
+    await sessionStore.put(next);
+    await commandStore.put({
+      commandId,
+      revision: next.revision,
+      sessionId: next.sessionId,
+      type: 'edit',
+    });
+    await transaction.done;
+    return next;
+  }
+
+  async finalizeReview(
+    commandId: string,
+    expectedRevision: number,
+    derivatives: readonly FinalizeDerivative[],
+    rawRetention: RawImageRetention,
+    now = new Date(),
+  ): Promise<AtriumCaptureSession> {
+    const database = await this.open();
+    const transaction = database.transaction(
+      ['assets', 'commands', 'meta', 'sessions'],
+      'readwrite',
+    );
+    const commandStore = transaction.objectStore('commands');
+    const existing = await commandStore.get(commandId);
+    const active = await transaction.objectStore('meta').get(activeSessionKey);
+    const sessionStore = transaction.objectStore('sessions');
+    const session = active ? await sessionStore.get(active.value) : undefined;
+    if (!session) {
+      throw new Error('session_not_found');
+    }
+    if (existing) {
+      await transaction.done;
+      return session;
+    }
+    if (session.revision !== expectedRevision) {
+      throw new Error('session_revision_changed');
+    }
+    if (!canFinalizeReview(session)) {
+      throw new Error('privacy_review_incomplete');
+    }
+
+    const assetStore = transaction.objectStore('assets');
+    const derivedByStep = new Map(derivatives.map((derivative) => [derivative.stepId, derivative]));
+    for (const derivative of derivatives) {
+      await assetStore.put({
+        assetId: derivative.assetId,
+        blob: derivative.prepared.blob,
+        localKey: derivative.localKey,
+      });
+    }
+    const rawAssetIds = new Set(derivatives.map((derivative) => derivative.sourceAssetId));
+    if (rawRetention === 'delete_after_flatten') {
+      await Promise.all([...rawAssetIds].map((assetId) => assetStore.delete(assetId)));
+    }
+    const nextAssets: AssetElement[] = [
+      ...session.assets.map((asset) =>
+        rawRetention === 'delete_after_flatten' && rawAssetIds.has(asset.assetId)
+          ? { ...asset, state: AssetState.Deleted }
+          : asset,
+      ),
+      ...derivatives.map((derivative): AssetElement => ({
+        assetId: derivative.assetId,
+        derivedFromAssetId: derivative.sourceAssetId,
+        localKey: derivative.localKey,
+        mimeType: derivative.prepared.mimeType,
+        pixelHeight: derivative.prepared.pixelHeight,
+        pixelWidth: derivative.prepared.pixelWidth,
+        sha256: derivative.prepared.sha256,
+        state: AssetState.PublishableLocal,
+      })),
+    ];
+    const next: AtriumCaptureSession = {
+      ...session,
+      assets: nextAssets,
+      policy: { ...session.policy, reviewStatus: ReviewStatus.Approved },
+      revision: session.revision + 1,
+      state: AtriumCaptureSessionState.Publishable,
+      steps: session.steps.map((step) => {
+        const derivative = derivedByStep.get(step.stepId);
+        return derivative ? { ...step, screenshotAssetId: derivative.assetId } : step;
+      }),
+      updatedAt: now,
+    };
+    await sessionStore.put(next);
+    await commandStore.put({
+      commandId,
+      revision: next.revision,
+      sessionId: next.sessionId,
+      type: 'finalize',
+    });
+    await transaction.done;
+    return next;
   }
 
   async applyEvent(

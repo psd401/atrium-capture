@@ -46,4 +46,35 @@ describe('runtime message boundary', () => {
       }),
     ).toBeUndefined();
   });
+
+  it('accepts bounded editor commands and rejects image bytes at the message boundary', () => {
+    expect(
+      parseIncomingMessage({
+        kind: 'editor.command',
+        payload: {
+          command: {
+            annotation: {
+              color: '#111827',
+              geometry: { height: 20, width: 100, x: 10, y: 10 },
+              id: crypto.randomUUID(),
+              kind: 'redaction',
+            },
+            kind: 'add_annotation',
+            stepId: crypto.randomUUID(),
+          },
+          commandId: crypto.randomUUID(),
+        },
+      }),
+    ).toBeTruthy();
+    expect(
+      parseIncomingMessage({
+        kind: 'editor.finalize',
+        payload: {
+          commandId: crypto.randomUUID(),
+          rawImageBytes: 'prohibited',
+          rawRetention: 'delete_after_flatten',
+        },
+      }),
+    ).toBeUndefined();
+  });
 });

@@ -1,4 +1,5 @@
 import { type Action } from '@atrium-capture/contracts';
+import { type EditorCommand } from '@atrium-capture/editor-model';
 
 import validateMessage from './generated/validate-extension-message.js';
 
@@ -42,8 +43,32 @@ export interface ContentStateMessage {
   payload: { url: string };
 }
 
+export interface EditorCommandMessage {
+  kind: 'editor.command';
+  payload: { command: EditorCommand; commandId: string };
+}
+
+export interface EditorFinalizeMessage {
+  kind: 'editor.finalize';
+  payload: {
+    commandId: string;
+    rawRetention: 'delete_after_flatten' | 'delete_after_submit';
+  };
+}
+
+export interface EditorAssetMessage {
+  kind: 'editor.asset';
+  payload: { assetId: string };
+}
+
 export type IncomingMessage =
-  CaptureEventMessage | RecorderCommandMessage | RecorderSnapshotMessage | ContentStateMessage;
+  | CaptureEventMessage
+  | RecorderCommandMessage
+  | RecorderSnapshotMessage
+  | ContentStateMessage
+  | EditorCommandMessage
+  | EditorFinalizeMessage
+  | EditorAssetMessage;
 
 export function parseIncomingMessage(value: unknown): IncomingMessage | undefined {
   return validateMessage(value) ? (value as IncomingMessage) : undefined;

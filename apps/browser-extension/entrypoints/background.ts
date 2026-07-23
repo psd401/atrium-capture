@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 
 import { CaptureRepository } from '../src/database.js';
+import { EditorService } from '../src/editor-service.js';
 import { parseIncomingMessage } from '../src/messages.js';
 import { RecorderService } from '../src/recorder-service.js';
 import { SerializedScreenshotCapture } from '../src/screenshot.js';
@@ -30,6 +31,7 @@ export default defineBackground(() => {
     broadcastChanged,
     browser.runtime.getManifest().version,
   );
+  const editor = new EditorService(repository, broadcastChanged);
 
   browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => undefined);
 
@@ -51,7 +53,7 @@ export default defineBackground(() => {
         return recorder.contentState(sender.tab.url);
       }
       case 'recorder.command': {
-        if (!sender.url?.startsWith(browser.runtime.getURL(''))) {
+        if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_control_recorder');
         }
         const [activeTab] = await browser.tabs.query({ active: true, currentWindow: true });
@@ -59,18 +61,36 @@ export default defineBackground(() => {
         return recorder.command(message.payload.command, title);
       }
       case 'recorder.snapshot':
-        if (!sender.url?.startsWith(browser.runtime.getURL(''))) {
+        if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_read_session');
         }
         return recorder.getSnapshot();
+      case 'editor.command':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_edit_session');
+        }
+        return editor.command(message.payload.commandId, message.payload.command);
+      case 'editor.finalize':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_finalize_session');
+        }
+        return editor.finalize(message.payload.commandId, message.payload.rawRetention);
+      case 'editor.asset':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_read_asset');
+        }
+        return editor.assetDataUrl(message.payload.assetId);
     }
   };
+
+  const isExtensionSender = (sender: MessageSender): boolean =>
+    Boolean(sender.url?.startsWith(browser.runtime.getURL('')));
 
   browser.runtime.onMessage.addListener((rawMessage: unknown, sender, sendResponse) => {
     void handleMessage(rawMessage, sender).then(
       (response) => sendResponse(response),
-      (error: unknown) => {
-        console.warn(error instanceof Error ? error.message : 'message_handling_failed');
+      () => {
+        console.warn('message_handling_failed');
         sendResponse(undefined);
       },
     );

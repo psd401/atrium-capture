@@ -1,6 +1,6 @@
 # Milestones
 
-Verification evidence is recorded in [verification.md](verification.md). M0 and M1 are complete; later milestones remain open until their exit gates pass.
+Verification evidence is recorded in [verification.md](verification.md). M0 through M2 are complete; later milestones remain open until their exit gates pass.
 
 ## M0 — Contracts and repository foundation
 

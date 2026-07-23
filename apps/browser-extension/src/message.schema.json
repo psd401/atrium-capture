@@ -72,9 +72,173 @@
           "properties": { "url": { "type": "string", "format": "uri", "maxLength": 4096 } }
         }
       }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "payload"],
+      "properties": {
+        "kind": { "const": "editor.command" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["commandId", "command"],
+          "properties": {
+            "commandId": { "type": "string", "format": "uuid" },
+            "command": { "$ref": "#/$defs/editorCommand" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "payload"],
+      "properties": {
+        "kind": { "const": "editor.finalize" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["commandId", "rawRetention"],
+          "properties": {
+            "commandId": { "type": "string", "format": "uuid" },
+            "rawRetention": {
+              "type": "string",
+              "enum": ["delete_after_flatten", "delete_after_submit"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "payload"],
+      "properties": {
+        "kind": { "const": "editor.asset" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["assetId"],
+          "properties": { "assetId": { "type": "string", "format": "uuid" } }
+        }
+      }
     }
   ],
   "$defs": {
+    "annotation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "geometry"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "kind": {
+          "type": "string",
+          "enum": ["arrow", "rectangle", "text", "highlight", "blur", "mosaic", "redaction"]
+        },
+        "geometry": { "$ref": "#/$defs/rect" },
+        "text": { "type": "string", "maxLength": 1000 },
+        "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
+      }
+    },
+    "editorCommand": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "const": "begin_review" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "stepId", "text"],
+          "properties": {
+            "kind": { "const": "update_instruction" },
+            "stepId": { "type": "string", "format": "uuid" },
+            "text": { "type": "string", "minLength": 1, "maxLength": 2000 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "stepId", "toIndex"],
+          "properties": {
+            "kind": { "const": "move_step" },
+            "stepId": { "type": "string", "format": "uuid" },
+            "toIndex": { "type": "integer", "minimum": 0 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "stepId"],
+          "properties": {
+            "kind": { "const": "delete_step" },
+            "stepId": { "type": "string", "format": "uuid" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "stepId", "withStepId"],
+          "properties": {
+            "kind": { "const": "merge_step" },
+            "stepId": { "type": "string", "format": "uuid" },
+            "withStepId": { "type": "string", "format": "uuid" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "text"],
+          "properties": {
+            "kind": { "const": "insert_step" },
+            "afterStepId": { "type": "string", "format": "uuid" },
+            "text": { "type": "string", "minLength": 1, "maxLength": 2000 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "stepId", "crop"],
+          "properties": {
+            "kind": { "const": "set_crop" },
+            "stepId": { "type": "string", "format": "uuid" },
+            "crop": { "anyOf": [{ "$ref": "#/$defs/rect" }, { "type": "null" }] }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "stepId", "annotation"],
+          "properties": {
+            "kind": { "const": "add_annotation" },
+            "stepId": { "type": "string", "format": "uuid" },
+            "annotation": { "$ref": "#/$defs/annotation" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "stepId", "annotationId"],
+          "properties": {
+            "kind": { "const": "remove_annotation" },
+            "stepId": { "type": "string", "format": "uuid" },
+            "annotationId": { "type": "string", "format": "uuid" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "stepId"],
+          "properties": {
+            "kind": { "const": "approve_step" },
+            "stepId": { "type": "string", "format": "uuid" }
+          }
+        }
+      ]
+    },
     "rect": {
       "type": "object",
       "additionalProperties": false,
