@@ -1,7 +1,7 @@
 ---
 type: Documentation Index
-title: "Contracts"
-description: "Files and subdirectories in Contracts."
+title: 'Contracts'
+description: 'Files and subdirectories in Contracts.'
 ---
 
 # Files

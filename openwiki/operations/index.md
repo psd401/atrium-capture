@@ -1,7 +1,7 @@
 ---
 type: Documentation Index
-title: "Operations"
-description: "Files and subdirectories in Operations."
+title: 'Operations'
+description: 'Files and subdirectories in Operations.'
 ---
 
 # Files

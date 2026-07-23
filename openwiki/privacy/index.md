@@ -1,7 +1,7 @@
 ---
 type: Documentation Index
-title: "Privacy"
-description: "Files and subdirectories in Privacy."
+title: 'Privacy'
+description: 'Files and subdirectories in Privacy.'
 ---
 
 # Files
