@@ -36,11 +36,11 @@ final class RedactionGoldenTests: XCTestCase {
     }
 
     private func sourcePNGWithMetadata(width: Int, height: Int) throws -> Data {
-        let bytes = [UInt8](repeating: 255, count: width * height * 4).enumerated().map { index, value in
-            switch index % 4 {
-            case 1: 0
-            default: value
+        let bytes = [UInt8](repeating: 255, count: width * height * 4).enumerated().map { index, value -> UInt8 in
+            if index % 4 == 1 {
+                return 0
             }
+            return value
         }
         let provider = try XCTUnwrap(CGDataProvider(data: Data(bytes) as CFData))
         let image = try XCTUnwrap(CGImage(
