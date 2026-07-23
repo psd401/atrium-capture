@@ -114,12 +114,9 @@ test('records a multi-page workflow across a forced service-worker stop', async 
     panel.getByText('Typed values are omitted. Password fields are never captured.'),
   ).toBeVisible();
 
-  const flaggedStep = panel
-    .locator('.step-select')
-    .filter({ hasText: 'redaction required' })
-    .first();
-  await expect(flaggedStep).toBeVisible();
-  await flaggedStep.click();
+  const flaggedSteps = panel.locator('.step-select').filter({ hasText: 'redaction required' });
+  await expect(flaggedSteps.first()).toBeVisible();
+  await flaggedSteps.first().click();
   const zoom = panel.getByLabel('Screenshot zoom');
   await expect(zoom).toBeVisible();
   await zoom.fill('1.5');
@@ -127,10 +124,14 @@ test('records a multi-page workflow across a forced service-worker stop', async 
   for (const tool of ['Crop', 'Arrow', 'Rectangle', 'Text', 'Highlight', 'Mosaic', 'Redact']) {
     await expect(panel.getByRole('button', { name: tool, exact: true })).toBeVisible();
   }
-  await panel.getByRole('button', { name: 'Add suggested redaction' }).click();
-  const approveStep = panel.getByRole('button', { name: 'Approve this step' });
-  await expect(approveStep).toBeEnabled();
-  await approveStep.click();
+  for (let remaining = await flaggedSteps.count(); remaining > 0; remaining -= 1) {
+    await flaggedSteps.first().click();
+    await panel.getByRole('button', { name: 'Add suggested redaction' }).click();
+    const approveStep = panel.getByRole('button', { name: 'Approve this step' });
+    await expect(approveStep).toBeEnabled();
+    await approveStep.click();
+    await expect.poll(async () => flaggedSteps.count()).toBe(remaining - 1);
+  }
   await panel.getByRole('button', { name: 'Approve all clear steps' }).click();
   const prepare = panel.getByRole('button', { name: 'Prepare publishable images' });
   await expect(prepare).toBeEnabled({ timeout: 30_000 });

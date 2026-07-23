@@ -88,6 +88,15 @@ export interface DiagnosticsClearLocalDataMessage {
   payload: { confirmation: 'DELETE_LOCAL_CAPTURE_DATA' };
 }
 
+export interface NativeBridgeSnapshotMessage {
+  kind: 'native-bridge.snapshot';
+}
+
+export interface NativeBridgeSetEnabledMessage {
+  kind: 'native-bridge.set-enabled';
+  payload: { enabled: boolean };
+}
+
 export type IncomingMessage =
   | CaptureEventMessage
   | RecorderCommandMessage
@@ -101,7 +110,9 @@ export type IncomingMessage =
   | PublisherRetryMessage
   | PublisherPublishInternalMessage
   | DiagnosticsSnapshotMessage
-  | DiagnosticsClearLocalDataMessage;
+  | DiagnosticsClearLocalDataMessage
+  | NativeBridgeSnapshotMessage
+  | NativeBridgeSetEnabledMessage;
 
 export function parseIncomingMessage(value: unknown): IncomingMessage | undefined {
   return validateMessage(value) ? (value as IncomingMessage) : undefined;

@@ -4,7 +4,7 @@
 
 The browser package version is `1.0.0`. `pnpm package:browser` builds the production Manifest V3 extension, creates an unsigned Chrome ZIP under `apps/browser-extension/.output`, inspects its ZIP central directory, and writes `browser-release-manifest.json` with the artifact byte size and SHA-256 digest.
 
-Package verification fails if the archive omits the manifest, worker, content script, side panel, or managed schema; changes the reviewed permission allowlist; or includes source maps, TypeScript, tests, fixtures, dependencies, environment files, or key material. The release manifest also records that telemetry and live Atrium are disabled.
+Package verification fails if the archive omits the manifest, worker, content script, side panel, or managed schema; changes the reviewed required permissions or the single optional `nativeMessaging` permission; or includes source maps, TypeScript, tests, fixtures, dependencies, environment files, or key material. The optional permission is requested only from the Mac-enrichment user gesture and is removed when enrichment is disabled. The release manifest also records that telemetry and live Atrium are disabled.
 
 The ZIP is intentionally unsigned. Chrome Web Store or district managed-distribution signing requires an authorized publisher and external signing custody. Per repository policy, no upload, signing-key creation, update host, deployment, or release occurs without explicit approval.
 

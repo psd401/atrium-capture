@@ -27,6 +27,18 @@ final class ContractFixtureTests: XCTestCase {
         XCTAssertEqual(session.policy.rawImageRetention, .deleteAfterFlatten)
     }
 
+    func testDecodesSharedMacCaptureSessionFixture() throws {
+        let session = try AtriumContractCodec.makeDecoder().decode(
+            AtriumCaptureSession.self,
+            from: fixtureData(named: "capture-session-macos-v1.json")
+        )
+
+        XCTAssertEqual(session.recorder.surface, .macos)
+        XCTAssertEqual(session.steps.count, 2)
+        XCTAssertEqual(session.steps[1].instruction.generatedText, "Enter the requested value in Synthetic account label.")
+        XCTAssertEqual(session.steps[0].target?.macos?.backingScaleFactor, 2)
+    }
+
     func testDecodesSharedPublishJobFixture() throws {
         _ = try AtriumContractCodec.makeDecoder().decode(
             AtriumCapturePublishJob.self,

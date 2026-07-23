@@ -25,7 +25,7 @@ Do not implement a private screenshot backend in this repository. Until the asse
 
 ## Implemented local boundary
 
-The client now contains the production-neutral `AtriumGateway`, a durable phase machine, browser IndexedDB outbox, collection-discovery/managed-default selection, Authorization Code + S256 PKCE primitives, and trusted Chrome Identity flow adapter. It creates private objects, selects only flattened `publishable_local` assets, creates Markdown through gateway-issued asset references, persists a reader link, and requires a separate explicit command for internal publication.
+The client now contains production-neutral browser and native `AtriumGateway` boundaries, durable phase machines, browser IndexedDB and native filesystem outboxes, collection-discovery/managed-default selection, Authorization Code + S256 PKCE primitives, Chrome Identity and `ASWebAuthenticationSession` adapters, and Keychain token storage. It creates private objects, selects only flattened `publishable_local` assets, creates Markdown through gateway-issued asset references, persists a reader link, and requires a separate explicit command for internal publication.
 
 No live URL or scope is present. The synthetic in-memory and HTTP gateways use deterministic UUIDs and the visibly non-production `/_mock/atrium-capture/v1` route. Failure injection occurs after the mock commits each object, asset, version, and internal-publication operation; stable keys prove retries do not duplicate remote state. See [ADR 0003](adr/0003-durable-atrium-publication.md).
 

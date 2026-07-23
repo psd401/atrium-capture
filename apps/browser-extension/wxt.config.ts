@@ -14,6 +14,7 @@ export default defineConfig({
     key: manifestPublicKey,
     minimum_chrome_version: '116',
     name: 'Atrium Capture',
+    optional_permissions: ['nativeMessaging'],
     permissions: ['identity', 'sidePanel', 'storage', 'unlimitedStorage'],
     storage: {
       managed_schema: 'managed-storage-schema.json',

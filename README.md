@@ -2,7 +2,7 @@
 
 Atrium Capture records a workflow, turns meaningful actions into an editable visual guide, and saves the reviewed result as an Atrium draft. The first application is a Chrome extension; the same capture contract is designed for an immediate Mac companion phase.
 
-Browser v1 source and an automated unsigned package are complete. Live Atrium publication remains visibly capability-gated until its documented production contracts are available.
+Browser v1 and the native Mac companion are locally buildable, tested, and packaged with unsigned/ad-hoc development artifacts. Live Atrium publication remains visibly capability-gated until its documented production contracts are available.
 
 ## Product boundary
 
@@ -12,7 +12,7 @@ Browser v1 source and an automated unsigned package are complete. Live Atrium pu
 
 ## Status
 
-M0 through M2 are complete: shared schemas generate TypeScript and Swift models, and the production Manifest V3 extension records, recovers, reviews, edits, permanently redacts, and flattens synthetic browser workflows with value-safe capture semantics. Publishing, pilot hardening, and Mac milestones remain pre-release.
+M0 through M7 are implemented locally. The production Manifest V3 extension and native SwiftUI/AppKit companion record, recover, review, annotate, permanently redact, and package synthetic workflows through the same generated contracts. Durable browser and native publishers pass failure-after-commit tests against local gateways. Release signing/deployment and live Atrium OAuth/assets remain external gates.
 
 ## Repository map
 

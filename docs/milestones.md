@@ -1,6 +1,6 @@
 # Milestones
 
-Verification evidence is recorded in [verification.md](verification.md). M0 through M5 are locally complete; native milestones remain open until their exit gates pass. Live Atrium dependencies remain capability-gated as documented below.
+Verification evidence is recorded in [verification.md](verification.md). M0 through M7 are locally complete; physical-device release acceptance remains in the Mac runbook. Live Atrium dependencies remain capability-gated as documented below.
 
 ## M0 — Contracts and repository foundation
 

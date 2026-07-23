@@ -1,0 +1,157 @@
+import AtriumCaptureContracts
+import AtriumCaptureCore
+import AtriumCaptureMacPlatform
+import Foundation
+
+#if os(macOS)
+import CoreGraphics
+import ImageIO
+import UniformTypeIdentifiers
+
+private enum VerificationFailure: Error {
+    case imageCreation
+    case encoding
+    case decoding
+    case redactionPixel
+    case neighborPixel
+    case metadata
+}
+
+@main
+enum AtriumCaptureMacVerifier {
+    @MainActor
+    static func main() throws {
+        let source = try sourcePNGWithMetadata(width: 10, height: 10)
+        let flattened = try CoreGraphicsReviewRenderer.flatten(
+            sourcePNG: source,
+            crop: nil,
+            annotations: [AnnotationElement(
+                color: "#000000",
+                geometry: Geometry(height: 4, width: 4, x: 3, y: 3),
+                id: "synthetic-redaction",
+                kind: .redaction,
+                text: nil
+            )]
+        )
+        let pixels = try rgbaPixels(flattened.pngData)
+        guard pixel(pixels, width: 10, x: 4, y: 4) == [0, 0, 0, 255] else {
+            throw VerificationFailure.redactionPixel
+        }
+        guard pixel(pixels, width: 10, x: 0, y: 0) == [255, 0, 255, 255] else {
+            throw VerificationFailure.neighborPixel
+        }
+        let chunks = try pngChunkTypes(flattened.pngData)
+        guard Set(["tEXt", "iTXt", "zTXt", "eXIf", "tIME"]).isDisjoint(with: chunks),
+              !String(decoding: flattened.pngData, as: UTF8.self).contains("Synthetic Author")
+        else { throw VerificationFailure.metadata }
+        try verifyPinnedWindow(pngData: flattened.pngData)
+        print("native-verifier: redaction pixels and metadata passed")
+    }
+
+    private static func sourcePNGWithMetadata(width: Int, height: Int) throws -> Data {
+        let bytes = [UInt8](repeating: 255, count: width * height * 4).enumerated().map { index, value in
+            index % 4 == 1 ? 0 : value
+        }
+        guard let provider = CGDataProvider(data: Data(bytes) as CFData),
+              let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let image = CGImage(
+                  width: width,
+                  height: height,
+                  bitsPerComponent: 8,
+                  bitsPerPixel: 32,
+                  bytesPerRow: width * 4,
+                  space: colorSpace,
+                  bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.last.rawValue),
+                  provider: provider,
+                  decode: nil,
+                  shouldInterpolate: false,
+                  intent: .defaultIntent
+              )
+        else { throw VerificationFailure.imageCreation }
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data,
+            UTType.png.identifier as CFString,
+            1,
+            nil
+        ) else { throw VerificationFailure.encoding }
+        CGImageDestinationAddImage(destination, image, [
+            kCGImagePropertyTIFFDictionary: [kCGImagePropertyTIFFArtist: "Synthetic Author"],
+        ] as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else { throw VerificationFailure.encoding }
+        return data as Data
+    }
+
+    private static func rgbaPixels(_ data: Data) throws -> [UInt8] {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let image = CGImageSourceCreateImageAtIndex(source, 0, nil),
+              let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)
+        else { throw VerificationFailure.decoding }
+        var bytes = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        guard let context = CGContext(
+            data: &bytes,
+            width: image.width,
+            height: image.height,
+            bitsPerComponent: 8,
+            bytesPerRow: image.width * 4,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { throw VerificationFailure.decoding }
+        context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        return bytes
+    }
+
+    private static func pixel(_ pixels: [UInt8], width: Int, x: Int, y: Int) -> [UInt8] {
+        let offset = (y * width + x) * 4
+        return Array(pixels[offset..<(offset + 4)])
+    }
+
+    private static func pngChunkTypes(_ data: Data) throws -> Set<String> {
+        guard data.count >= 8, Array(data.prefix(8)) == [137, 80, 78, 71, 13, 10, 26, 10] else {
+            throw VerificationFailure.decoding
+        }
+        var offset = 8
+        var result: Set<String> = []
+        while offset + 12 <= data.count {
+            let length = data[offset..<(offset + 4)].reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+            let typeStart = offset + 4
+            let type = String(decoding: data[typeStart..<(typeStart + 4)], as: UTF8.self)
+            result.insert(type)
+            offset += 12 + Int(length)
+            if type == "IEND" { break }
+        }
+        return result
+    }
+
+    @MainActor
+    private static func verifyPinnedWindow(pngData: Data) throws {
+        let pin = PinnedCapture(
+            id: "synthetic-pin-verifier",
+            localKey: "synthetic/pin.png",
+            title: "Synthetic pin",
+            frame: NativeRect(x: 20, y: 20, width: 160, height: 120),
+            displayID: CGMainDisplayID(),
+            clickThrough: true,
+            groupID: "synthetic",
+            createdAt: Date(timeIntervalSince1970: 1_000),
+            byteCount: pngData.count
+        )
+        let manager = PinnedImageWindowManager()
+        manager.show(pin: pin, pngData: pngData)
+        guard manager.verificationState(pinID: pin.id) == PinnedWindowVerificationState(
+            floating: true,
+            clickThrough: true,
+            joinsAllSpaces: true,
+            fullScreenAuxiliary: true
+        ) else { throw VerificationFailure.imageCreation }
+        manager.closeAll()
+    }
+}
+#else
+@main
+enum AtriumCaptureMacVerifier {
+    static func main() {
+        print("native-verifier: macOS framework checks require macOS")
+    }
+}
+#endif

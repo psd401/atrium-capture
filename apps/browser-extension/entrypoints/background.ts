@@ -6,6 +6,10 @@ import { DiagnosticsService } from '../src/diagnostics-service.js';
 import { EditorService } from '../src/editor-service.js';
 import { ManagedPolicyProvider } from '../src/managed-policy.js';
 import { parseIncomingMessage } from '../src/messages.js';
+import {
+  createBrowserNativeBridgeAdapter,
+  NativeBridgeService,
+} from '../src/native-bridge-service.js';
 import { BrowserPublicationService } from '../src/publication-service.js';
 import { RecorderService } from '../src/recorder-service.js';
 import { SerializedScreenshotCapture } from '../src/screenshot.js';
@@ -57,6 +61,7 @@ export default defineBackground(() => {
     },
     version: browser.runtime.getManifest().version,
   });
+  const nativeBridge = new NativeBridgeService(createBrowserNativeBridgeAdapter(browser));
 
   void repository.recordHealthEvent('worker_started').catch(() => undefined);
 
@@ -78,8 +83,11 @@ export default defineBackground(() => {
     }
 
     switch (message.kind) {
-      case 'capture.event':
-        return recorder.handleEvent(message, sender);
+      case 'capture.event': {
+        const result = await recorder.handleEvent(message, sender);
+        void nativeBridge.forwardCaptureEvent(message).catch(() => undefined);
+        return result;
+      }
       case 'recorder.content-state': {
         if (!sender.tab?.url || sender.frameId !== 0) {
           throw new Error('untrusted_content_sender');
@@ -158,6 +166,16 @@ export default defineBackground(() => {
         await repository.deleteAllLocalData();
         await broadcastChanged();
         return { cleared: true };
+      case 'native-bridge.snapshot':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_read_native_bridge');
+        }
+        return nativeBridge.snapshot();
+      case 'native-bridge.set-enabled':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_control_native_bridge');
+        }
+        return nativeBridge.setEnabled(message.payload.enabled);
     }
   };
 

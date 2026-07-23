@@ -64,6 +64,12 @@ if (
 ) {
   throw new Error('Packaged permissions differ from the reviewed v1 allowlist.');
 }
+if (
+  !Array.isArray(manifest.optional_permissions) ||
+  JSON.stringify([...manifest.optional_permissions].sort()) !== JSON.stringify(['nativeMessaging'])
+) {
+  throw new Error('Packaged optional permissions differ from the reviewed Mac bridge allowlist.');
+}
 
 const releaseManifest = {
   artifact: archiveName,

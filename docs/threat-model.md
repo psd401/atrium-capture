@@ -30,6 +30,8 @@ Atrium Capture handles local workflow semantics, raw screenshots, author edits, 
 | Tampered persisted/imported state bypasses privacy review         | Unreviewed publication                                  | Validate and migrate on every read; recompute publishability; gateway accepts only publishable assets                     | Migration and corrupted-state tests           |
 | Compromised dependency or build                                   | Code execution or data exfiltration                     | Exact lockfile, reviewed permissive licenses, high-severity audit gate, minimal dependencies, no telemetry                | CI license/audit checks and dependency review |
 | Permission revocation on macOS                                    | Silent loss or accidental broad capture                 | Point-of-use checks, degraded editor-only mode, stop active capture on permission change                                  | Unit tests and manual permission matrix       |
+| Native host sends an oversized or privileged response             | Token/pixel disclosure or worker compromise             | Optional permission, fixed host allow-origin, 64 KiB client bound, exact envelope validation, recursive image/token deny  | Browser and host negative tests               |
+| Pin/clipboard history outlives district need                      | Local screenshot disclosure                             | Bounded local history, explicit deletion, do-not-copy option, owner-aware timed clipboard clearing                        | Pin/clipboard persistence tests and runbook   |
 
 ## Privacy abuse cases
 

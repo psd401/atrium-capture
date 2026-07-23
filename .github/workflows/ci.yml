@@ -39,6 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: swift test --package-path apps/macos
+      - run: scripts/build-macos-app.sh
 
   dependency-review:
     if: github.event_name == 'pull_request'

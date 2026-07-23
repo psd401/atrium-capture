@@ -25,6 +25,17 @@ describe('generated contract fixtures', () => {
     expect(inputStep?.target).not.toHaveProperty('value');
   });
 
+  it('decodes the shared macOS capture fixture', async () => {
+    const session = await readFixture<AtriumCaptureSession>('capture-session-macos-v1.json');
+
+    expect(session.recorder.surface).toBe('macos');
+    expect(session.steps).toHaveLength(2);
+    expect(session.steps[1]?.instruction.generatedText).toBe(
+      'Enter the requested value in Synthetic account label.',
+    );
+    expect(session.steps[0]?.target?.macos?.backingScaleFactor).toBe(2);
+  });
+
   it('loads a metadata-only native bridge envelope', async () => {
     const message = await readFixture<AtriumCaptureNativeBridgeMessage>('native-bridge-v1.json');
     const serialized = JSON.stringify(message);

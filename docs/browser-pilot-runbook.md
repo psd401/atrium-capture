@@ -35,7 +35,7 @@ Checklist:
 - `unlimitedStorage` prevents Chrome's generic quota from corrupting a long recording. The smaller administrator-controlled `maxStorageBytes` budget is still enforced before image commit.
 - `identity` supports an interactive non-Google Authorization Code + PKCE flow. It is unused while the live Atrium OAuth capability is disabled.
 
-No permission reads cookies, browsing history, page storage, network traffic, password values, or ordinary input values. `nativeMessaging` is intentionally absent until M6.
+No permission reads cookies, browsing history, page storage, network traffic, password values, or ordinary input values. M6 adds `nativeMessaging` as an optional, user-requested permission only; it is absent from the required install-time allowlist and forwards a strict semantic subset after worker validation and persistence.
 
 ## Support procedure
 
