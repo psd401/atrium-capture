@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.atrium.local/capture-extension-message.schema.json",
+  "title": "Atrium Capture extension message",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "payload"],
+      "properties": {
+        "kind": { "const": "capture.event" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["action", "eventId", "occurredAt"],
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "click",
+                "drag",
+                "input",
+                "manual",
+                "navigate",
+                "scroll",
+                "select",
+                "shortcut",
+                "submit"
+              ]
+            },
+            "eventId": { "type": "string", "format": "uuid" },
+            "occurredAt": { "type": "string", "format": "date-time" },
+            "shortcut": { "type": "string", "maxLength": 100 },
+            "target": { "$ref": "#/$defs/target" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "payload"],
+      "properties": {
+        "kind": { "const": "recorder.command" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["command", "commandId"],
+          "properties": {
+            "command": { "type": "string", "enum": ["start", "pause", "resume", "stop"] },
+            "commandId": { "type": "string", "format": "uuid" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": { "kind": { "const": "recorder.snapshot" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "payload"],
+      "properties": {
+        "kind": { "const": "recorder.content-state" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["url"],
+          "properties": { "url": { "type": "string", "format": "uri", "maxLength": 4096 } }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "rect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["height", "width", "x", "y"],
+      "properties": {
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "width": { "type": "number", "exclusiveMinimum": 0 },
+        "x": { "type": "number" },
+        "y": { "type": "number" }
+      }
+    },
+    "viewport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["height", "width"],
+      "properties": {
+        "height": { "type": "number", "exclusiveMinimum": 0 },
+        "width": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
+    "target": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "accessibleName": { "type": "string", "maxLength": 500 },
+        "bounds": { "$ref": "#/$defs/rect" },
+        "browser": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["devicePixelRatio", "origin", "viewportCss"],
+          "properties": {
+            "devicePixelRatio": { "type": "number", "exclusiveMinimum": 0 },
+            "origin": { "type": "string", "format": "uri", "maxLength": 2048 },
+            "pageTitle": { "type": "string", "maxLength": 500 },
+            "path": { "type": "string", "maxLength": 2048 },
+            "selectors": {
+              "type": "array",
+              "maxItems": 5,
+              "items": { "type": "string", "maxLength": 1000 }
+            },
+            "viewportCss": { "$ref": "#/$defs/viewport" }
+          }
+        },
+        "role": { "type": "string", "maxLength": 100 }
+      }
+    }
+  }
+}

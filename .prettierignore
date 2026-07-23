@@ -5,4 +5,5 @@ coverage/
 .output/
 apps/macos/.build/
 apps/macos/Sources/AtriumCaptureContracts/Generated/
+apps/browser-extension/src/generated/
 pnpm-lock.yaml

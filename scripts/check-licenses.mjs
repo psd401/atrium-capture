@@ -10,6 +10,19 @@ const allowedLicenses = new Set([
   'ISC',
   'MIT',
   'MPL-2.0',
+  'Zlib',
+]);
+
+// These exact metadata expressions were manually reviewed. OR expressions select the listed
+// permissive option; pako's MIT AND Zlib terms are both permissive. "BSD" is winreg's legacy
+// package metadata for its BSD-licensed, development-only WXT dependency.
+const reviewedExpressions = new Set([
+  '(BSD-2-Clause OR MIT OR Apache-2.0)',
+  '(BSD-3-Clause OR GPL-2.0)',
+  '(MIT AND Zlib)',
+  '(MIT OR CC0-1.0)',
+  '(MIT OR GPL-3.0-or-later)',
+  'BSD',
 ]);
 
 const result = spawnSync('pnpm', ['licenses', 'list', '--json', '--dev'], {
@@ -23,7 +36,9 @@ if (result.status !== 0) {
 
 const report = JSON.parse(result.stdout);
 const licenses = Array.isArray(report) ? report.map((entry) => entry.license) : Object.keys(report);
-const disallowed = [...new Set(licenses)].filter((license) => !allowedLicenses.has(license));
+const disallowed = [...new Set(licenses)].filter(
+  (license) => !allowedLicenses.has(license) && !reviewedExpressions.has(license),
+);
 
 if (disallowed.length > 0) {
   throw new Error(`Unreviewed dependency licenses: ${disallowed.join(', ')}`);

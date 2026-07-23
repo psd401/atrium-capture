@@ -25,7 +25,11 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm contracts:check
+      - run: pnpm messages:check
       - run: pnpm test
+      - run: pnpm build
+      - run: pnpm --filter @atrium-capture/browser-extension exec playwright install --with-deps chromium
+      - run: pnpm test:extension
       - run: pnpm licenses:check
       - run: pnpm security:audit
 
@@ -45,4 +49,5 @@ jobs:
       - uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
-          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD, CC0-1.0, BlueOak-1.0.0, MPL-2.0
+          allow-licenses: MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC, 0BSD, CC0-1.0, BlueOak-1.0.0, MPL-2.0, Zlib
+          allow-dependencies: pkg:npm/winreg@0.0.12

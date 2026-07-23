@@ -1,6 +1,5 @@
 {
   "compilerOptions": {
-    "composite": true,
     "declaration": true,
     "exactOptionalPropertyTypes": true,
     "forceConsistentCasingInFileNames": true,
@@ -16,6 +15,5 @@
     "target": "ES2024",
     "types": ["node", "vitest/globals"]
   },
-  "include": ["eslint.config.js", "scripts/**/*.mjs"],
-  "references": [{ "path": "packages/contracts" }]
+  "include": ["eslint.config.js", "scripts/**/*.mjs"]
 }
