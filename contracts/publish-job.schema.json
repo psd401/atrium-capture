@@ -35,6 +35,7 @@
     "createIdempotencyKey": { "type": "string", "minLength": 16, "maxLength": 128 },
     "contentObjectId": { "type": "string", "format": "uuid" },
     "currentVersionId": { "type": "string", "format": "uuid" },
+    "readerUrl": { "type": "string", "format": "uri", "maxLength": 2048 },
     "collectionId": { "type": "string", "format": "uuid" },
     "assetUploads": {
       "type": "array",

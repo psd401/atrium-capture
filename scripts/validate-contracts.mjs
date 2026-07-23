@@ -13,15 +13,24 @@ const schemaFixtures = [
   ],
   ['contracts/native-bridge.schema.json', 'packages/test-fixtures/fixtures/native-bridge-v1.json'],
   ['contracts/publish-job.schema.json', 'packages/test-fixtures/fixtures/publish-job-v1.json'],
+  [
+    'contracts/publish-job.schema.json',
+    'packages/test-fixtures/fixtures/publish-job-ready-v1.json',
+  ],
 ];
 
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 addFormats(ajv);
+const validators = new Map();
 
 for (const [schemaPath, fixturePath] of schemaFixtures) {
-  const schema = JSON.parse(await readFile(path.join(repositoryRoot, schemaPath), 'utf8'));
   const fixture = JSON.parse(await readFile(path.join(repositoryRoot, fixturePath), 'utf8'));
-  const validate = ajv.compile(schema);
+  let validate = validators.get(schemaPath);
+  if (!validate) {
+    const schema = JSON.parse(await readFile(path.join(repositoryRoot, schemaPath), 'utf8'));
+    validate = ajv.compile(schema);
+    validators.set(schemaPath, validate);
+  }
 
   if (!validate(fixture)) {
     throw new Error(`${fixturePath} failed ${schemaPath}: ${ajv.errorsText(validate.errors)}`);

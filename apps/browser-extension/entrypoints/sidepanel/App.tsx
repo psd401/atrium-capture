@@ -2,6 +2,7 @@ import {
   AssetState,
   AtriumCaptureSessionState,
   Kind,
+  Phase,
   PrivacyReview,
   type AnnotationElement,
   type AtriumCaptureSession,
@@ -17,6 +18,8 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { browser } from 'wxt/browser';
 
+import type { PublicationSnapshot } from '../../src/publication-service.js';
+
 const annotationTools = [
   { kind: Kind.Arrow, label: 'Arrow' },
   { kind: Kind.Rectangle, label: 'Rectangle' },
@@ -31,6 +34,8 @@ type DrawingTool = Kind | 'crop';
 
 export function App() {
   const [session, setSession] = useState<AtriumCaptureSession>();
+  const [publication, setPublication] = useState<PublicationSnapshot>();
+  const [selectedCollectionId, setSelectedCollectionId] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
   const [selectedStepId, setSelectedStepId] = useState<string>();
@@ -44,9 +49,12 @@ export function App() {
   const imageRef = useRef<HTMLImageElement>(null);
 
   const refresh = useCallback(async () => {
-    const next = (await browser.runtime.sendMessage({ kind: 'recorder.snapshot' })) as
-      AtriumCaptureSession | undefined;
-    setSession(next);
+    const [next, publicationSnapshot] = await Promise.all([
+      browser.runtime.sendMessage({ kind: 'recorder.snapshot' }),
+      browser.runtime.sendMessage({ kind: 'publisher.snapshot' }),
+    ]);
+    setSession(next as AtriumCaptureSession | undefined);
+    setPublication(publicationSnapshot as PublicationSnapshot | undefined);
   }, []);
 
   useEffect(() => {
@@ -54,6 +62,17 @@ export function App() {
     const interval = window.setInterval(() => void refresh(), 500);
     return () => window.clearInterval(interval);
   }, [refresh]);
+
+  useEffect(() => {
+    if (
+      publication?.collections.length &&
+      !publication.collections.some(
+        (collection) => collection.collectionId === selectedCollectionId,
+      )
+    ) {
+      setSelectedCollectionId(publication.collections[0]?.collectionId ?? '');
+    }
+  }, [publication, selectedCollectionId]);
 
   useEffect(() => {
     if (!session?.steps.length) {
@@ -166,12 +185,46 @@ export function App() {
     }
   };
 
+  const publisherCommand = async (
+    kind: 'publisher.enqueue' | 'publisher.publish-internal' | 'publisher.retry',
+  ) => {
+    setPending(true);
+    setError(undefined);
+    try {
+      const payload =
+        kind === 'publisher.enqueue'
+          ? {
+              commandId: crypto.randomUUID(),
+              ...(selectedCollectionId ? { collectionId: selectedCollectionId } : {}),
+            }
+          : { jobId: publication?.job?.jobId };
+      if (kind !== 'publisher.enqueue' && !payload.jobId) {
+        throw new Error('publish_job_missing');
+      }
+      const job = await browser.runtime.sendMessage({ kind, payload });
+      if (!job) {
+        throw new Error('publisher_command_failed');
+      }
+      await refresh();
+    } catch {
+      setError('Atrium could not be updated. The durable draft remains safe to retry.');
+    } finally {
+      setPending(false);
+    }
+  };
+
   const state = session?.state;
   const isRecording = state === AtriumCaptureSessionState.Recording;
   const isPaused = state === AtriumCaptureSessionState.Paused;
   const isReview = state === AtriumCaptureSessionState.Review;
   const isPublishable = state === AtriumCaptureSessionState.Publishable;
+  const isSubmitted = state === AtriumCaptureSessionState.Submitted;
   const canStart = !session || (!isRecording && !isPaused && !isReview && !isPublishable);
+  const canCreateDraft = Boolean(
+    publication?.capabilities.idempotentWrites &&
+    publication.capabilities.immutableAssets &&
+    (publication.capabilities.mode === 'mock' || publication.capabilities.oauth),
+  );
 
   const approveClearSteps = async () => {
     if (!session) {
@@ -605,10 +658,88 @@ export function App() {
         </section>
       )}
 
-      {isPublishable && (
-        <section className="success-callout">
+      {(isPublishable || isSubmitted) && (
+        <section aria-labelledby="publish-heading" className="success-callout">
+          <h2 id="publish-heading">Atrium draft</h2>
           <strong>Publishable images prepared</strong>
           <p>Annotations are flattened, metadata is stripped, and raw source bytes were deleted.</p>
+
+          {!canCreateDraft && !publication?.job && (
+            <div className="capability-callout">
+              <strong>Live Atrium publishing is not configured</strong>
+              <p>Local recording and privacy review remain available. No capture data was sent.</p>
+              {publication?.capabilities.reasons.map((reason) => (
+                <small key={reason}>{reason}</small>
+              ))}
+            </div>
+          )}
+
+          {canCreateDraft && !publication?.job && (
+            <div className="publish-controls">
+              <label htmlFor="collection-picker">Collection</label>
+              <select
+                id="collection-picker"
+                onChange={(event) => setSelectedCollectionId(event.target.value)}
+                value={selectedCollectionId}
+              >
+                {publication?.collections.map((collection) => (
+                  <option key={collection.collectionId} value={collection.collectionId}>
+                    {collection.name}
+                  </option>
+                ))}
+              </select>
+              {publication?.collectionSource === 'managed_default' && (
+                <small>Set by district managed policy.</small>
+              )}
+              <button
+                disabled={pending || !selectedCollectionId}
+                onClick={() => void publisherCommand('publisher.enqueue')}
+                type="button"
+              >
+                Save private Atrium draft
+              </button>
+            </div>
+          )}
+
+          {publication?.job && (
+            <div className="publish-status" role="status">
+              <p>
+                <strong>{publishPhaseLabel(publication.job.phase)}</strong>
+              </p>
+              {publication.job.lastError && (
+                <p className="error">
+                  {publication.job.lastError.retryable
+                    ? 'The last request was interrupted and can be retried safely.'
+                    : 'Publishing needs attention before it can continue.'}
+                </p>
+              )}
+              {publication.job.lastError?.retryable && (
+                <button
+                  disabled={pending}
+                  onClick={() => void publisherCommand('publisher.retry')}
+                  type="button"
+                >
+                  Retry safely
+                </button>
+              )}
+              {publication.job.readerUrl && (
+                <a href={publication.job.readerUrl} rel="noreferrer" target="_blank">
+                  Open Atrium reader
+                </a>
+              )}
+              {publication.job.phase === Phase.ReadyAsDraft &&
+                publication.capabilities.internalPublication && (
+                  <button
+                    className="secondary"
+                    disabled={pending}
+                    onClick={() => void publisherCommand('publisher.publish-internal')}
+                    type="button"
+                  >
+                    Publish internally
+                  </button>
+                )}
+            </div>
+          )}
         </section>
       )}
 
@@ -627,8 +758,30 @@ function stateLabel(state?: AtriumCaptureSessionState): string {
       return 'Ready for review';
     case AtriumCaptureSessionState.Publishable:
       return 'Privacy approved';
+    case AtriumCaptureSessionState.Submitted:
+      return 'Saved to Atrium';
     default:
       return 'Not recording';
+  }
+}
+
+function publishPhaseLabel(phase: Phase): string {
+  switch (phase) {
+    case Phase.Queued:
+    case Phase.CreatingObject:
+      return 'Creating private draft…';
+    case Phase.UploadingAssets:
+      return 'Uploading publishable images…';
+    case Phase.CreatingVersion:
+      return 'Creating guide version…';
+    case Phase.ReadyAsDraft:
+      return 'Private draft ready';
+    case Phase.PublishingInternal:
+      return 'Publishing internally…';
+    case Phase.Complete:
+      return 'Published internally';
+    case Phase.NeedsAttention:
+      return 'Publishing needs attention';
   }
 }
 

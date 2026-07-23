@@ -30,6 +30,8 @@ swift test --package-path apps/macos
 
 `pnpm messages:generate` compiles the extension trust-boundary JSON Schema into a committed standalone validator. Runtime AJV compilation is intentionally forbidden because Manifest V3 disallows dynamic code generation. Install bundled Chromium once with `pnpm --filter @atrium-capture/browser-extension exec playwright install chromium`; the browser suite launches the production MV3 build in a persistent profile and runs the synthetic restart/review workflow plus byte-level image goldens.
 
+The Atrium client integration test binds a loopback-only synthetic server on an ephemeral port. It exposes only `/_mock/atrium-capture/v1`; the production client has no inferred Atrium route. Run `pnpm exec vitest run packages/atrium-client/test` to verify the mock HTTP boundary and failure-after-commit matrix.
+
 The browser fixture site is entirely synthetic. Serve `packages/test-fixtures/site` at `http://127.0.0.1:4173`; no real district information belongs in local fixtures, test recordings, or golden images.
 
 ## Browser permission rationale

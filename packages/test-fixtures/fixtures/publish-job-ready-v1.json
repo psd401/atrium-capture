@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "1.0",
+  "jobId": "50000000-0000-4000-8000-000000000002",
+  "sessionId": "10000000-0000-4000-8000-000000000001",
+  "phase": "ready_as_draft",
+  "attemptCount": 1,
+  "createIdempotencyKey": "fixture-create-10000000-0000-4000-8000-000000000002",
+  "contentObjectId": "70000000-0000-4000-8000-000000000001",
+  "currentVersionId": "80000000-0000-4000-8000-000000000001",
+  "readerUrl": "https://atrium.example.test/reader/70000000-0000-4000-8000-000000000001",
+  "collectionId": "60000000-0000-4000-8000-000000000001",
+  "assetUploads": [
+    {
+      "localAssetId": "20000000-0000-4000-8000-000000000002",
+      "remoteAssetId": "90000000-0000-4000-8000-000000000001",
+      "idempotencyKey": "fixture-asset-20000000-0000-4000-8000-000000000002",
+      "state": "ready"
+    }
+  ],
+  "createdAt": "2026-01-15T15:05:00.000Z",
+  "updatedAt": "2026-01-15T15:06:00.000Z"
+}

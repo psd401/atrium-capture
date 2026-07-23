@@ -20,6 +20,7 @@ body {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -56,6 +57,7 @@ button[aria-pressed='true'] {
 
 button:focus-visible,
 input:focus-visible,
+select:focus-visible,
 textarea:focus-visible {
   outline: 3px solid #ffbf47;
   outline-offset: 2px;
@@ -67,6 +69,7 @@ button:disabled {
 }
 
 input,
+select,
 textarea {
   width: 100%;
   border: 1px solid #bfc9d7;
@@ -74,6 +77,10 @@ textarea {
   padding: 0.65rem;
   color: #17213b;
   background: white;
+}
+
+select {
+  min-height: 2.55rem;
 }
 
 textarea {
@@ -410,6 +417,35 @@ footer,
   margin: 0.9rem 0;
   border-radius: 0.7rem;
   padding: 0.85rem;
+}
+
+.success-callout h2 {
+  margin-bottom: 0.55rem;
+  font-size: 1rem;
+}
+
+.capability-callout,
+.publish-controls,
+.publish-status {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.8rem;
+  border-top: 1px solid #b9dbc9;
+  padding-top: 0.8rem;
+}
+
+.capability-callout small {
+  color: #52657b;
+}
+
+.publish-controls label {
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.publish-status a {
+  color: #2448b8;
+  font-weight: 750;
 }
 
 .privacy-callout {

@@ -51,6 +51,9 @@ importers:
 
   apps/browser-extension:
     dependencies:
+      '@atrium-capture/atrium-client':
+        specifier: workspace:*
+        version: link:../../packages/atrium-client
       '@atrium-capture/capture-core':
         specifier: workspace:*
         version: link:../../packages/capture-core
@@ -94,6 +97,12 @@ importers:
       wxt:
         specifier: 0.20.27
         version: 0.20.27(@types/node@26.1.1)(eslint@10.7.0(jiti@2.7.0))(jiti@2.7.0)(rolldown@1.1.5)(yaml@2.9.0)
+
+  packages/atrium-client:
+    dependencies:
+      '@atrium-capture/contracts':
+        specifier: workspace:*
+        version: link:../contracts
 
   packages/capture-core:
     dependencies:

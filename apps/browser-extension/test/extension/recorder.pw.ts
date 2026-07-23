@@ -141,6 +141,8 @@ test('records a multi-page workflow across a forced service-worker stop', async 
   expect(publishable?.assets.filter((asset) => asset.state === 'raw_local')).toHaveLength(0);
   await expect(panel.getByRole('status')).toContainText('Privacy approved');
   await expect(panel.getByText('raw source bytes were deleted', { exact: false })).toBeVisible();
+  await expect(panel.getByText('Live Atrium publishing is not configured')).toBeVisible();
+  await expect(panel.getByText('No capture data was sent.', { exact: false })).toBeVisible();
 });
 
 async function extensionWorker(browserContext: BrowserContext): Promise<Worker> {

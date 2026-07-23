@@ -33,6 +33,16 @@ final class ContractFixtureTests: XCTestCase {
         )
     }
 
+    func testDecodesSharedReadyPublishJobFixture() throws {
+        let job = try AtriumContractCodec.makeDecoder().decode(
+            AtriumCapturePublishJob.self,
+            from: fixtureData(named: "publish-job-ready-v1.json")
+        )
+
+        XCTAssertEqual(job.phase, .readyAsDraft)
+        XCTAssertNotNil(job.readerURL)
+    }
+
     func testDecodesSharedMetadataOnlyBridgeFixture() throws {
         let data = try fixtureData(named: "native-bridge-v1.json")
         _ = try AtriumContractCodec.makeDecoder().decode(

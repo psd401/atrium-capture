@@ -12,3 +12,7 @@ Contract versioning rules:
 - Removing, renaming, retyping, or changing semantics requires a new major schema version and a migration.
 - Persisted data is validated on read and migrated before use.
 - TypeScript and Swift must share the same fixture corpus before either platform ships.
+
+## 1.0 additive history
+
+- 2026-07-22: added optional `PublishJob.readerUrl`. This is backward-compatible: queued/legacy jobs omit it, while ready-draft jobs persist the documented reader destination. TypeScript and Swift decode both queued and ready fixtures.

@@ -77,4 +77,34 @@ describe('runtime message boundary', () => {
       }),
     ).toBeUndefined();
   });
+
+  it('accepts publication control metadata but rejects tokens and screenshot bytes', () => {
+    expect(
+      parseIncomingMessage({
+        kind: 'publisher.enqueue',
+        payload: {
+          collectionId: '60000000-0000-4000-8000-000000000001',
+          commandId: '50000000-0000-4000-8000-000000000001',
+        },
+      }),
+    ).toBeTruthy();
+    expect(
+      parseIncomingMessage({
+        kind: 'publisher.enqueue',
+        payload: {
+          accessToken: 'prohibited',
+          commandId: '50000000-0000-4000-8000-000000000001',
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      parseIncomingMessage({
+        kind: 'publisher.retry',
+        payload: {
+          imageBytes: 'prohibited',
+          jobId: '50000000-0000-4000-8000-000000000001',
+        },
+      }),
+    ).toBeUndefined();
+  });
 });

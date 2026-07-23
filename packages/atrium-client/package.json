@@ -1,0 +1,19 @@
+{
+  "name": "@atrium-capture/atrium-client",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./mock": "./src/mock-gateway.ts",
+    "./mock-http": "./src/http-mock-gateway.ts",
+    "./mock-server": "./src/mock-server.ts"
+  },
+  "dependencies": {
+    "@atrium-capture/contracts": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

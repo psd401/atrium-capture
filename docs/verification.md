@@ -35,3 +35,16 @@ Exit-gate conclusion: the production extension-loaded workflow survives a forced
 - [ADR 0002](adr/0002-flattening-and-raw-retention.md) records the irreversible image boundary and safest-default `delete_after_flatten` retention policy.
 
 Exit-gate conclusion: golden and lifecycle tests prove redacted source pixels and source metadata are not recoverable from exported or locally publishable bytes, and unreviewed/raw assets cannot cross the publishable boundary.
+
+## M3 — locally complete (2026-07-22)
+
+- The language-neutral publish-job contract has a backward-compatible optional `readerUrl`; strict schema validation and the generated TypeScript and Swift models decode both queued and ready-draft shared fixtures.
+- `AtriumGateway` exposes independent OAuth, collection discovery, immutable asset, idempotency, and publication capabilities. The unavailable live implementation fails closed and contains no production route. The synthetic HTTP implementation accepts only `/_mock/atrium-capture/v1` and validates bounded responses at the client trust boundary.
+- Authorization tests prove S256 PKCE state/challenge handling, use the fixed Chrome Identity redirect, keep the verifier out of the authorization URL, validate token responses, and send no token through a runtime message. The manifest requests the documented `identity` permission; live endpoints/scopes remain absent.
+- Publisher tests inject a connection loss after remote commit at private-object creation, each asset upload, version creation, and internal publication. Every retry ends with exactly one object, one copy of each asset, and one version; visibility stays private until the separate internal-publication action.
+- IndexedDB version 3 stores the durable outbox. A browser-service test closes the repository after a committed-but-unacknowledged object creation, opens a new repository instance, resumes the job, and obtains one private draft and reader link without selecting the retained raw sentinel.
+- The side panel provides a collection picker/managed-default indication, phase/error status, safe retry, reader link, and explicit internal-publication action when capabilities exist. The production build instead displays the named capability blocker and confirms no data was sent.
+- `pnpm typecheck`, `pnpm contracts:check`, `pnpm messages:check`, package/unit tests, the localhost HTTP integration test, production WXT build, and extension-loaded Chromium workflow pass. Swift 6 decodes the new ready-draft fixture in the official container.
+- [ADR 0003](adr/0003-durable-atrium-publication.md) records persistence-before-I/O, idempotency, private-default, raw-asset exclusion, PKCE, and the no-invented-route decision.
+
+Exit-gate conclusion: every publication phase recovers from a post-commit interruption without duplicate remote state and private is the default. Production publication remains exclusively blocked on Atrium's documented OAuth registration/token validation, immutable authored-asset upload, collection discovery or managed default, and idempotent write contract.

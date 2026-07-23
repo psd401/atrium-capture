@@ -5,6 +5,7 @@
   "type": "module",
   "license": "MIT",
   "dependencies": {
+    "@atrium-capture/atrium-client": "workspace:*",
     "@atrium-capture/capture-core": "workspace:*",
     "@atrium-capture/contracts": "workspace:*",
     "@atrium-capture/editor-model": "workspace:*",
