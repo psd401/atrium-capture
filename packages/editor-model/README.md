@@ -1,5 +1,3 @@
 # Editor model
 
-Owns platform-neutral commands for reorder, delete, merge, crop, zoom, annotation, redaction, and publishable-image derivation.
-
-Rendering implementations may differ between browser Canvas and Core Graphics, but both consume the same command model and golden fixtures.
+Owns platform-neutral, deterministic review commands, step ordering, annotation/crop state, automated sensitive-region suggestions, and mandatory privacy-review gates. Browser Canvas and Core Graphics are rendering adapters; neither platform invents separate edit semantics.
