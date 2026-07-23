@@ -1,6 +1,6 @@
 # Milestones
 
-Verification evidence is recorded in [verification.md](verification.md). M0 through M3 are locally complete; later milestones remain open until their exit gates pass. M3's live Atrium dependency remains capability-gated as documented below.
+Verification evidence is recorded in [verification.md](verification.md). M0 through M4 are locally complete; later milestones remain open until their exit gates pass. Live Atrium dependencies remain capability-gated as documented below.
 
 ## M0 — Contracts and repository foundation
 
@@ -49,6 +49,8 @@ Dependencies: Atrium production OAuth and content assets. Collection discovery i
 Exit gate: pilot checklist, privacy review, rollback, and support diagnostics are approved.
 
 Dependency: Atrium idempotency/concurrency before broad rollout.
+
+Local status: engineering-approved for synthetic/unpublished evaluation. Authenticated development-Atrium acceptance remains capability-gated by the dependency above.
 
 ## M5 — Browser v1
 

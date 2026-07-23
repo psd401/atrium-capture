@@ -60,6 +60,8 @@ test('records a multi-page workflow across a forced service-worker stop', async 
   const page = await context.newPage();
   await page.goto(`${fixtureOrigin}/index.html`);
   await page.bringToFront();
+  await panel.getByRole('button', { name: 'Start recording' }).focus();
+  await expect(panel.getByRole('button', { name: 'Start recording' })).toBeFocused();
   await panel.getByRole('button', { name: 'Start recording' }).click();
   await expect.poll(async () => (await snapshot(panel))?.state).toBe('recording');
 
@@ -143,6 +145,35 @@ test('records a multi-page workflow across a forced service-worker stop', async 
   await expect(panel.getByText('raw source bytes were deleted', { exact: false })).toBeVisible();
   await expect(panel.getByText('Live Atrium publishing is not configured')).toBeVisible();
   await expect(panel.getByText('No capture data was sent.', { exact: false })).toBeVisible();
+
+  await panel.getByText('Support diagnostics').click();
+  await expect(
+    panel.getByText('never screenshots, instructions, page URLs, typed values, or tokens', {
+      exact: false,
+    }),
+  ).toBeVisible();
+  const downloadPromise = panel.waitForEvent('download');
+  await panel.getByRole('button', { name: 'Export safe diagnostics' }).click();
+  const download = await downloadPromise;
+  const diagnosticsPath = await download.path();
+  if (!diagnosticsPath) {
+    throw new Error('diagnostics_download_missing');
+  }
+  const diagnostics = await readFile(diagnosticsPath, 'utf8');
+  expect(diagnostics).not.toContain('SYNTHETIC_LITERAL_MUST_NOT_PERSIST');
+  expect(diagnostics).not.toContain('SYNTHETIC_PASSWORD_MUST_NOT_PERSIST');
+  expect(diagnostics).not.toContain(fixtureOrigin);
+  expect(diagnostics).not.toMatch(/access[_-]?token|refresh[_-]?token|bearer/i);
+
+  await panel.getByText('Why these permissions?').click();
+  await expect(
+    panel.getByText('bounded action metadata only during a recording', { exact: false }),
+  ).toBeVisible();
+
+  panel.once('dialog', (dialog) => dialog.accept());
+  await panel.getByRole('button', { name: 'Delete all local capture data' }).click();
+  await expect(panel.getByRole('button', { name: 'Start recording' })).toBeVisible();
+  await expect(panel.locator('ol > li')).toHaveCount(0);
 });
 
 async function extensionWorker(browserContext: BrowserContext): Promise<Worker> {

@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } 
 import { browser } from 'wxt/browser';
 
 import type { PublicationSnapshot } from '../../src/publication-service.js';
+import type { SupportDiagnostics } from '../../src/diagnostics-service.js';
 
 const annotationTools = [
   { kind: Kind.Arrow, label: 'Arrow' },
@@ -35,6 +36,7 @@ type DrawingTool = Kind | 'crop';
 export function App() {
   const [session, setSession] = useState<AtriumCaptureSession>();
   const [publication, setPublication] = useState<PublicationSnapshot>();
+  const [diagnostics, setDiagnostics] = useState<SupportDiagnostics>();
   const [selectedCollectionId, setSelectedCollectionId] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
@@ -62,6 +64,17 @@ export function App() {
     const interval = window.setInterval(() => void refresh(), 500);
     return () => window.clearInterval(interval);
   }, [refresh]);
+
+  const refreshDiagnostics = useCallback(async () => {
+    const next = await browser.runtime.sendMessage({ kind: 'diagnostics.snapshot' });
+    setDiagnostics(next as SupportDiagnostics | undefined);
+  }, []);
+
+  useEffect(() => {
+    void refreshDiagnostics();
+    const interval = window.setInterval(() => void refreshDiagnostics(), 5_000);
+    return () => window.clearInterval(interval);
+  }, [refreshDiagnostics]);
 
   useEffect(() => {
     if (
@@ -172,7 +185,7 @@ export function App() {
     try {
       const next = (await browser.runtime.sendMessage({
         kind: 'editor.finalize',
-        payload: { commandId: crypto.randomUUID(), rawRetention: 'delete_after_flatten' },
+        payload: { commandId: crypto.randomUUID() },
       })) as AtriumCaptureSession | undefined;
       if (!next) {
         throw new Error('finalize_failed');
@@ -213,13 +226,64 @@ export function App() {
     }
   };
 
+  const exportDiagnostics = async () => {
+    setError(undefined);
+    try {
+      const next = (await browser.runtime.sendMessage({
+        kind: 'diagnostics.snapshot',
+      })) as SupportDiagnostics;
+      const blob = new Blob([`${JSON.stringify(next, undefined, 2)}\n`], {
+        type: 'application/json',
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.download = `atrium-capture-diagnostics-${next.generatedAt.slice(0, 10)}.json`;
+      anchor.href = url;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setDiagnostics(next);
+    } catch {
+      setError('Support diagnostics could not be prepared.');
+    }
+  };
+
+  const clearLocalData = async () => {
+    if (
+      !window.confirm(
+        'Delete every local Atrium Capture session, screenshot, edit receipt, and publishing job from this browser?',
+      )
+    ) {
+      return;
+    }
+    setPending(true);
+    setError(undefined);
+    try {
+      const result = await browser.runtime.sendMessage({
+        kind: 'diagnostics.clear-local-data',
+        payload: { confirmation: 'DELETE_LOCAL_CAPTURE_DATA' },
+      });
+      if (!result) {
+        throw new Error('local_clear_failed');
+      }
+      setSession(undefined);
+      setPublication(undefined);
+      await Promise.all([refresh(), refreshDiagnostics()]);
+    } catch {
+      setError('Local capture data could not be deleted.');
+    } finally {
+      setPending(false);
+    }
+  };
+
   const state = session?.state;
   const isRecording = state === AtriumCaptureSessionState.Recording;
   const isPaused = state === AtriumCaptureSessionState.Paused;
   const isReview = state === AtriumCaptureSessionState.Review;
   const isPublishable = state === AtriumCaptureSessionState.Publishable;
   const isSubmitted = state === AtriumCaptureSessionState.Submitted;
-  const canStart = !session || (!isRecording && !isPaused && !isReview && !isPublishable);
+  const canStart =
+    (!session || (!isRecording && !isPaused && !isReview && !isPublishable)) &&
+    diagnostics?.managedPolicy.valid !== false;
   const canCreateDraft = Boolean(
     publication?.capabilities.idempotentWrites &&
     publication.capabilities.immutableAssets &&
@@ -370,6 +434,13 @@ export function App() {
       </section>
 
       {error && <p className="error">{error}</p>}
+
+      {diagnostics?.managedPolicy.valid === false && (
+        <section className="policy-error" role="alert">
+          <strong>Recording disabled by invalid managed policy</strong>
+          <p>Ask district support to validate the Atrium Capture policy configuration.</p>
+        </section>
+      )}
 
       <section aria-labelledby="steps-heading" className="steps">
         <div className="section-heading">
@@ -652,7 +723,9 @@ export function App() {
             <small>
               {issues.length
                 ? 'Resolve every privacy check first.'
-                : 'Raw originals will be deleted after flattening.'}
+                : diagnostics?.managedPolicy.rawImageRetention === 'delete_after_submit'
+                  ? 'Raw originals remain local until the draft succeeds; they never enter the outbox.'
+                  : 'Raw originals will be deleted after flattening.'}
             </small>
           </div>
         </section>
@@ -662,7 +735,12 @@ export function App() {
         <section aria-labelledby="publish-heading" className="success-callout">
           <h2 id="publish-heading">Atrium draft</h2>
           <strong>Publishable images prepared</strong>
-          <p>Annotations are flattened, metadata is stripped, and raw source bytes were deleted.</p>
+          <p>
+            Annotations are flattened and metadata is stripped.{' '}
+            {diagnostics?.managedPolicy.rawImageRetention === 'delete_after_submit' && !isSubmitted
+              ? 'Raw source bytes remain local until the Atrium draft succeeds and are excluded from upload.'
+              : 'Raw source bytes were deleted.'}
+          </p>
 
           {!canCreateDraft && !publication?.job && (
             <div className="capability-callout">
@@ -743,6 +821,56 @@ export function App() {
         </section>
       )}
 
+      <section className="support">
+        <details>
+          <summary>Support diagnostics</summary>
+          <p>
+            Diagnostics contain operational counts and policy status only—never screenshots,
+            instructions, page URLs, typed values, or tokens.
+          </p>
+          {diagnostics && (
+            <dl>
+              <div>
+                <dt>Version</dt>
+                <dd>{diagnostics.application.version}</dd>
+              </div>
+              <div>
+                <dt>Policy</dt>
+                <dd>{diagnostics.managedPolicy.valid ? 'valid' : 'invalid'}</dd>
+              </div>
+              <div>
+                <dt>Local image storage</dt>
+                <dd>{formatBytes(diagnostics.storage.assetBytes)}</dd>
+              </div>
+              <div>
+                <dt>Telemetry</dt>
+                <dd>off</dd>
+              </div>
+            </dl>
+          )}
+          <button onClick={() => void exportDiagnostics()} type="button">
+            Export safe diagnostics
+          </button>
+          <button
+            className="danger"
+            disabled={pending}
+            onClick={() => void clearLocalData()}
+            type="button"
+          >
+            Delete all local capture data
+          </button>
+        </details>
+        <details>
+          <summary>Why these permissions?</summary>
+          <p>
+            Site access observes bounded action metadata only during a recording. Visible-tab
+            capture creates local screenshots. Storage preserves acknowledged steps across worker
+            restarts. Identity is reserved for an interactive Atrium sign-in when the live service
+            is configured.
+          </p>
+        </details>
+      </section>
+
       <footer>Typed values are omitted. Password fields are never captured.</footer>
     </main>
   );
@@ -783,6 +911,13 @@ function publishPhaseLabel(phase: Phase): string {
     case Phase.NeedsAttention:
       return 'Publishing needs attention';
   }
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024 * 1024) {
+    return `${Math.round(bytes / 1024)} KB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function privacyLabel(step: StepElement, issues: ReviewIssue[]): string {

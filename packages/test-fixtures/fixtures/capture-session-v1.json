@@ -13,6 +13,7 @@
   "policy": {
     "policyVersion": "fixture-v1",
     "sourceUrlRetention": "origin",
+    "rawImageRetention": "delete_after_flatten",
     "reviewStatus": "in_review"
   },
   "steps": [

@@ -25,7 +25,8 @@ export class BrowserPublicationService {
   constructor(
     private readonly repository: CaptureRepository,
     private readonly gateway: AtriumGateway,
-    private readonly managedDefaultCollectionId?: string,
+    private readonly loadManagedDefaultCollectionId: () => Promise<string | undefined> = async () =>
+      undefined,
   ) {
     const jobs: PublishJobStore = {
       load: (jobId) => repository.getPublishJob(jobId),
@@ -45,7 +46,10 @@ export class BrowserPublicationService {
       ? await this.repository.getLatestPublishJobForSession(session.sessionId)
       : undefined;
     try {
-      const choices = await loadCollectionChoices(this.gateway, this.managedDefaultCollectionId);
+      const choices = await loadCollectionChoices(
+        this.gateway,
+        await this.loadManagedDefaultCollectionId(),
+      );
       return {
         capabilities,
         collections: choices.collections,
@@ -68,7 +72,10 @@ export class BrowserPublicationService {
     if (existing) {
       return this.drive(existing.jobId);
     }
-    const choices = await loadCollectionChoices(this.gateway, this.managedDefaultCollectionId);
+    const choices = await loadCollectionChoices(
+      this.gateway,
+      await this.loadManagedDefaultCollectionId(),
+    );
     const selectedCollectionId = collectionId ?? choices.collections[0]?.collectionId;
     if (!selectedCollectionId) {
       throw new GatewayError('collection_selection_required', false);

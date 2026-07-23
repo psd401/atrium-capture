@@ -113,6 +113,51 @@ describe('durable review and asset lifecycle', () => {
     expect(finalized.steps[0]?.screenshotAssetId).toBe(publishable?.assetId);
     expect(flatten).toHaveBeenCalledOnce();
   });
+
+  it('may retain raw bytes until submit without making them publishable', async () => {
+    await repository.startSession('Synthetic retained raw', '0.1.0');
+    const receipt = await repository.applyEvent(
+      {
+        action: Action.Click,
+        eventId: '50000000-0000-4000-8000-000000000010',
+        occurredAt: new Date(1),
+      },
+      sourceScreenshot,
+    );
+    await repository.transition('stop');
+    await repository.applyEditorCommand('70000000-0000-4000-8000-000000000010', {
+      kind: 'approve_step',
+      stepId: receipt.stepId!,
+    });
+    const review = await repository.getActiveSession();
+    const rawAssetId = review?.steps[0]?.screenshotAssetId;
+    if (!review || !rawAssetId) {
+      throw new Error('synthetic_retention_setup_failed');
+    }
+
+    const finalized = await repository.finalizeReview(
+      '70000000-0000-4000-8000-000000000011',
+      review.revision,
+      [
+        {
+          assetId: '60000000-0000-4000-8000-000000000010',
+          localKey: 'synthetic/publishable.png',
+          prepared: flattenedScreenshot,
+          sourceAssetId: rawAssetId,
+          stepId: receipt.stepId!,
+        },
+      ],
+      'delete_after_submit',
+    );
+
+    expect(finalized.assets.find((asset) => asset.assetId === rawAssetId)?.state).toBe(
+      AssetState.RawLocal,
+    );
+    expect((await repository.getStoredAsset(rawAssetId))?.blob).toEqual(sourceScreenshot.blob);
+    expect(
+      finalized.assets.filter((asset) => asset.state === AssetState.PublishableLocal),
+    ).toHaveLength(1);
+  });
 });
 
 function sequentialIds(): () => string {

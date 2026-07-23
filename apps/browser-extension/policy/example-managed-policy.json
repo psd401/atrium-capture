@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "allowedOrigins": ["https://intranet.example.test", "*.example.test"],
+  "deniedOrigins": ["https://accounts.example.test"],
+  "sourceUrlRetention": "origin",
+  "rawImageRetention": "delete_after_flatten",
+  "defaultCollectionId": "60000000-0000-4000-8000-000000000001",
+  "maxStorageBytes": 536870912,
+  "maxSessionSteps": 1000
+}

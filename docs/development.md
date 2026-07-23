@@ -34,6 +34,8 @@ The Atrium client integration test binds a loopback-only synthetic server on an 
 
 The browser fixture site is entirely synthetic. Serve `packages/test-fixtures/site` at `http://127.0.0.1:4173`; no real district information belongs in local fixtures, test recordings, or golden images.
 
+The production manifest packages `public/managed-storage-schema.json`. Validate policy behavior with `apps/browser-extension/policy/example-managed-policy.json` and the unit tests; do not place real district origins or collection identifiers in repository fixtures. Deployment, support, update, and rollback steps are in [browser-pilot-runbook.md](browser-pilot-runbook.md).
+
 ## Browser permission rationale
 
 Chrome requires the literal `<all_urls>` host permission (or a short-lived `activeTab` grant) for `captureVisibleTab`. Atrium Capture uses `<all_urls>` because a user-started workflow may cross origins and still needs correctly associated screenshots. The content script itself matches only HTTP/HTTPS pages, asks the trusted worker for current policy, and attaches observation listeners only while a session is actively recording and the site is allowed. It never reads cookies, page storage, network traffic, password values, or ordinary typed values. M4 adds administrator allow/deny policy on top of this invariant.

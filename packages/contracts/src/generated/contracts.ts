@@ -68,8 +68,14 @@ export enum AssetState {
 export interface Policy {
   denyReason?: string;
   policyVersion: string;
+  rawImageRetention?: RawImageRetention;
   reviewStatus: ReviewStatus;
   sourceUrlRetention: SourceURLRetention;
+}
+
+export enum RawImageRetention {
+  DeleteAfterFlatten = 'delete_after_flatten',
+  DeleteAfterSubmit = 'delete_after_submit',
 }
 
 export enum ReviewStatus {

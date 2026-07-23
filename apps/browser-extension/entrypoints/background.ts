@@ -2,7 +2,9 @@ import { browser } from 'wxt/browser';
 import { UnavailableAtriumGateway } from '@atrium-capture/atrium-client';
 
 import { CaptureRepository } from '../src/database.js';
+import { DiagnosticsService } from '../src/diagnostics-service.js';
 import { EditorService } from '../src/editor-service.js';
+import { ManagedPolicyProvider } from '../src/managed-policy.js';
 import { parseIncomingMessage } from '../src/messages.js';
 import { BrowserPublicationService } from '../src/publication-service.js';
 import { RecorderService } from '../src/recorder-service.js';
@@ -10,6 +12,10 @@ import { SerializedScreenshotCapture } from '../src/screenshot.js';
 
 export default defineBackground(() => {
   const repository = new CaptureRepository();
+  const managedPolicy = new ManagedPolicyProvider(browser.storage.managed);
+  void browser.storage.managed
+    .setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' })
+    .catch(() => undefined);
   const screenshotCapture = new SerializedScreenshotCapture((windowId) =>
     browser.tabs.captureVisibleTab(windowId, { format: 'png' }),
   );
@@ -32,13 +38,34 @@ export default defineBackground(() => {
     screenshotCapture,
     broadcastChanged,
     browser.runtime.getManifest().version,
+    () => managedPolicy.load(),
   );
   const editor = new EditorService(repository, broadcastChanged);
-  const publication = new BrowserPublicationService(repository, new UnavailableAtriumGateway());
+  const publication = new BrowserPublicationService(
+    repository,
+    new UnavailableAtriumGateway(),
+    async () => {
+      const snapshot = await managedPolicy.load();
+      return snapshot.valid ? snapshot.policy.defaultCollectionId : undefined;
+    },
+  );
+  const diagnostics = new DiagnosticsService(repository, managedPolicy, publication, {
+    extensionId: browser.runtime.id,
+    platform: async () => {
+      const platform = await browser.runtime.getPlatformInfo();
+      return { arch: platform.arch, os: platform.os };
+    },
+    version: browser.runtime.getManifest().version,
+  });
 
   void publication.resumePending().catch(() => undefined);
 
   browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => undefined);
+  browser.storage.onChanged.addListener((_changes, areaName) => {
+    if (areaName === 'managed') {
+      void broadcastChanged();
+    }
+  });
 
   type MessageSender = Parameters<Parameters<typeof browser.runtime.onMessage.addListener>[0]>[1];
 
@@ -79,7 +106,19 @@ export default defineBackground(() => {
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_finalize_session');
         }
-        return editor.finalize(message.payload.commandId, message.payload.rawRetention);
+        {
+          const snapshot = await managedPolicy.load();
+          if (!snapshot.valid) {
+            throw new Error('managed_policy_invalid');
+          }
+          const session = await repository.getActiveSession();
+          const retention =
+            session?.policy.rawImageRetention === 'delete_after_flatten' ||
+            snapshot.policy.rawImageRetention === 'delete_after_flatten'
+              ? 'delete_after_flatten'
+              : 'delete_after_submit';
+          return editor.finalize(message.payload.commandId, retention);
+        }
       case 'editor.asset':
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_read_asset');
@@ -105,6 +144,18 @@ export default defineBackground(() => {
           throw new Error('content_cannot_publish');
         }
         return publication.publishInternal(message.payload.jobId);
+      case 'diagnostics.snapshot':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_read_diagnostics');
+        }
+        return diagnostics.snapshot();
+      case 'diagnostics.clear-local-data':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_delete_local_data');
+        }
+        await repository.deleteAllLocalData();
+        await broadcastChanged();
+        return { cleared: true };
     }
   };
 

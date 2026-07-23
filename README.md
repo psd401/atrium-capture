@@ -34,6 +34,7 @@ docs/                  Architecture, milestones, security, and Atrium integratio
 - Never capture password values. Typed values are omitted by default.
 - Keep recordings local until the author explicitly submits a reviewed draft.
 - Upload only flattened, publishable screenshots; never upload an unredacted original.
+- Managed browser policy and support diagnostics are documented in [the pilot runbook](docs/browser-pilot-runbook.md); diagnostics are local and telemetry remains off.
 - Browser content scripts are untrusted. Validate every privileged message in the extension service worker.
 - The browser and Mac implementations share versioned contracts and fixtures, not platform-specific implementation code.
 
