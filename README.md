@@ -40,7 +40,7 @@ docs/                  Architecture, milestones, security, and Atrium integratio
 - Browser content scripts are untrusted. Validate every privileged message in the extension service worker.
 - The browser and Mac implementations share versioned contracts and fixtures, not platform-specific implementation code.
 
-See [docs/architecture.md](docs/architecture.md), [docs/milestones.md](docs/milestones.md), [docs/development.md](docs/development.md), and [docs/security-and-privacy.md](docs/security-and-privacy.md).
+See [docs/architecture.md](docs/architecture.md), [docs/milestones.md](docs/milestones.md), [docs/development.md](docs/development.md), and [docs/security-and-privacy.md](docs/security-and-privacy.md). The generated, agent-navigable documentation entry point is [openwiki/index.md](openwiki/index.md).
 
 ## License
 
