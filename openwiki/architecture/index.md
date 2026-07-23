@@ -1,9 +1,9 @@
 ---
 type: Documentation Index
-title: 'Architecture'
-description: 'Cross-platform runtime boundaries and durable state ownership.'
+title: "Architecture"
+description: "Files and subdirectories in Architecture."
 ---
 
 # Files
 
-- [Architecture overview](overview.md) - Browser and macOS runtimes, shared contracts, trusted contexts, and publication phases.
+- [Atrium Capture Architecture](overview.md) - Platform-neutral contracts connect separate browser and native implementations without sharing platform-specific runtime code.

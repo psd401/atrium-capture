@@ -1,10 +1,10 @@
 ---
 type: Documentation Index
-title: 'Operations'
-description: 'Development gates, packaging, pilot controls, and external release blockers.'
+title: "Operations"
+description: "Files and subdirectories in Operations."
 ---
 
 # Files
 
-- [Development and verification](development-and-verification.md) - Reproducible local and CI quality gates.
-- [Release gates](release-gates.md) - Build artifacts, pilot controls, and external dependencies.
+- [Development and Verification](development-and-verification.md) - Commands and evidence required to validate contracts, browser workflows, native workflows, privacy, packaging, licenses, and dependencies.
+- [Release Gates and External Dependencies](release-gates.md) - Locally complete milestones, build artifacts, operational approvals, and unavailable live Atrium capabilities.

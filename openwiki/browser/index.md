@@ -1,10 +1,10 @@
 ---
 type: Documentation Index
-title: 'Browser Extension'
-description: 'Manifest V3 recording, recovery, review, redaction, and managed operation.'
+title: "Browser"
+description: "Files and subdirectories in Browser."
 ---
 
 # Files
 
-- [Recorder and recovery](recorder.md) - Service-worker state ownership, semantic events, screenshots, and restart behavior.
-- [Review and redaction](review-and-redaction.md) - Side-panel editing, privacy approval, and irreversible export.
+- [Browser Recorder and Recovery](recorder.md) - The extension service worker serializes validated events, screenshots, receipts, and IndexedDB updates before acknowledgement.
+- [Browser Review and Irreversible Redaction](review-and-redaction.md) - The side panel edits normalized steps and creates metadata-free publishable derivatives after mandatory privacy review.

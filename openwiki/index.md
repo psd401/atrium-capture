@@ -1,12 +1,12 @@
 ---
 type: Documentation Index
-title: 'OpenWiki'
-description: 'Agent-navigable documentation for Atrium Capture.'
+title: "OpenWiki"
+description: "Files and subdirectories in OpenWiki."
 ---
 
 # Files
 
-- [Atrium Capture codebase overview](quickstart.md) - Browser-first workflow capture, irreversible privacy review, and private-by-default Atrium publication with a native macOS companion.
+- [Atrium Capture Codebase Overview](quickstart.md) - Browser-first workflow recorder and native macOS companion that create reviewed visual guides for Atrium.
 
 # Directories
 
