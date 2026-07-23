@@ -60,3 +60,14 @@ Exit-gate conclusion: every publication phase recovers from a post-commit interr
 - The complete local gate passes formatting, lint, strict typechecking, schema/message generation checks, unit/integration tests, production WXT build, extension-loaded Chromium acceptance, Swift fixture decode, license allowlist, and dependency audit.
 
 Exit-gate conclusion: every locally buildable pilot control, privacy review, support diagnostic, and rollback check passes. The sole unavailable pilot action is authenticated development-Atrium publication, which remains blocked on the named Atrium production capabilities rather than an implementation substitute.
+
+## M5 — locally complete (2026-07-22)
+
+- Browser package and manifest versions are `1.0.0`. `pnpm package:browser` builds the production MV3 ZIP, validates required runtime/schema files and the exact reviewed permission set, rejects source/test/fixture/map/environment/key material, and emits an artifact size/SHA-256 manifest with telemetry/live Atrium disabled and signing explicitly false.
+- Capture-core classifies merged events before screenshot work. A service test proves a duplicate click captures exactly one image, while the reducer hardening test produces 1,000 ordered unique steps at the managed default ceiling.
+- IndexedDB version 4 adds a bounded 100-entry operational health ring. Fixed event codes record worker lifecycle, capture/quota/screenshot health, message failures, and publication readiness/retry/attention without content. Diagnostics export only the latest timestamp/code/severity tuples and never transmits them.
+- The production extension test covers keyboard focus, a forced worker stop, multi-page capture, input/password omission, review/redaction, private live-capability gate, safe diagnostics download, permission rationale, and confirmed data deletion. The separate pixel golden remains byte-level.
+- CI now generates and verifies the browser package after extension acceptance. [Browser v1 release](browser-v1-release.md) records the supported district matrix, automated commands, manual synthetic ring, signing custody, store checklist, and the rule that signing/upload/deployment require explicit approval.
+- Formatting, lint, strict typechecking, schema/message freshness, all unit/integration tests, build, extension acceptance, package verification, Swift shared-contract tests, license allowlist, and a high-severity audit pass.
+
+Exit-gate conclusion: every locally buildable Browser v1 implementation, hardening, package, health, documentation, and automated acceptance gate passes. The artifact is deliberately unsigned and undeployed; those external release actions were not authorized. Live workflow publication remains gated only by the named Atrium contracts.

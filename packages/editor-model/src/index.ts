@@ -21,6 +21,7 @@ export type EditorCommand =
   | { crop: Geometry | null; kind: 'set_crop'; stepId: string }
   | { annotation: AnnotationElement; kind: 'add_annotation'; stepId: string }
   | { annotationId: string; kind: 'remove_annotation'; stepId: string }
+  | { kind: 'approve_clear_steps' }
   | { kind: 'approve_step'; stepId: string };
 
 export interface EditorContext {
@@ -195,6 +196,16 @@ export function applyEditorCommand(
             ? PrivacyReview.NotReviewed
             : step.privacyReview,
       }));
+    case 'approve_clear_steps':
+      return changed(
+        session,
+        session.steps.map((step) =>
+          !requiresPermanentRedaction(step) || hasCoveringRedaction(step)
+            ? { ...step, privacyReview: PrivacyReview.Approved }
+            : step,
+        ),
+        now,
+      );
     case 'approve_step': {
       const step = session.steps[requireStepIndex(session, command.stepId)];
       if (!step) {

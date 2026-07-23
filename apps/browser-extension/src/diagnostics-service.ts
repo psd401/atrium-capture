@@ -22,6 +22,9 @@ export interface SupportDiagnostics {
     stepCount: number;
   };
   generatedAt: string;
+  health: {
+    events: Array<{ code: string; occurredAt: string; severity: string }>;
+  };
   managedPolicy: {
     allowedOriginCount: number;
     configured: boolean;
@@ -74,12 +77,13 @@ export class DiagnosticsService {
   ) {}
 
   async snapshot(): Promise<SupportDiagnostics> {
-    const [session, storage, managed, publication, platform] = await Promise.all([
+    const [session, storage, managed, publication, platform, healthEvents] = await Promise.all([
       this.repository.getActiveSession(),
       this.repository.storageSummary(),
       this.managedPolicy.load(),
       this.publication.snapshot(),
       this.application.platform(),
+      this.repository.listHealthEvents(),
     ]);
     const assetStates: Record<string, number> = {};
     for (const state of Object.values(AssetState)) {
@@ -101,6 +105,13 @@ export class DiagnosticsService {
         ...(session ? { revision: session.revision } : {}),
       },
       generatedAt: this.now().toISOString(),
+      health: {
+        events: healthEvents.map(({ code, occurredAt, severity }) => ({
+          code,
+          occurredAt,
+          severity,
+        })),
+      },
       managedPolicy: {
         allowedOriginCount: managed.policy.allowedOrigins?.length ?? 0,
         configured: managed.configured,

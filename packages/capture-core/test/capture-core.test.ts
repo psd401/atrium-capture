@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   SerialTaskQueue,
+  classifyCaptureEvent,
   createCaptureSession,
   reduceCaptureEvent,
   transitionSession,
@@ -89,6 +90,36 @@ describe('event reduction', () => {
     expect(second.session.steps).toHaveLength(1);
     expect(serialized).not.toMatch(/"value"/i);
     expect(second.session.steps[0]?.instruction.generatedText).toContain('requested value');
+  });
+
+  it('classifies a duplicate before screenshot work and handles a 1,000-step session', () => {
+    const idFactory = makeIds();
+    let session = createCaptureSession({
+      appVersion: '1.0.0',
+      idFactory,
+      now: new Date(0),
+      title: 'Synthetic long session',
+    });
+    const firstEvent = event(Action.Click, 0);
+    session = reduceCaptureEvent(session, firstEvent, idFactory).session;
+    expect(classifyCaptureEvent(session, event(Action.Click, 100))).toBe('merged');
+
+    for (let index = 1; index < 1_000; index += 1) {
+      session = reduceCaptureEvent(
+        session,
+        {
+          action: Action.Manual,
+          eventId: crypto.randomUUID(),
+          occurredAt: new Date(1_700_000_001_000 + index),
+          target: { accessibleName: `Synthetic control ${index}`, role: 'button' },
+        },
+        idFactory,
+      ).session;
+    }
+
+    expect(session.steps).toHaveLength(1_000);
+    expect(session.steps.at(-1)?.sequence).toBe(999);
+    expect(new Set(session.steps.map((step) => step.stepId)).size).toBe(1_000);
   });
 });
 

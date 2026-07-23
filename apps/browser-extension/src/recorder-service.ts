@@ -4,7 +4,11 @@ import {
   SourceURLRetention,
   type Target,
 } from '@atrium-capture/contracts';
-import { SerialTaskQueue, type NormalizedCaptureEvent } from '@atrium-capture/capture-core';
+import {
+  SerialTaskQueue,
+  classifyCaptureEvent,
+  type NormalizedCaptureEvent,
+} from '@atrium-capture/capture-core';
 import {
   evaluateSiteAccess,
   retainBrowserLocation,
@@ -40,7 +44,7 @@ export class RecorderService {
     private readonly repository: CaptureRepository,
     private readonly screenshots: SerializedScreenshotCapture,
     private readonly onChanged: () => Promise<void>,
-    private readonly appVersion = '0.1.0',
+    private readonly appVersion = '1.0.0',
     private readonly loadPolicy: () => Promise<ManagedPolicySnapshot> = async () =>
       parseManagedPolicy({}),
   ) {}
@@ -55,6 +59,7 @@ export class RecorderService {
       if (command === 'start') {
         const managed = await this.loadPolicy();
         if (!managed.valid) {
+          await this.recordHealth('managed_policy_invalid', 'error');
           throw new Error('managed_policy_invalid');
         }
         session = await this.repository.startSession(title, this.appVersion, new Date(), {
@@ -65,6 +70,7 @@ export class RecorderService {
       } else {
         session = await this.repository.transition(command);
       }
+      await this.recordHealth(command === 'start' ? 'capture_started' : 'capture_state_changed');
       await this.onChanged();
       return session;
     });
@@ -124,12 +130,14 @@ export class RecorderService {
           session.steps.length >= managed.policy.maxSessionSteps
         ) {
           session = await this.repository.transition('pause');
+          await this.recordHealth('capture_paused_quota', 'warning');
         }
       }
 
       let screenshot;
       if (
         session?.state === AtriumCaptureSessionState.Recording &&
+        classifyCaptureEvent(session, event) === 'recorded' &&
         sender.tab.active !== false &&
         event.action !== Action.Shortcut
       ) {
@@ -137,6 +145,7 @@ export class RecorderService {
           screenshot = await this.screenshots.capture(windowId);
         } catch {
           console.warn('screenshot_capture_failed');
+          await this.recordHealth('screenshot_capture_failed', 'warning');
         }
       }
 
@@ -144,6 +153,7 @@ export class RecorderService {
         const storage = await this.repository.storageSummary();
         if (storage.assetBytes + screenshot.blob.size > managed.policy.maxStorageBytes) {
           await this.repository.transition('pause');
+          await this.recordHealth('capture_paused_quota', 'warning');
           screenshot = undefined;
         }
       }
@@ -152,6 +162,13 @@ export class RecorderService {
       await this.onChanged();
       return receipt;
     });
+  }
+
+  private async recordHealth(
+    code: Parameters<CaptureRepository['recordHealthEvent']>[0],
+    severity: Parameters<CaptureRepository['recordHealthEvent']>[1] = 'info',
+  ): Promise<void> {
+    await this.repository.recordHealthEvent(code, severity).catch(() => undefined);
   }
 }
 

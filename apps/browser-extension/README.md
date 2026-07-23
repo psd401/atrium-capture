@@ -11,3 +11,5 @@ Responsibilities:
 - Support: exports content-free local diagnostics, explains permissions, and can delete all extension-owned capture data after confirmation.
 
 Run `pnpm --filter @atrium-capture/browser-extension build` for the production extension and `pnpm test:extension` for the extension-loaded Chromium workflow and image goldens. Tests use only synthetic fixture pages and pixels. Live publication remains disabled until documented Atrium asset and production OAuth capabilities are available.
+
+Run `pnpm package:browser` from the repository root for the verified, unsigned `1.0.0` ZIP and SHA-256 release manifest. Signing and distribution are external approval steps.

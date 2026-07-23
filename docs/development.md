@@ -32,6 +32,8 @@ swift test --package-path apps/macos
 
 The Atrium client integration test binds a loopback-only synthetic server on an ephemeral port. It exposes only `/_mock/atrium-capture/v1`; the production client has no inferred Atrium route. Run `pnpm exec vitest run packages/atrium-client/test` to verify the mock HTTP boundary and failure-after-commit matrix.
 
+`pnpm package:browser` creates and inspects the unsigned Browser v1 ZIP, then writes a content hash manifest under the ignored `.output` directory. Packaging never signs, uploads, or deploys. Follow [browser-v1-release.md](browser-v1-release.md) for release acceptance and external signing custody.
+
 The browser fixture site is entirely synthetic. Serve `packages/test-fixtures/site` at `http://127.0.0.1:4173`; no real district information belongs in local fixtures, test recordings, or golden images.
 
 The production manifest packages `public/managed-storage-schema.json`. Validate policy behavior with `apps/browser-extension/policy/example-managed-policy.json` and the unit tests; do not place real district origins or collection identifiers in repository fixtures. Deployment, support, update, and rollback steps are in [browser-pilot-runbook.md](browser-pilot-runbook.md).

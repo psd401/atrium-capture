@@ -58,6 +58,8 @@ export default defineBackground(() => {
     version: browser.runtime.getManifest().version,
   });
 
+  void repository.recordHealthEvent('worker_started').catch(() => undefined);
+
   void publication.resumePending().catch(() => undefined);
 
   browser.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => undefined);
@@ -167,6 +169,9 @@ export default defineBackground(() => {
       (response) => sendResponse(response),
       () => {
         console.warn('message_handling_failed');
+        void repository
+          .recordHealthEvent('message_handling_failed', 'warning')
+          .catch(() => undefined);
         sendResponse(undefined);
       },
     );

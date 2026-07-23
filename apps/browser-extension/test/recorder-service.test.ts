@@ -145,6 +145,37 @@ describe('recorder service trust boundary', () => {
       'managed_policy_invalid',
     );
   });
+
+  it('does not capture a second screenshot for a discardable duplicate', async () => {
+    const capture = vi.fn().mockResolvedValue({
+      blob: new Blob(['synthetic screenshot'], { type: 'image/png' }),
+      mimeType: 'image/png',
+      pixelHeight: 1,
+      pixelWidth: 1,
+      sha256: 'a'.repeat(64),
+    });
+    const optimizedService = new RecorderService(
+      repository,
+      { capture } as unknown as SerializedScreenshotCapture,
+      async () => undefined,
+    );
+    await optimizedService.command('start', 'Synthetic duplicate optimization');
+    const first = clickMessage();
+    first.payload.occurredAt = '2026-01-15T15:00:00.000Z';
+    const duplicate = clickMessage();
+    duplicate.payload.occurredAt = '2026-01-15T15:00:00.100Z';
+    const sender = {
+      frameId: 0,
+      tab: { active: true, id: 1, url: 'https://fixture.test', windowId: 1 },
+    };
+
+    await optimizedService.handleEvent(first, sender);
+    const receipt = await optimizedService.handleEvent(duplicate, sender);
+
+    expect(receipt.disposition).toBe('merged');
+    expect(capture).toHaveBeenCalledOnce();
+    expect((await optimizedService.getSnapshot())?.assets).toHaveLength(1);
+  });
 });
 
 function clickMessage(): CaptureEventMessage {

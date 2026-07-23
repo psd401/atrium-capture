@@ -1,6 +1,6 @@
 {
   "name": "atrium-capture",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -20,7 +20,7 @@
   },
   "scripts": {
     "build": "pnpm --recursive --if-present build",
-    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm contracts:check && pnpm messages:check && pnpm test && pnpm build && pnpm test:extension && pnpm swift:test && pnpm licenses:check",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm contracts:check && pnpm messages:check && pnpm test && pnpm build && pnpm test:extension && pnpm package:browser && pnpm swift:test && pnpm licenses:check",
     "contracts:check": "pnpm contracts:generate --check && pnpm contracts:validate",
     "contracts:generate": "node scripts/generate-contracts.mjs",
     "contracts:validate": "node scripts/validate-contracts.mjs",
@@ -30,6 +30,7 @@
     "lint": "eslint . --max-warnings 0",
     "messages:check": "node scripts/generate-extension-message-validator.mjs --check",
     "messages:generate": "node scripts/generate-extension-message-validator.mjs",
+    "package:browser": "pnpm --filter @atrium-capture/browser-extension zip && node scripts/verify-browser-package.mjs",
     "security:audit": "pnpm audit --audit-level high",
     "swift:test": "swift test --package-path apps/macos",
     "test": "vitest run",

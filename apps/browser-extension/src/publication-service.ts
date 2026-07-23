@@ -92,6 +92,7 @@ export class BrowserPublicationService {
   async publishInternal(jobId: string): Promise<AtriumCapturePublishJob> {
     const job = await this.publisher.requestInternalPublication(jobId);
     await this.markSubmitted(job);
+    await this.recordHealth(job);
     return job;
   }
 
@@ -119,12 +120,27 @@ export class BrowserPublicationService {
   private async drive(jobId: string): Promise<AtriumCapturePublishJob> {
     const job = await this.publisher.resume(jobId);
     await this.markSubmitted(job);
+    await this.recordHealth(job);
     return job;
   }
 
   private async markSubmitted(job: AtriumCapturePublishJob): Promise<void> {
     if (job.phase === Phase.ReadyAsDraft || job.phase === Phase.Complete) {
       await this.repository.markSessionSubmitted(job.sessionId);
+    }
+  }
+
+  private async recordHealth(job: AtriumCapturePublishJob): Promise<void> {
+    if (job.lastError?.retryable) {
+      await this.repository
+        .recordHealthEvent('publication_retryable', 'warning')
+        .catch(() => undefined);
+    } else if (job.lastError || job.phase === Phase.NeedsAttention) {
+      await this.repository
+        .recordHealthEvent('publication_attention', 'error')
+        .catch(() => undefined);
+    } else if (job.phase === Phase.ReadyAsDraft || job.phase === Phase.Complete) {
+      await this.repository.recordHealthEvent('publication_ready').catch(() => undefined);
     }
   }
 }

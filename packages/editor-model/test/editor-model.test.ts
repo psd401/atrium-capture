@@ -89,11 +89,22 @@ describe('editor commands', () => {
       kind: 'add_annotation',
       stepId: firstStepId,
     });
-    session = applyEditorCommand(session, { kind: 'approve_step', stepId: firstStepId });
-    session = applyEditorCommand(session, { kind: 'approve_step', stepId: secondStepId });
+    session = applyEditorCommand(session, { kind: 'approve_clear_steps' });
 
     expect(reviewIssues(session)).toEqual([]);
     expect(canFinalizeReview(session)).toBe(true);
+  });
+
+  it('bulk approval leaves an uncovered sensitive step blocked in one revision', () => {
+    const session = applyEditorCommand(fixtureSession(), { kind: 'approve_clear_steps' });
+
+    expect(session.revision).toBe(2);
+    expect(session.steps[0]?.privacyReview).toBe(PrivacyReview.Flagged);
+    expect(session.steps[1]?.privacyReview).toBe(PrivacyReview.Approved);
+    expect(reviewIssues(session)).toEqual([
+      { code: 'sensitive_region_unredacted', stepId: firstStepId },
+      { code: 'step_not_approved', stepId: firstStepId },
+    ]);
   });
 });
 

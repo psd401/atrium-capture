@@ -78,6 +78,25 @@ export interface StorageSummary {
   sessionCount: number;
 }
 
+export type HealthEventCode =
+  | 'capture_paused_quota'
+  | 'capture_started'
+  | 'capture_state_changed'
+  | 'managed_policy_invalid'
+  | 'message_handling_failed'
+  | 'publication_attention'
+  | 'publication_ready'
+  | 'publication_retryable'
+  | 'screenshot_capture_failed'
+  | 'worker_started';
+
+export interface LocalHealthEvent {
+  code: HealthEventCode;
+  eventId: string;
+  occurredAt: string;
+  severity: 'error' | 'info' | 'warning';
+}
+
 interface MetaRecord {
   key: string;
   value: string;
@@ -91,6 +110,11 @@ interface CaptureDatabaseSchema extends DBSchema {
   commands: {
     key: string;
     value: EditorCommandReceipt;
+  };
+  healthEvents: {
+    indexes: { 'by-occurred-at': string };
+    key: string;
+    value: LocalHealthEvent;
   };
   meta: {
     key: string;
@@ -125,13 +149,17 @@ export class CaptureRepository {
     if (this.deleting) {
       return this.deleting.then(() => this.open());
     }
-    this.database ??= openDB<CaptureDatabaseSchema>(this.databaseName, 3, {
+    this.database ??= openDB<CaptureDatabaseSchema>(this.databaseName, 4, {
       upgrade(database) {
         if (!database.objectStoreNames.contains('assets')) {
           database.createObjectStore('assets', { keyPath: 'assetId' });
         }
         if (!database.objectStoreNames.contains('commands')) {
           database.createObjectStore('commands', { keyPath: 'commandId' });
+        }
+        if (!database.objectStoreNames.contains('healthEvents')) {
+          const health = database.createObjectStore('healthEvents', { keyPath: 'eventId' });
+          health.createIndex('by-occurred-at', 'occurredAt');
         }
         if (!database.objectStoreNames.contains('meta')) {
           database.createObjectStore('meta', { keyPath: 'key' });
@@ -293,6 +321,39 @@ export class CaptureRepository {
     const sessionCount = await transaction.objectStore('sessions').count();
     await transaction.done;
     return { assetBytes, assetCount, publishJobCount, sessionCount };
+  }
+
+  async recordHealthEvent(
+    code: HealthEventCode,
+    severity: LocalHealthEvent['severity'] = 'info',
+    now = new Date(),
+  ): Promise<void> {
+    const database = await this.open();
+    const transaction = database.transaction('healthEvents', 'readwrite');
+    const store = transaction.objectStore('healthEvents');
+    await store.put({
+      code,
+      eventId: crypto.randomUUID(),
+      occurredAt: now.toISOString(),
+      severity,
+    });
+    let excess = (await store.count()) - 100;
+    if (excess > 0) {
+      let cursor = await store.index('by-occurred-at').openCursor();
+      while (cursor && excess > 0) {
+        await cursor.delete();
+        excess -= 1;
+        cursor = await cursor.continue();
+      }
+    }
+    await transaction.done;
+  }
+
+  async listHealthEvents(limit = 20): Promise<LocalHealthEvent[]> {
+    const events = await (await this.open()).getAll('healthEvents');
+    return events
+      .sort((left, right) => right.occurredAt.localeCompare(left.occurredAt))
+      .slice(0, Math.max(0, Math.min(limit, 100)));
   }
 
   async putPublishJob(job: AtriumCapturePublishJob): Promise<void> {

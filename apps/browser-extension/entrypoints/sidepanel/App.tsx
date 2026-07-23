@@ -294,18 +294,7 @@ export function App() {
     if (!session) {
       return;
     }
-    let latest: AtriumCaptureSession | undefined;
-    for (const step of session.steps) {
-      const blocked = issues.some(
-        (issue) => issue.stepId === step.stepId && issue.code === 'sensitive_region_unredacted',
-      );
-      if (!blocked && step.privacyReview !== PrivacyReview.Approved) {
-        latest = await editorCommand({ kind: 'approve_step', stepId: step.stepId });
-        if (!latest) {
-          return;
-        }
-      }
-    }
+    await editorCommand({ kind: 'approve_clear_steps' });
   };
 
   const addSuggestedRedaction = async () => {

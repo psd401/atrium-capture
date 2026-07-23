@@ -305,6 +305,12 @@
             "kind": { "const": "approve_step" },
             "stepId": { "type": "string", "format": "uuid" }
           }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind"],
+          "properties": { "kind": { "const": "approve_clear_steps" } }
         }
       ]
     },
