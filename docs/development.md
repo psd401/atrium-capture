@@ -24,6 +24,7 @@ pnpm test:extension
 pnpm licenses:check
 pnpm security:audit
 swift test --package-path apps/macos
+scripts/build-macos-app.sh
 ```
 
 `pnpm contracts:generate` updates both generated TypeScript and Swift models. Never edit either generated file directly. Contract fixtures under `packages/test-fixtures/fixtures` are decoded by both platforms.
@@ -35,6 +36,8 @@ The Atrium client integration test binds a loopback-only synthetic server on an 
 `pnpm package:browser` creates and inspects the unsigned Browser v1 ZIP, then writes a content hash manifest under the ignored `.output` directory. Packaging never signs, uploads, or deploys. Follow [browser-v1-release.md](browser-v1-release.md) for release acceptance and external signing custody.
 
 The browser fixture site is entirely synthetic. Serve `packages/test-fixtures/site` at `http://127.0.0.1:4173`; no real district information belongs in local fixtures, test recordings, or golden images.
+
+The Swift package also includes the native recorder, editor, publisher, bridge, display, and pin tests. On non-macOS hosts, use the official `swift:6.0-bookworm` image for the platform-neutral suite. On macOS, `scripts/build-macos-app.sh` compiles the actual Apple adapters and runs a standalone Core Graphics/AppKit verifier even when a Command Line Tools-only installation does not include a compatible XCTest module. Full Xcode CI runs all XCTest targets. See [macos-runbook.md](macos-runbook.md).
 
 The production manifest packages `public/managed-storage-schema.json`. Validate policy behavior with `apps/browser-extension/policy/example-managed-policy.json` and the unit tests; do not place real district origins or collection identifiers in repository fixtures. Deployment, support, update, and rollback steps are in [browser-pilot-runbook.md](browser-pilot-runbook.md).
 

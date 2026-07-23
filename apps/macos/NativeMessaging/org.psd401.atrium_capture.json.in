@@ -1,0 +1,7 @@
+{
+  "name": "org.psd401.atrium_capture",
+  "description": "Atrium Capture metadata-only native messaging host",
+  "path": "__ABSOLUTE_HELPER_PATH__",
+  "type": "stdio",
+  "allowed_origins": ["chrome-extension://__EXTENSION_ID__/"]
+}

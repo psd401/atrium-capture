@@ -128,4 +128,20 @@ describe('runtime message boundary', () => {
       }),
     ).toBeUndefined();
   });
+
+  it('allows only bounded native bridge controls', () => {
+    expect(parseIncomingMessage({ kind: 'native-bridge.snapshot' })).toBeTruthy();
+    expect(
+      parseIncomingMessage({
+        kind: 'native-bridge.set-enabled',
+        payload: { enabled: true },
+      }),
+    ).toBeTruthy();
+    expect(
+      parseIncomingMessage({
+        kind: 'native-bridge.set-enabled',
+        payload: { enabled: true, imageData: 'synthetic-prohibited-bytes' },
+      }),
+    ).toBeUndefined();
+  });
 });

@@ -1,0 +1,84 @@
+{
+  "schemaVersion": "1.0",
+  "sessionId": "10000000-0000-4000-8000-000000000020",
+  "revision": 4,
+  "state": "review",
+  "title": "Synthetic Finder settings workflow",
+  "recorder": {
+    "surface": "macos",
+    "appVersion": "1.0.0",
+    "osVersion": "synthetic-macos-14"
+  },
+  "policy": {
+    "policyVersion": "native-default-v1",
+    "sourceUrlRetention": "none",
+    "rawImageRetention": "delete_after_flatten",
+    "reviewStatus": "in_review"
+  },
+  "steps": [
+    {
+      "stepId": "20000000-0000-4000-8000-000000000020",
+      "sequence": 0,
+      "occurredAt": "2026-01-15T16:00:00.000Z",
+      "action": "click",
+      "target": {
+        "role": "AXButton",
+        "accessibleName": "Synthetic sidebar item",
+        "bounds": { "x": 48, "y": 92, "width": 180, "height": 32 },
+        "macos": {
+          "bundleId": "org.example.synthetic-finder",
+          "appName": "Synthetic Finder",
+          "windowTitle": "Synthetic Documents",
+          "accessibilityRole": "AXButton",
+          "backingScaleFactor": 2
+        }
+      },
+      "instruction": {
+        "generatedText": "Select Synthetic sidebar item.",
+        "source": "rules",
+        "userEdited": false
+      },
+      "screenshotAssetId": "30000000-0000-4000-8000-000000000020",
+      "annotations": [],
+      "privacyReview": "not_reviewed"
+    },
+    {
+      "stepId": "20000000-0000-4000-8000-000000000021",
+      "sequence": 1,
+      "occurredAt": "2026-01-15T16:00:01.000Z",
+      "action": "input",
+      "target": {
+        "role": "AXTextField",
+        "accessibleName": "Synthetic account label",
+        "bounds": { "x": 260, "y": 132, "width": 260, "height": 30 },
+        "macos": {
+          "bundleId": "org.example.synthetic-settings",
+          "appName": "Synthetic Settings",
+          "windowTitle": "Synthetic Accounts",
+          "accessibilityRole": "AXTextField",
+          "backingScaleFactor": 2
+        }
+      },
+      "instruction": {
+        "generatedText": "Enter the requested value in Synthetic account label.",
+        "source": "rules",
+        "userEdited": false
+      },
+      "privacyReview": "flagged"
+    }
+  ],
+  "assets": [
+    {
+      "assetId": "30000000-0000-4000-8000-000000000020",
+      "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "mimeType": "image/png",
+      "pixelWidth": 2880,
+      "pixelHeight": 1800,
+      "state": "raw_local",
+      "localKey": "fixture/native/raw/step-1.png",
+      "annotations": []
+    }
+  ],
+  "createdAt": "2026-01-15T16:00:00.000Z",
+  "updatedAt": "2026-01-15T16:00:02.000Z"
+}

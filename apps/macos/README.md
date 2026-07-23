@@ -1,7 +1,22 @@
 # Mac companion
 
-Planned stack: SwiftUI shell, AppKit overlay/window management, ScreenCaptureKit, Core Graphics, Accessibility (`AXUIElement`), Keychain, and `ASWebAuthenticationSession`.
+Atrium Capture for Mac is a native SwiftUI/AppKit application targeting macOS 14 or later. It uses ScreenCaptureKit for pixels, Accessibility for bounded semantics, Core Graphics for flattened exports, Keychain and `ASWebAuthenticationSession` for native OAuth, and the generated language-neutral contracts for persisted sessions and publish jobs.
 
-The Mac phase starts from the same `CaptureSession` and `PublishJob` contracts as the browser. It uploads screenshots directly to Atrium; a Chrome native messaging bridge is optional enrichment for DOM semantics and carries no image bytes.
+Build and verify the application bundle from the repository root:
 
-The shared-contract Swift package targets macOS 14. The bundle identifier, OAuth callback, signing boundary, and MDM distribution path are recorded in [ADR 0001](../../docs/adr/0001-platform-identifiers-and-support.md). An Xcode application project is deferred until the native application milestone; contract decoding remains independently testable with Swift Package Manager.
+```sh
+scripts/build-macos-app.sh
+```
+
+The script builds the release executables, runs the native pixel/metadata verifier, exercises the metadata-only native host, assembles `dist/macos/Atrium Capture.app`, validates its plist, and applies an ad-hoc local signature. It does not notarize, upload, install a native host, or deploy anything.
+
+Swift Package products:
+
+- `AtriumCaptureContracts`: generated contract models and the shared JSON codec.
+- `AtriumCaptureCore`: recorder recovery, review commands, durable publisher, bridge validation, display geometry, and pin history.
+- `AtriumCaptureMacPlatform`: ScreenCaptureKit, Accessibility, Core Graphics, AuthenticationServices, Keychain, overlays, pins, shortcuts, and clipboard adapters.
+- `AtriumCaptureMacApp`: SwiftUI application executable.
+- `AtriumCaptureNativeHost`: Chrome length-prefixed metadata bridge.
+- `AtriumCaptureMacVerifier`: native redaction/metadata/window-policy acceptance executable.
+
+The default application uses an unavailable production `NativeAtriumGateway`. Set `ATRIUM_CAPTURE_LOCAL_MOCK=1` only for a visibly local private-draft demonstration; no production route is inferred. See [the Mac runbook](../../docs/macos-runbook.md) for permissions, synthetic acceptance, native-host registration, data retention, and external release dependencies.

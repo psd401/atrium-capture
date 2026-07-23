@@ -20,6 +20,7 @@ import { browser } from 'wxt/browser';
 
 import type { PublicationSnapshot } from '../../src/publication-service.js';
 import type { SupportDiagnostics } from '../../src/diagnostics-service.js';
+import type { NativeBridgeSnapshot } from '../../src/native-bridge-service.js';
 
 const annotationTools = [
   { kind: Kind.Arrow, label: 'Arrow' },
@@ -37,6 +38,7 @@ export function App() {
   const [session, setSession] = useState<AtriumCaptureSession>();
   const [publication, setPublication] = useState<PublicationSnapshot>();
   const [diagnostics, setDiagnostics] = useState<SupportDiagnostics>();
+  const [nativeBridge, setNativeBridge] = useState<NativeBridgeSnapshot>();
   const [selectedCollectionId, setSelectedCollectionId] = useState('');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string>();
@@ -75,6 +77,42 @@ export function App() {
     const interval = window.setInterval(() => void refreshDiagnostics(), 5_000);
     return () => window.clearInterval(interval);
   }, [refreshDiagnostics]);
+
+  const refreshNativeBridge = useCallback(async () => {
+    const next = await browser.runtime.sendMessage({ kind: 'native-bridge.snapshot' });
+    setNativeBridge(next as NativeBridgeSnapshot | undefined);
+  }, []);
+
+  useEffect(() => {
+    void refreshNativeBridge();
+    const interval = window.setInterval(() => void refreshNativeBridge(), 5_000);
+    return () => window.clearInterval(interval);
+  }, [refreshNativeBridge]);
+
+  const toggleNativeBridge = useCallback(async () => {
+    try {
+      const enable = !nativeBridge?.enabled;
+      if (enable) {
+        const granted = await browser.permissions.request({ permissions: ['nativeMessaging'] });
+        if (!granted) {
+          setError('Mac enrichment permission was not granted.');
+          await refreshNativeBridge();
+          return;
+        }
+      }
+      const next = await browser.runtime.sendMessage({
+        kind: 'native-bridge.set-enabled',
+        payload: { enabled: enable },
+      });
+      setNativeBridge(next as NativeBridgeSnapshot);
+      if (!enable) {
+        await browser.permissions.remove({ permissions: ['nativeMessaging'] });
+        await refreshNativeBridge();
+      }
+    } catch {
+      setError('Mac enrichment could not be updated.');
+    }
+  }, [nativeBridge?.enabled, refreshNativeBridge]);
 
   useEffect(() => {
     if (
@@ -857,6 +895,20 @@ export function App() {
             restarts. Identity is reserved for an interactive Atrium sign-in when the live service
             is configured.
           </p>
+          <p>
+            Mac enrichment is optional. If enabled, Chrome shows its native-app permission and the
+            trusted worker sends semantic action metadata only—never screenshots, typed values, or
+            tokens—to the installed Atrium Capture host.
+          </p>
+          <dl>
+            <div>
+              <dt>Mac enrichment</dt>
+              <dd>{nativeBridge?.statusCode ?? 'DISABLED'}</dd>
+            </div>
+          </dl>
+          <button onClick={() => void toggleNativeBridge()} type="button">
+            {nativeBridge?.enabled ? 'Disable Mac enrichment' : 'Enable Mac enrichment'}
+          </button>
         </details>
       </section>
 

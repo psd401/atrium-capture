@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key>
+  <string>en</string>
+  <key>CFBundleDisplayName</key>
+  <string>Atrium Capture</string>
+  <key>CFBundleExecutable</key>
+  <string>AtriumCaptureMacApp</string>
+  <key>CFBundleIdentifier</key>
+  <string>org.psd401.AtriumCapture</string>
+  <key>CFBundleInfoDictionaryVersion</key>
+  <string>6.0</string>
+  <key>CFBundleName</key>
+  <string>Atrium Capture</string>
+  <key>CFBundlePackageType</key>
+  <string>APPL</string>
+  <key>CFBundleShortVersionString</key>
+  <string>1.0.0</string>
+  <key>CFBundleVersion</key>
+  <string>1</string>
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>Atrium Capture OAuth callback</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>org.psd401.AtriumCapture</string>
+      </array>
+    </dict>
+  </array>
+  <key>LSApplicationCategoryType</key>
+  <string>public.app-category.productivity</string>
+  <key>LSMinimumSystemVersion</key>
+  <string>14.0</string>
+  <key>NSHighResolutionCapable</key>
+  <true/>
+  <key>NSScreenCaptureUsageDescription</key>
+  <string>Atrium Capture records screenshots you explicitly capture so you can review, redact, and publish a visual guide.</string>
+  <key>NSHumanReadableCopyright</key>
+  <string>Copyright © 2026 PSD401. MIT licensed.</string>
+</dict>
+</plist>

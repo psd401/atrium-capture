@@ -25,13 +25,17 @@ The content script never receives OAuth tokens and cannot publish. The service w
 ```text
 ScreenCaptureKit + Accessibility events
   -> native platform adapter
+  -> synchronous recorder journal + serialized frame queue
   -> CaptureSession v1
   -> Swift editor using the shared command model
   -> flattened publishable images
+  -> durable native outbox
   -> native AtriumGateway + Keychain-backed OAuth
 ```
 
 SwiftUI owns ordinary application UI. AppKit owns floating windows, always-on-top pins, click-through behavior, and global shortcuts. Core Graphics renders publishable images.
+
+The Swift package keeps generated contracts, platform-neutral recovery/publication logic, and Apple adapters in separate targets. The app persists event receipts with the session before acknowledging an observed action. A task-tail queue prevents actor reentrancy from overlapping ScreenCaptureKit calls. Quartz top-left global coordinates remain canonical until the AppKit adapter converts a window frame.
 
 ## Cross-platform boundary
 
@@ -49,6 +53,8 @@ They do not attempt to share browser Canvas, IndexedDB, Chrome APIs, AppKit, Acc
 ## Optional native messaging
 
 The Mac app may register a Chrome native messaging host after the browser product ships. The bridge is for control and DOM semantic enrichment only. Images remain on the platform that captured them and upload directly to Atrium. This avoids Chrome's native-message size ceiling and keeps a single owner for each local asset.
+
+The bridge is implemented as an optional permission. The user-facing side panel requests `nativeMessaging`; the service worker sends a strict event subset after recorder persistence, and the Swift host validates a 64 KiB application limit plus prohibited image/token fields. Installation is a separate operator action.
 
 ## Atrium publication transaction
 

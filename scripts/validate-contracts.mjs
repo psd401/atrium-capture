@@ -11,6 +11,10 @@ const schemaFixtures = [
     'contracts/capture-session.schema.json',
     'packages/test-fixtures/fixtures/capture-session-v1.json',
   ],
+  [
+    'contracts/capture-session.schema.json',
+    'packages/test-fixtures/fixtures/capture-session-macos-v1.json',
+  ],
   ['contracts/native-bridge.schema.json', 'packages/test-fixtures/fixtures/native-bridge-v1.json'],
   ['contracts/publish-job.schema.json', 'packages/test-fixtures/fixtures/publish-job-v1.json'],
   [
