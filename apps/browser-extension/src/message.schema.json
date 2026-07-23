@@ -99,13 +99,9 @@
         "payload": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["commandId", "rawRetention"],
+          "required": ["commandId"],
           "properties": {
-            "commandId": { "type": "string", "format": "uuid" },
-            "rawRetention": {
-              "type": "string",
-              "enum": ["delete_after_flatten", "delete_after_submit"]
-            }
+            "commandId": { "type": "string", "format": "uuid" }
           }
         }
       }
@@ -172,6 +168,28 @@
           "additionalProperties": false,
           "required": ["jobId"],
           "properties": { "jobId": { "type": "string", "format": "uuid" } }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": { "kind": { "const": "diagnostics.snapshot" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "payload"],
+      "properties": {
+        "kind": { "const": "diagnostics.clear-local-data" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["confirmation"],
+          "properties": {
+            "confirmation": { "const": "DELETE_LOCAL_CAPTURE_DATA" }
+          }
         }
       }
     }

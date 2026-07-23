@@ -1,4 +1,9 @@
-import { Action, AtriumCaptureSessionState, type Target } from '@atrium-capture/contracts';
+import {
+  Action,
+  AtriumCaptureSessionState,
+  SourceURLRetention,
+  type Target,
+} from '@atrium-capture/contracts';
 import { SerialTaskQueue, type NormalizedCaptureEvent } from '@atrium-capture/capture-core';
 import {
   evaluateSiteAccess,
@@ -7,6 +12,7 @@ import {
 } from '@atrium-capture/privacy';
 
 import { CaptureRepository, type EventReceipt } from './database.js';
+import { parseManagedPolicy, type ManagedPolicySnapshot } from './managed-policy.js';
 import type { CaptureEventMessage } from './messages.js';
 import { SerializedScreenshotCapture } from './screenshot.js';
 
@@ -35,6 +41,8 @@ export class RecorderService {
     private readonly screenshots: SerializedScreenshotCapture,
     private readonly onChanged: () => Promise<void>,
     private readonly appVersion = '0.1.0',
+    private readonly loadPolicy: () => Promise<ManagedPolicySnapshot> = async () =>
+      parseManagedPolicy({}),
   ) {}
 
   getSnapshot() {
@@ -43,10 +51,20 @@ export class RecorderService {
 
   command(command: 'start' | 'pause' | 'resume' | 'stop', title = 'Untitled capture') {
     return this.queue.enqueue(async () => {
-      const session =
-        command === 'start'
-          ? await this.repository.startSession(title, this.appVersion)
-          : await this.repository.transition(command);
+      let session;
+      if (command === 'start') {
+        const managed = await this.loadPolicy();
+        if (!managed.valid) {
+          throw new Error('managed_policy_invalid');
+        }
+        session = await this.repository.startSession(title, this.appVersion, new Date(), {
+          policyVersion: managed.policy.policyVersion,
+          rawImageRetention: managed.policy.rawImageRetention,
+          sourceUrlRetention: managed.policy.sourceUrlRetention as SourceURLRetention,
+        });
+      } else {
+        session = await this.repository.transition(command);
+      }
       await this.onChanged();
       return session;
     });
@@ -55,10 +73,15 @@ export class RecorderService {
   contentState(rawUrl: string): Promise<ContentRecorderState> {
     return this.queue.enqueue(async () => {
       const session = await this.repository.getActiveSession();
-      const access = evaluateSiteAccess(rawUrl, {});
+      const managed = await this.loadPolicy();
+      const access = evaluateSiteAccess(rawUrl, managed.policy);
       return {
-        active: session?.state === AtriumCaptureSessionState.Recording && access.allowed,
-        sourceUrlRetention: (session?.policy.sourceUrlRetention ?? 'origin') as SourceUrlRetention,
+        active:
+          managed.valid && session?.state === AtriumCaptureSessionState.Recording && access.allowed,
+        sourceUrlRetention: effectiveRetention(
+          (session?.policy.sourceUrlRetention ?? 'origin') as SourceUrlRetention,
+          managed.policy.sourceUrlRetention,
+        ),
       };
     });
   }
@@ -67,18 +90,23 @@ export class RecorderService {
     return this.queue.enqueue(async () => {
       const senderUrl = sender.tab?.url;
       const windowId = sender.tab?.windowId;
+      const managed = await this.loadPolicy();
       if (
+        !managed.valid ||
         sender.frameId !== 0 ||
         sender.tab?.id === undefined ||
         windowId === undefined ||
         !senderUrl ||
-        !evaluateSiteAccess(senderUrl, {}).allowed
+        !evaluateSiteAccess(senderUrl, managed.policy).allowed
       ) {
         throw new Error('untrusted_content_sender');
       }
 
-      const session = await this.repository.getActiveSession();
-      const retention = (session?.policy.sourceUrlRetention ?? 'origin') as SourceUrlRetention;
+      let session = await this.repository.getActiveSession();
+      const retention = effectiveRetention(
+        (session?.policy.sourceUrlRetention ?? 'origin') as SourceUrlRetention,
+        managed.policy.sourceUrlRetention,
+      );
       const event: NormalizedCaptureEvent = {
         action: message.payload.action,
         eventId: message.payload.eventId,
@@ -88,6 +116,16 @@ export class RecorderService {
           ? { target: sanitizeTarget(message.payload.target, senderUrl, retention) }
           : {}),
       };
+
+      if (session?.state === AtriumCaptureSessionState.Recording) {
+        const storage = await this.repository.storageSummary();
+        if (
+          storage.assetBytes >= managed.policy.maxStorageBytes ||
+          session.steps.length >= managed.policy.maxSessionSteps
+        ) {
+          session = await this.repository.transition('pause');
+        }
+      }
 
       let screenshot;
       if (
@@ -102,11 +140,27 @@ export class RecorderService {
         }
       }
 
+      if (screenshot) {
+        const storage = await this.repository.storageSummary();
+        if (storage.assetBytes + screenshot.blob.size > managed.policy.maxStorageBytes) {
+          await this.repository.transition('pause');
+          screenshot = undefined;
+        }
+      }
+
       const receipt = await this.repository.applyEvent(event, screenshot);
       await this.onChanged();
       return receipt;
     });
   }
+}
+
+function effectiveRetention(
+  sessionRetention: SourceUrlRetention,
+  currentRetention: SourceUrlRetention,
+): SourceUrlRetention {
+  const rank: Record<SourceUrlRetention, number> = { full: 2, none: 0, origin: 1 };
+  return rank[currentRetention] < rank[sessionRetention] ? currentRetention : sessionRetention;
 }
 
 function sanitizeTarget(

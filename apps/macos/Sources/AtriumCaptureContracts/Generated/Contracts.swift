@@ -354,19 +354,22 @@ public enum AssetState: String, Codable {
 public struct Policy: Codable {
     public let denyReason: String?
     public let policyVersion: String
+    public let rawImageRetention: RawImageRetention?
     public let reviewStatus: ReviewStatus
     public let sourceURLRetention: SourceURLRetention
 
     public enum CodingKeys: String, CodingKey {
         case denyReason = "denyReason"
         case policyVersion = "policyVersion"
+        case rawImageRetention = "rawImageRetention"
         case reviewStatus = "reviewStatus"
         case sourceURLRetention = "sourceUrlRetention"
     }
 
-    public init(denyReason: String?, policyVersion: String, reviewStatus: ReviewStatus, sourceURLRetention: SourceURLRetention) {
+    public init(denyReason: String?, policyVersion: String, rawImageRetention: RawImageRetention?, reviewStatus: ReviewStatus, sourceURLRetention: SourceURLRetention) {
         self.denyReason = denyReason
         self.policyVersion = policyVersion
+        self.rawImageRetention = rawImageRetention
         self.reviewStatus = reviewStatus
         self.sourceURLRetention = sourceURLRetention
     }
@@ -393,12 +396,14 @@ public extension Policy {
     func with(
         denyReason: String?? = nil,
         policyVersion: String? = nil,
+        rawImageRetention: RawImageRetention?? = nil,
         reviewStatus: ReviewStatus? = nil,
         sourceURLRetention: SourceURLRetention? = nil
     ) -> Policy {
         return Policy(
             denyReason: denyReason ?? self.denyReason,
             policyVersion: policyVersion ?? self.policyVersion,
+            rawImageRetention: rawImageRetention ?? self.rawImageRetention,
             reviewStatus: reviewStatus ?? self.reviewStatus,
             sourceURLRetention: sourceURLRetention ?? self.sourceURLRetention
         )
@@ -411,6 +416,11 @@ public extension Policy {
     func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
         return String(data: try self.jsonData(), encoding: encoding)
     }
+}
+
+public enum RawImageRetention: String, Codable {
+    case deleteAfterFlatten = "delete_after_flatten"
+    case deleteAfterSubmit = "delete_after_submit"
 }
 
 public enum ReviewStatus: String, Codable {

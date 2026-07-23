@@ -59,6 +59,10 @@
       "properties": {
         "policyVersion": { "type": "string", "minLength": 1, "maxLength": 100 },
         "sourceUrlRetention": { "type": "string", "enum": ["none", "origin", "full"] },
+        "rawImageRetention": {
+          "type": "string",
+          "enum": ["delete_after_flatten", "delete_after_submit"]
+        },
         "reviewStatus": { "type": "string", "enum": ["not_reviewed", "in_review", "approved"] },
         "denyReason": { "type": "string", "maxLength": 500 }
       }

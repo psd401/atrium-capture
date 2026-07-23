@@ -19,6 +19,8 @@ Atrium Capture is intended for a K-12 district. Privacy behavior is a release ga
 4. Export creates a new flattened raster, strips metadata, and marks that derivative publishable.
 5. Only the publishable derivative may enter the Atrium outbox.
 6. The default local policy deletes raw originals atomically when flattened derivatives are finalized. A managed policy may retain them until successful submission, but raw assets never enter the outbox.
+7. Managed policy is read only in trusted extension contexts and is validated again by the worker. Malformed configured policy disables capture and forces URL retention to none.
+8. Support diagnostics contain operational counts and capability/error codes only; they never contain capture text, URLs, identifiers, tokens, or pixels and are never transmitted automatically.
 
 Blur is not sufficient for secrets that must be irrecoverable; permanent redaction uses opaque replacement pixels. Tests must inspect the output bytes, not only the on-screen preview.
 
@@ -33,6 +35,8 @@ Blur is not sufficient for secrets that must be irrecoverable; permanent redacti
 ## Permissions
 
 Use the smallest practical browser permission set. Continuous, cross-site recording may require broad optional/managed host access; explain it plainly and activate capture only during a user-started session. Add `nativeMessaging` only with the Mac bridge release, not preemptively.
+
+The production extension displays its permission rationale in-product. `unlimitedStorage` is bounded by a smaller managed image budget, and `identity` remains dormant while live OAuth is capability-gated.
 
 Mac permissions are staged and explained at point of use: Screen Recording for pixels and Accessibility for semantic UI metadata. The app remains usable for screenshot editing when either permission is denied.
 

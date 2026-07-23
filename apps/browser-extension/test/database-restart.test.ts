@@ -80,6 +80,26 @@ describe('IndexedDB restart recovery', () => {
     expect((await second.getActiveSession())?.state).toBe('paused');
     expect((await second.transition('resume'))?.state).toBe('recording');
   });
+
+  it('deletes all local capture stores for user-initiated rollback', async () => {
+    const current = repository();
+    await current.startSession('Synthetic deletion', '0.1.0');
+    await current.applyEvent({
+      action: Action.Click,
+      eventId: '10000000-0000-4000-8000-000000000100',
+      occurredAt: new Date(1),
+    });
+
+    await current.deleteAllLocalData();
+
+    expect(await current.getActiveSession()).toBeUndefined();
+    expect(await current.storageSummary()).toEqual({
+      assetBytes: 0,
+      assetCount: 0,
+      publishJobCount: 0,
+      sessionCount: 0,
+    });
+  });
 });
 
 async function openLegacyDatabase(name: string): Promise<IDBDatabase> {

@@ -1,0 +1,26 @@
+{
+  "$schema": "http://json-schema.org/draft-03/schema#",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "type": "integer", "enum": [1] },
+    "allowedOrigins": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "deniedOrigins": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "sourceUrlRetention": {
+      "type": "string",
+      "enum": ["none", "origin", "full"]
+    },
+    "rawImageRetention": {
+      "type": "string",
+      "enum": ["delete_after_flatten", "delete_after_submit"]
+    },
+    "defaultCollectionId": { "type": "string" },
+    "maxStorageBytes": { "type": "integer", "minimum": 16777216, "maximum": 4294967296 },
+    "maxSessionSteps": { "type": "integer", "minimum": 10, "maximum": 10000 }
+  }
+}

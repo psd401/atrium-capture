@@ -24,6 +24,7 @@ final class ContractFixtureTests: XCTestCase {
 
         XCTAssertEqual(session.steps.count, 3)
         XCTAssertEqual(session.assets.count, 1)
+        XCTAssertEqual(session.policy.rawImageRetention, .deleteAfterFlatten)
     }
 
     func testDecodesSharedPublishJobFixture() throws {

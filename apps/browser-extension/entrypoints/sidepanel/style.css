@@ -413,10 +413,21 @@ footer,
 }
 
 .privacy-callout,
+.policy-error,
 .success-callout {
   margin: 0.9rem 0;
   border-radius: 0.7rem;
   padding: 0.85rem;
+}
+
+.policy-error {
+  border: 1px solid #d97c88;
+  background: #fff0f2;
+}
+
+.policy-error p {
+  margin: 0.3rem 0 0;
+  color: #7d2937;
 }
 
 .success-callout h2 {
@@ -445,6 +456,49 @@ footer,
 
 .publish-status a {
   color: #2448b8;
+  font-weight: 750;
+}
+
+.support {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 1rem;
+}
+
+.support details {
+  border: 1px solid #d9e0eb;
+  border-radius: 0.7rem;
+  padding: 0.75rem;
+  background: white;
+}
+
+.support summary {
+  color: #29435f;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.support p {
+  margin: 0.65rem 0;
+  color: #52657b;
+  font-size: 0.82rem;
+}
+
+.support dl {
+  margin: 0.6rem 0;
+}
+
+.support dl div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid #edf0f5;
+  padding: 0.25rem 0;
+  font-size: 0.8rem;
+}
+
+.support dd {
+  margin: 0;
   font-weight: 750;
 }
 

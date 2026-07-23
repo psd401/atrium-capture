@@ -15,5 +15,8 @@ export default defineConfig({
     minimum_chrome_version: '116',
     name: 'Atrium Capture',
     permissions: ['identity', 'sidePanel', 'storage', 'unlimitedStorage'],
+    storage: {
+      managed_schema: 'managed-storage-schema.json',
+    },
   },
 });

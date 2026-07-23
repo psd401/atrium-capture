@@ -52,7 +52,6 @@ export interface EditorFinalizeMessage {
   kind: 'editor.finalize';
   payload: {
     commandId: string;
-    rawRetention: 'delete_after_flatten' | 'delete_after_submit';
   };
 }
 
@@ -80,6 +79,15 @@ export interface PublisherPublishInternalMessage {
   payload: { jobId: string };
 }
 
+export interface DiagnosticsSnapshotMessage {
+  kind: 'diagnostics.snapshot';
+}
+
+export interface DiagnosticsClearLocalDataMessage {
+  kind: 'diagnostics.clear-local-data';
+  payload: { confirmation: 'DELETE_LOCAL_CAPTURE_DATA' };
+}
+
 export type IncomingMessage =
   | CaptureEventMessage
   | RecorderCommandMessage
@@ -91,7 +99,9 @@ export type IncomingMessage =
   | PublisherSnapshotMessage
   | PublisherEnqueueMessage
   | PublisherRetryMessage
-  | PublisherPublishInternalMessage;
+  | PublisherPublishInternalMessage
+  | DiagnosticsSnapshotMessage
+  | DiagnosticsClearLocalDataMessage;
 
 export function parseIncomingMessage(value: unknown): IncomingMessage | undefined {
   return validateMessage(value) ? (value as IncomingMessage) : undefined;

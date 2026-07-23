@@ -19,6 +19,7 @@ describe('generated contract fixtures', () => {
     const inputStep = session.steps.find((step) => step.action === 'input');
 
     expect(session.schemaVersion).toBe('1.0');
+    expect(session.policy.rawImageRetention).toBe('delete_after_flatten');
     expect(inputStep?.instruction.generatedText).toContain('Enter the requested value');
     expect(inputStep).not.toHaveProperty('value');
     expect(inputStep?.target).not.toHaveProperty('value');

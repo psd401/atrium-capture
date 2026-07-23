@@ -41,6 +41,11 @@ describe('browser durable publication service', () => {
     expect(gateway.snapshot().assets[0]?.localAssetId).toBe(derivativeAssetId);
     expect(gateway.snapshot().assets[0]?.localAssetId).not.toBe(rawAssetId);
     expect(gateway.snapshot().versions).toHaveLength(1);
+    expect(await afterRestart.getStoredAsset(rawAssetId)).toBeUndefined();
+    expect(
+      (await afterRestart.getActiveSession())?.assets.find((asset) => asset.assetId === rawAssetId)
+        ?.state,
+    ).toBe('deleted');
   });
 });
 
@@ -108,7 +113,7 @@ async function preparePublishableSession(repository: CaptureRepository): Promise
         stepId: receipt.stepId!,
       },
     ],
-    'delete_after_flatten',
+    'delete_after_submit',
     new Date(4),
   );
   return { derivativeAssetId, rawAssetId };

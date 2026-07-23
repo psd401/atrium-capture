@@ -72,7 +72,6 @@ describe('runtime message boundary', () => {
         payload: {
           commandId: crypto.randomUUID(),
           rawImageBytes: 'prohibited',
-          rawRetention: 'delete_after_flatten',
         },
       }),
     ).toBeUndefined();
@@ -104,6 +103,28 @@ describe('runtime message boundary', () => {
           imageBytes: 'prohibited',
           jobId: '50000000-0000-4000-8000-000000000001',
         },
+      }),
+    ).toBeUndefined();
+  });
+
+  it('allows a diagnostics request only without page-supplied content', () => {
+    expect(parseIncomingMessage({ kind: 'diagnostics.snapshot' })).toBeTruthy();
+    expect(
+      parseIncomingMessage({
+        kind: 'diagnostics.snapshot',
+        payload: { title: 'prohibited' },
+      }),
+    ).toBeUndefined();
+    expect(
+      parseIncomingMessage({
+        kind: 'diagnostics.clear-local-data',
+        payload: { confirmation: 'DELETE_LOCAL_CAPTURE_DATA' },
+      }),
+    ).toBeTruthy();
+    expect(
+      parseIncomingMessage({
+        kind: 'diagnostics.clear-local-data',
+        payload: { confirmation: 'yes' },
       }),
     ).toBeUndefined();
   });

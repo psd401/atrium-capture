@@ -16,3 +16,4 @@ Contract versioning rules:
 ## 1.0 additive history
 
 - 2026-07-22: added optional `PublishJob.readerUrl`. This is backward-compatible: queued/legacy jobs omit it, while ready-draft jobs persist the documented reader destination. TypeScript and Swift decode both queued and ready fixtures.
+- 2026-07-22: added optional `CaptureSession.policy.rawImageRetention`. This is backward-compatible: older sessions use the safest local default during migration; new managed sessions record whether raw bytes are deleted after flattening or immediately after successful submission.

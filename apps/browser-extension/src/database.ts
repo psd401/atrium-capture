@@ -2,7 +2,9 @@ import {
   AssetState,
   AtriumCaptureSessionState,
   MIMEType,
+  RawImageRetention as ContractRawImageRetention,
   ReviewStatus,
+  SourceURLRetention,
   type AssetElement,
   type AtriumCapturePublishJob,
   type AtriumCaptureSession,
@@ -63,6 +65,19 @@ export interface FinalizeDerivative {
 
 export type RawImageRetention = 'delete_after_flatten' | 'delete_after_submit';
 
+export interface SessionPolicyOptions {
+  policyVersion: string;
+  rawImageRetention: RawImageRetention;
+  sourceUrlRetention: SourceURLRetention;
+}
+
+export interface StorageSummary {
+  assetBytes: number;
+  assetCount: number;
+  publishJobCount: number;
+  sessionCount: number;
+}
+
 interface MetaRecord {
   key: string;
   value: string;
@@ -99,6 +114,7 @@ interface CaptureDatabaseSchema extends DBSchema {
 
 export class CaptureRepository {
   private database: Promise<IDBPDatabase<CaptureDatabaseSchema>> | undefined;
+  private deleting: Promise<void> | undefined;
 
   constructor(
     private readonly databaseName = 'atrium-capture-v1',
@@ -106,6 +122,9 @@ export class CaptureRepository {
   ) {}
 
   private open(): Promise<IDBPDatabase<CaptureDatabaseSchema>> {
+    if (this.deleting) {
+      return this.deleting.then(() => this.open());
+    }
     this.database ??= openDB<CaptureDatabaseSchema>(this.databaseName, 3, {
       upgrade(database) {
         if (!database.objectStoreNames.contains('assets')) {
@@ -137,6 +156,11 @@ export class CaptureRepository {
     title: string,
     appVersion: string,
     now = new Date(),
+    policy: SessionPolicyOptions = {
+      policyVersion: 'local-default-v1',
+      rawImageRetention: 'delete_after_flatten',
+      sourceUrlRetention: SourceURLRetention.Origin,
+    },
   ): Promise<AtriumCaptureSession> {
     const database = await this.open();
     const transaction = database.transaction(['meta', 'sessions'], 'readwrite');
@@ -152,12 +176,21 @@ export class CaptureRepository {
       }
     }
 
-    const session = createCaptureSession({
+    const created = createCaptureSession({
       appVersion,
       idFactory: this.idFactory,
       now,
       title,
     });
+    const session: AtriumCaptureSession = {
+      ...created,
+      policy: {
+        ...created.policy,
+        policyVersion: policy.policyVersion,
+        rawImageRetention: policy.rawImageRetention as ContractRawImageRetention,
+        sourceUrlRetention: policy.sourceUrlRetention,
+      },
+    };
     await sessionStore.put(session);
     await metaStore.put({ key: activeSessionKey, value: session.sessionId });
     await transaction.done;
@@ -203,12 +236,24 @@ export class CaptureRepository {
 
   async markSessionSubmitted(sessionId: string, now = new Date()): Promise<void> {
     const database = await this.open();
-    const transaction = database.transaction('sessions', 'readwrite');
+    const transaction = database.transaction(['assets', 'sessions'], 'readwrite');
     const store = transaction.objectStore('sessions');
     const session = await store.get(sessionId);
     if (session && session.state === AtriumCaptureSessionState.Publishable) {
+      const rawAssetIds = new Set(
+        session.assets
+          .filter((asset) => asset.state === AssetState.RawLocal)
+          .map((asset) => asset.assetId),
+      );
+      const assetStore = transaction.objectStore('assets');
+      for (const assetId of rawAssetIds) {
+        await assetStore.delete(assetId);
+      }
       await store.put({
         ...session,
+        assets: session.assets.map((asset) =>
+          rawAssetIds.has(asset.assetId) ? { ...asset, state: AssetState.Deleted } : asset,
+        ),
         revision: session.revision + 1,
         state: AtriumCaptureSessionState.Submitted,
         updatedAt: now,
@@ -230,6 +275,24 @@ export class CaptureRepository {
 
   async listPublishJobs(): Promise<AtriumCapturePublishJob[]> {
     return (await this.open()).getAll('publishJobs');
+  }
+
+  async storageSummary(): Promise<StorageSummary> {
+    const database = await this.open();
+    const transaction = database.transaction(['assets', 'publishJobs', 'sessions'], 'readonly');
+    const assetStore = transaction.objectStore('assets');
+    let assetBytes = 0;
+    let assetCount = 0;
+    let cursor = await assetStore.openCursor();
+    while (cursor) {
+      assetBytes += cursor.value.blob.size;
+      assetCount += 1;
+      cursor = await cursor.continue();
+    }
+    const publishJobCount = await transaction.objectStore('publishJobs').count();
+    const sessionCount = await transaction.objectStore('sessions').count();
+    await transaction.done;
+    return { assetBytes, assetCount, publishJobCount, sessionCount };
   }
 
   async putPublishJob(job: AtriumCapturePublishJob): Promise<void> {
@@ -339,7 +402,11 @@ export class CaptureRepository {
     const next: AtriumCaptureSession = {
       ...session,
       assets: nextAssets,
-      policy: { ...session.policy, reviewStatus: ReviewStatus.Approved },
+      policy: {
+        ...session.policy,
+        rawImageRetention: rawRetention as ContractRawImageRetention,
+        reviewStatus: ReviewStatus.Approved,
+      },
       revision: session.revision + 1,
       state: AtriumCaptureSessionState.Publishable,
       steps: session.steps.map((step) => {
@@ -433,8 +500,22 @@ export class CaptureRepository {
     }
   }
 
+  async deleteAllLocalData(): Promise<void> {
+    if (this.deleting) {
+      return this.deleting;
+    }
+    this.deleting = (async () => {
+      await this.close();
+      await deleteDB(this.databaseName);
+    })();
+    try {
+      await this.deleting;
+    } finally {
+      this.deleting = undefined;
+    }
+  }
+
   async deleteForTests(): Promise<void> {
-    await this.close();
-    await deleteDB(this.databaseName);
+    await this.deleteAllLocalData();
   }
 }
