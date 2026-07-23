@@ -10,7 +10,7 @@ Atrium Capture records a workflow, turns meaningful actions into an editable vis
 
 ## Status
 
-M0 and M1 are complete: shared schemas generate TypeScript and Swift models, and the production Manifest V3 extension records synthetic browser workflows with durable restart recovery and value-safe capture semantics. Review/editing, publishing, pilot hardening, and Mac milestones remain pre-release.
+M0 through M2 are complete: shared schemas generate TypeScript and Swift models, and the production Manifest V3 extension records, recovers, reviews, edits, permanently redacts, and flattens synthetic browser workflows with value-safe capture semantics. Publishing, pilot hardening, and Mac milestones remain pre-release.
 
 ## Repository map
 

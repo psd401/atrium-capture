@@ -106,6 +106,18 @@ test('flattens opaque redaction pixels and strips source PNG metadata', async ({
             kind: 'arrow',
           },
           {
+            color: '#DC2626',
+            geometry: { height: 1, width: 3, x: 1, y: 4 },
+            id: '10000000-0000-4000-8000-000000000006',
+            kind: 'text',
+            text: 'Synthetic',
+          },
+          {
+            geometry: { height: 1, width: 2, x: 9, y: 4 },
+            id: '10000000-0000-4000-8000-000000000007',
+            kind: 'blur',
+          },
+          {
             color: '#111827',
             geometry: { height: 3, width: 4, x: 4, y: 2 },
             id: '10000000-0000-4000-8000-000000000005',

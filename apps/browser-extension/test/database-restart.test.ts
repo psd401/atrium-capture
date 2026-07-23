@@ -21,6 +21,24 @@ afterEach(async () => {
 });
 
 describe('IndexedDB restart recovery', () => {
+  it('upgrades a version-one recorder database without losing its active session', async () => {
+    const legacyName = `${databaseName}-legacy`;
+    const legacy = await openLegacyDatabase(legacyName);
+    legacy.close();
+    const upgraded = new CaptureRepository(legacyName);
+    repositories.push(upgraded);
+
+    const session = await upgraded.startSession('Synthetic migrated session', '0.1.0');
+    await upgraded.transition('stop');
+    const reviewed = await upgraded.applyEditorCommand('30000000-0000-4000-8000-000000000001', {
+      kind: 'begin_review',
+    });
+
+    expect(session.title).toBe('Synthetic migrated session');
+    expect(reviewed.state).toBe('review');
+    await upgraded.deleteForTests();
+  });
+
   it('persists an acknowledged event and deduplicates its retry after restart', async () => {
     const beforeRestart = repository();
     await beforeRestart.startSession('Synthetic restart test', '0.1.0', new Date(0));
@@ -63,3 +81,20 @@ describe('IndexedDB restart recovery', () => {
     expect((await second.transition('resume'))?.state).toBe('recording');
   });
 });
+
+async function openLegacyDatabase(name: string): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(name, 1);
+    request.onupgradeneeded = () => {
+      const database = request.result;
+      database.createObjectStore('assets', { keyPath: 'assetId' });
+      database.createObjectStore('meta', { keyPath: 'key' });
+      database
+        .createObjectStore('receipts', { keyPath: 'eventId' })
+        .createIndex('by-session', 'sessionId');
+      database.createObjectStore('sessions', { keyPath: 'sessionId' });
+    };
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+  });
+}

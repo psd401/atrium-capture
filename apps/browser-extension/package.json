@@ -7,6 +7,7 @@
   "dependencies": {
     "@atrium-capture/capture-core": "workspace:*",
     "@atrium-capture/contracts": "workspace:*",
+    "@atrium-capture/editor-model": "workspace:*",
     "@atrium-capture/privacy": "workspace:*",
     "idb": "8.0.3",
     "react": "19.2.8",

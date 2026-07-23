@@ -57,6 +57,9 @@ importers:
       '@atrium-capture/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@atrium-capture/editor-model':
+        specifier: workspace:*
+        version: link:../../packages/editor-model
       '@atrium-capture/privacy':
         specifier: workspace:*
         version: link:../../packages/privacy

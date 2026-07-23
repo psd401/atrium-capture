@@ -18,7 +18,7 @@ Atrium Capture is intended for a K-12 district. Privacy behavior is a release ga
 3. The author reviews/edits redactions.
 4. Export creates a new flattened raster, strips metadata, and marks that derivative publishable.
 5. Only the publishable derivative may enter the Atrium outbox.
-6. Raw originals are deleted after successful submission or the configured local retention window.
+6. The default local policy deletes raw originals atomically when flattened derivatives are finalized. A managed policy may retain them until successful submission, but raw assets never enter the outbox.
 
 Blur is not sufficient for secrets that must be irrecoverable; permanent redaction uses opaque replacement pixels. Tests must inspect the output bytes, not only the on-screen preview.
 
