@@ -97,3 +97,15 @@ Exit-gate conclusion: synthetic Finder/Settings/Office semantics produce the sam
 - [ADR 0004](adr/0004-native-runtime-and-overlay-boundaries.md) records native boundaries and [the Mac runbook](macos-runbook.md) records permission, display, Space, full-screen, pin, clipboard, and rollback acceptance.
 
 Exit-gate conclusion: native overlay behavior is implemented and automatically verified across coordinate origins, scale factors, AppKit Space/full-screen policy, permission-driven pause paths, pin recovery, and clipboard ownership. The runbook preserves the physical multi-display and district-signed release matrix; those operator checks do not weaken the local privacy or build gates.
+
+## Atrium visual alignment follow-up — complete (2026-07-24)
+
+- The current Atrium product was used as a transient visual reference for color, density, radii, and hierarchy only. No production screenshot, content, font, icon pack, or frontend asset was added to the repository.
+- The extension side panel renders its 420-point-wide empty state without horizontal overflow. Visual inspection confirms the brand lockup, private-default message, recorder action, step card, diagnostics, permission rationale, and typed-value/password notice remain legible in the side-panel hierarchy.
+- Browser semantic tokens use evergreen primary actions, mint review/selection states, warm neutral canvas, white panels, amber warnings, and restrained destructive red. The small-text muted role measures 5.01:1 against white; evergreen primary actions measure 12.40:1 with white text.
+- The Mac app uses equivalent native SwiftUI color roles and reusable button, panel, brand, status-pill, and section-label components. Its recorder, quick capture, review, private-draft capability gate, pins, and step editor remain platform-native rather than reproducing the Atrium content-library layout.
+- `pnpm check` passes formatting, OpenWiki normalization, lint, strict typechecking, generated contract/message freshness, five shared fixture validations, 68 TypeScript tests, production builds, the real extension restart workflow, the irreversible redaction golden, extension packaging, 26 Swift tests, and the dependency-license allowlist.
+- `scripts/build-macos-app.sh` compiles the production SwiftUI workspace, runs the native redaction and bridge verifiers, validates the plist, produces the app bundle, and verifies its ad-hoc signature. `pnpm security:audit` reports no known vulnerabilities.
+- [ADR 0005](adr/0005-atrium-aligned-visual-language.md) records the cross-platform presentation roles, privacy hierarchy, accessibility requirements, and no-production-asset boundary.
+
+Follow-up conclusion: Atrium Capture now reads as a related Atrium tool while preserving its independent recorder/review information architecture, platform conventions, and every existing privacy boundary.
