@@ -61,6 +61,18 @@ public struct NativeVersionResult: Equatable, Sendable {
     }
 }
 
+public struct NativeCaptureSourceRef: Equatable, Sendable {
+    public let capturedAt: Date
+    public let clientVersion: String
+    public let externalID: String
+
+    public init(capturedAt: Date, clientVersion: String, externalID: String) {
+        self.capturedAt = capturedAt
+        self.clientVersion = clientVersion
+        self.externalID = externalID
+    }
+}
+
 public struct NativeGatewayFailure: Error, Equatable, Sendable {
     public let code: String
     public let retryable: Bool
@@ -71,22 +83,30 @@ public struct NativeGatewayFailure: Error, Equatable, Sendable {
     }
 }
 
-public protocol NativeAtriumGateway: AnyObject {
+public protocol NativeAtriumGateway: AnyObject, Sendable {
     var capabilities: NativeAtriumCapabilities { get }
-    func createPrivateDraft(title: String, idempotencyKey: String) throws -> NativeDraftResult
+    func createPrivateDraft(
+        title: String,
+        sourceRef: NativeCaptureSourceRef,
+        collectionID: String?,
+        idempotencyKey: String
+    ) async throws -> NativeDraftResult
+    func formatAssetMarkdown(remoteAssetID: String, altText: String) throws -> String
     func uploadPublishableAsset(
         objectID: String,
+        localAssetID: String,
         pngData: Data,
+        pixelWidth: Int,
+        pixelHeight: Int,
         sha256: String,
         idempotencyKey: String
-    ) throws -> NativeAssetResult
+    ) async throws -> NativeAssetResult
     func createVersion(
         objectID: String,
         markdown: String,
-        remoteAssetIDs: [String],
         idempotencyKey: String
-    ) throws -> NativeVersionResult
-    func publishInternal(objectID: String, versionID: String, idempotencyKey: String) throws
+    ) async throws -> NativeVersionResult
+    func publishInternal(objectID: String, versionID: String, idempotencyKey: String) async throws
 }
 
 public final class UnavailableNativeAtriumGateway: NativeAtriumGateway {
@@ -94,29 +114,44 @@ public final class UnavailableNativeAtriumGateway: NativeAtriumGateway {
 
     public init() {}
 
-    public func createPrivateDraft(title _: String, idempotencyKey _: String) throws -> NativeDraftResult {
+    public func createPrivateDraft(
+        title _: String,
+        sourceRef _: NativeCaptureSourceRef,
+        collectionID _: String?,
+        idempotencyKey _: String
+    ) async throws -> NativeDraftResult {
+        throw NativeGatewayFailure(code: "ATRIUM_API_UNAVAILABLE", retryable: false)
+    }
+
+    public func formatAssetMarkdown(remoteAssetID _: String, altText _: String) throws -> String {
         throw NativeGatewayFailure(code: "ATRIUM_API_UNAVAILABLE", retryable: false)
     }
 
     public func uploadPublishableAsset(
         objectID _: String,
+        localAssetID _: String,
         pngData _: Data,
+        pixelWidth _: Int,
+        pixelHeight _: Int,
         sha256 _: String,
         idempotencyKey _: String
-    ) throws -> NativeAssetResult {
+    ) async throws -> NativeAssetResult {
         throw NativeGatewayFailure(code: "ATRIUM_API_UNAVAILABLE", retryable: false)
     }
 
     public func createVersion(
         objectID _: String,
         markdown _: String,
-        remoteAssetIDs _: [String],
         idempotencyKey _: String
-    ) throws -> NativeVersionResult {
+    ) async throws -> NativeVersionResult {
         throw NativeGatewayFailure(code: "ATRIUM_API_UNAVAILABLE", retryable: false)
     }
 
-    public func publishInternal(objectID _: String, versionID _: String, idempotencyKey _: String) throws {
+    public func publishInternal(
+        objectID _: String,
+        versionID _: String,
+        idempotencyKey _: String
+    ) async throws {
         throw NativeGatewayFailure(code: "ATRIUM_API_UNAVAILABLE", retryable: false)
     }
 }
@@ -126,6 +161,7 @@ public protocol NativePublishRepository: AnyObject {
     func loadSession(sessionID: String) throws -> AtriumCaptureSession?
     func saveJob(_ job: AtriumCapturePublishJob) throws
     func loadJob(jobID: String) throws -> AtriumCapturePublishJob?
+    func listJobs() throws -> [AtriumCapturePublishJob]
     func assetData(localKey: String) throws -> Data
     func deleteRawAssets(sessionID: String) throws
 }
@@ -162,6 +198,21 @@ public final class FileNativePublishRepository: NativePublishRepository, @unchec
     public func loadJob(jobID: String) throws -> AtriumCapturePublishJob? {
         guard let data = try load(directory: "outbox", name: jobID) else { return nil }
         return try AtriumContractCodec.makeDecoder().decode(AtriumCapturePublishJob.self, from: data)
+    }
+
+    public func listJobs() throws -> [AtriumCapturePublishJob] {
+        lock.lock()
+        defer { lock.unlock() }
+        let directory = rootURL.appendingPathComponent("outbox", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
+        return try FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )
+        .filter { $0.pathExtension == "json" }
+        .map { try AtriumContractCodec.makeDecoder().decode(AtriumCapturePublishJob.self, from: Data(contentsOf: $0)) }
+        .sorted { $0.updatedAt < $1.updatedAt }
     }
 
     public func assetData(localKey: String) throws -> Data {
@@ -278,6 +329,14 @@ public final class MemoryNativePublishRepository: NativePublishRepository, @unch
         return try AtriumContractCodec.makeDecoder().decode(AtriumCapturePublishJob.self, from: data)
     }
 
+    public func listJobs() throws -> [AtriumCapturePublishJob] {
+        lock.lock()
+        defer { lock.unlock() }
+        return try jobs.values
+            .map { try AtriumContractCodec.makeDecoder().decode(AtriumCapturePublishJob.self, from: $0) }
+            .sorted { $0.updatedAt < $1.updatedAt }
+    }
+
     public func assetData(localKey: String) throws -> Data {
         lock.lock()
         defer { lock.unlock() }
@@ -303,6 +362,7 @@ public final class MemoryNativePublishRepository: NativePublishRepository, @unch
 
 public enum NativePublishError: Error, Equatable {
     case capabilityUnavailable
+    case alreadyRunning
     case sessionNotFound
     case jobNotFound
     case reviewRequired
@@ -311,17 +371,17 @@ public enum NativePublishError: Error, Equatable {
     case gateway(code: String)
 }
 
-public final class DurableNativePublisher: @unchecked Sendable {
+public actor DurableNativePublisher {
     private let repository: any NativePublishRepository
     private let gateway: any NativeAtriumGateway
-    private let lock = NSLock()
+    public nonisolated let capabilities: NativeAtriumCapabilities
+    private var activeJobIDs: Set<String> = []
 
     public init(repository: any NativePublishRepository, gateway: any NativeAtriumGateway) {
         self.repository = repository
         self.gateway = gateway
+        capabilities = gateway.capabilities
     }
-
-    public var capabilities: NativeAtriumCapabilities { gateway.capabilities }
 
     public func enqueue(
         session: AtriumCaptureSession,
@@ -329,8 +389,6 @@ public final class DurableNativePublisher: @unchecked Sendable {
         jobID: String = UUID().uuidString.lowercased(),
         now: Date = Date()
     ) throws -> AtriumCapturePublishJob {
-        lock.lock()
-        defer { lock.unlock() }
         guard gateway.capabilities.privateDrafts,
               gateway.capabilities.assetUpload,
               gateway.capabilities.versionCreation
@@ -341,6 +399,11 @@ public final class DurableNativePublisher: @unchecked Sendable {
         guard session.steps.allSatisfy({ $0.privacyReview == .approved }) else {
             throw NativePublishError.reviewRequired
         }
+        if let existing = try repository.listJobs().last(where: {
+            $0.sessionID == session.sessionID
+        }) {
+            return existing
+        }
         do {
             try NativeReviewEditor.validatePrivacyAnnotations(in: session)
         } catch {
@@ -348,7 +411,7 @@ public final class DurableNativePublisher: @unchecked Sendable {
         }
         let referencedAssetIDs = Set(session.steps.compactMap(\.screenshotAssetID))
         guard session.assets.allSatisfy({
-            $0.state == .deleted
+            $0.state == .deleted || $0.state == .rawLocal
                 || ($0.state == .publishableLocal && referencedAssetIDs.contains($0.assetID))
         }), referencedAssetIDs.allSatisfy({ assetID in
             session.assets.contains { $0.assetID == assetID && $0.state == .publishableLocal }
@@ -386,9 +449,26 @@ public final class DurableNativePublisher: @unchecked Sendable {
         return job
     }
 
-    public func resume(jobID: String, publishInternal: Bool = false, now: Date = Date()) throws -> AtriumCapturePublishJob {
-        lock.lock()
-        defer { lock.unlock() }
+    public func resume(
+        jobID: String,
+        publishInternal: Bool = false,
+        now: Date = Date()
+    ) async throws -> AtriumCapturePublishJob {
+        guard !activeJobIDs.contains(jobID) else { throw NativePublishError.alreadyRunning }
+        activeJobIDs.insert(jobID)
+        defer { activeJobIDs.remove(jobID) }
+        return try await resumeExclusive(
+            jobID: jobID,
+            publishInternal: publishInternal,
+            now: now
+        )
+    }
+
+    private func resumeExclusive(
+        jobID: String,
+        publishInternal: Bool,
+        now: Date
+    ) async throws -> AtriumCapturePublishJob {
         guard var job = try repository.loadJob(jobID: jobID) else { throw NativePublishError.jobNotFound }
         guard let session = try repository.loadSession(sessionID: job.sessionID) else {
             throw NativePublishError.sessionNotFound
@@ -399,8 +479,14 @@ public final class DurableNativePublisher: @unchecked Sendable {
             if job.phase == .queued || job.phase == .creatingObject {
                 job = job.with(lastError: .some(nil), phase: .creatingObject, updatedAt: now)
                 try repository.saveJob(job)
-                let draft = try gateway.createPrivateDraft(
+                let draft = try await gateway.createPrivateDraft(
                     title: session.title,
+                    sourceRef: NativeCaptureSourceRef(
+                        capturedAt: session.createdAt,
+                        clientVersion: session.recorder.appVersion,
+                        externalID: session.sessionID
+                    ),
+                    collectionID: job.collectionID,
                     idempotencyKey: job.createIdempotencyKey
                 )
                 job = job.with(contentObjectID: .some(draft.objectID), phase: .uploadingAssets, updatedAt: now)
@@ -418,9 +504,12 @@ public final class DurableNativePublisher: @unchecked Sendable {
                         $0.assetID == uploads[index].localAssetID && $0.state == .publishableLocal
                     }) else { throw NativePublishError.rawAssetRejected }
                     let data = try repository.assetData(localKey: asset.localKey)
-                    let remote = try gateway.uploadPublishableAsset(
+                    let remote = try await gateway.uploadPublishableAsset(
                         objectID: objectID,
+                        localAssetID: asset.assetID,
                         pngData: data,
+                        pixelWidth: asset.pixelWidth,
+                        pixelHeight: asset.pixelHeight,
                         sha256: asset.sha256,
                         idempotencyKey: uploads[index].idempotencyKey
                     )
@@ -437,22 +526,34 @@ public final class DurableNativePublisher: @unchecked Sendable {
 
             if job.phase == .creatingVersion {
                 guard let objectID = job.contentObjectID else { throw NativePublishError.jobNotFound }
-                let result = try gateway.createVersion(
+                let result = try await gateway.createVersion(
                     objectID: objectID,
-                    markdown: Self.markdown(for: session),
-                    remoteAssetIDs: (job.assetUploads ?? []).compactMap(\.remoteAssetID),
+                    markdown: try Self.markdown(
+                        for: session,
+                        uploads: job.assetUploads ?? [],
+                        gateway: gateway
+                    ),
                     idempotencyKey: "version:\(job.jobID)"
                 )
-                job = job.with(
+                let readyJob = job.with(
                     currentVersionID: .some(result.versionID),
                     phase: .readyAsDraft,
                     readerURL: .some(result.readerURL),
                     updatedAt: now
                 )
-                try repository.saveJob(job)
                 if session.policy.rawImageRetention == .deleteAfterSubmit {
                     try repository.deleteRawAssets(sessionID: session.sessionID)
                 }
+                let latestSession = try repository.loadSession(sessionID: session.sessionID) ?? session
+                try repository.saveSession(
+                    latestSession.with(
+                        revision: latestSession.revision + 1,
+                        state: .submitted,
+                        updatedAt: now
+                    )
+                )
+                try repository.saveJob(readyJob)
+                job = readyJob
             }
 
             if job.phase == .publishingInternal || (publishInternal && job.phase == .readyAsDraft) {
@@ -466,7 +567,7 @@ public final class DurableNativePublisher: @unchecked Sendable {
                     job = job.with(phase: .publishingInternal, updatedAt: now)
                     try repository.saveJob(job)
                 }
-                try gateway.publishInternal(
+                try await gateway.publishInternal(
                     objectID: objectID,
                     versionID: versionID,
                     idempotencyKey: "publish:\(job.jobID)"
@@ -493,8 +594,32 @@ public final class DurableNativePublisher: @unchecked Sendable {
         }
     }
 
-    private static func markdown(for session: AtriumCaptureSession) -> String {
-        let lines = session.steps.map { step -> String in
+    public func resumePending(now: Date = Date()) async -> [AtriumCapturePublishJob] {
+        guard let jobs = try? repository.listJobs() else { return [] }
+        var results: [AtriumCapturePublishJob] = []
+        for job in jobs {
+            if job.phase == .complete || job.phase == .readyAsDraft || job.phase == .needsAttention {
+                results.append(job)
+                continue
+            }
+            if let recovered = try? await resume(jobID: job.jobID, now: now) {
+                results.append(recovered)
+            } else if let persisted = try? repository.loadJob(jobID: job.jobID) {
+                results.append(persisted)
+            }
+        }
+        return results
+    }
+
+    private static func markdown(
+        for session: AtriumCaptureSession,
+        uploads: [AssetUpload],
+        gateway: any NativeAtriumGateway
+    ) throws -> String {
+        let remoteAssets = Dictionary(uniqueKeysWithValues: uploads.compactMap { upload in
+            upload.remoteAssetID.map { (upload.localAssetID, $0) }
+        })
+        let lines = try session.steps.map { step -> String in
             let raw = step.instruction.editedText ?? step.instruction.generatedText
             let escaped = raw
                 .replacingOccurrences(of: "\\", with: "\\\\")
@@ -502,8 +627,13 @@ public final class DurableNativePublisher: @unchecked Sendable {
                 .replacingOccurrences(of: "]", with: "\\]")
                 .replacingOccurrences(of: "\n", with: " ")
             if let assetID = step.screenshotAssetID,
+               let remoteAssetID = remoteAssets[assetID],
                session.assets.contains(where: { $0.assetID == assetID && $0.state == .publishableLocal }) {
-                return "1. \(escaped)\n\n   ![Reviewed capture](asset://\(assetID))"
+                let directive = try gateway.formatAssetMarkdown(
+                    remoteAssetID: remoteAssetID,
+                    altText: "Reviewed capture"
+                )
+                return "1. \(escaped)\n\n   \(directive)"
             }
             return "1. \(escaped)"
         }
@@ -544,52 +674,71 @@ public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Send
         return (objects.count, assets.count, versions.count, publishes.count)
     }
 
-    public func createPrivateDraft(title _: String, idempotencyKey: String) throws -> NativeDraftResult {
-        lock.lock()
-        defer { lock.unlock() }
-        let result = objects[idempotencyKey] ?? NativeDraftResult(objectID: "mock-object-\(objects.count + 1)")
-        objects[idempotencyKey] = result
-        try failOnce(.object)
-        return result
+    public func createPrivateDraft(
+        title _: String,
+        sourceRef _: NativeCaptureSourceRef,
+        collectionID _: String?,
+        idempotencyKey: String
+    ) async throws -> NativeDraftResult {
+        return try lock.withLock {
+            let result = objects[idempotencyKey]
+                ?? NativeDraftResult(objectID: "mock-object-\(objects.count + 1)")
+            objects[idempotencyKey] = result
+            try failOnce(.object)
+            return result
+        }
+    }
+
+    public func formatAssetMarkdown(remoteAssetID: String, altText: String) throws -> String {
+        "![\(altText)](mock-atrium-asset:\(remoteAssetID))"
     }
 
     public func uploadPublishableAsset(
         objectID _: String,
+        localAssetID _: String,
         pngData: Data,
+        pixelWidth _: Int,
+        pixelHeight _: Int,
         sha256 _: String,
         idempotencyKey: String
-    ) throws -> NativeAssetResult {
-        lock.lock()
-        defer { lock.unlock() }
-        guard !pngData.isEmpty else { throw NativeGatewayFailure(code: "EMPTY_ASSET", retryable: false) }
-        let result = assets[idempotencyKey] ?? NativeAssetResult(assetID: "mock-asset-\(assets.count + 1)")
-        assets[idempotencyKey] = result
-        try failOnce(.asset)
-        return result
+    ) async throws -> NativeAssetResult {
+        return try lock.withLock {
+            guard !pngData.isEmpty else {
+                throw NativeGatewayFailure(code: "EMPTY_ASSET", retryable: false)
+            }
+            let result = assets[idempotencyKey]
+                ?? NativeAssetResult(assetID: "mock-asset-\(assets.count + 1)")
+            assets[idempotencyKey] = result
+            try failOnce(.asset)
+            return result
+        }
     }
 
     public func createVersion(
         objectID _: String,
         markdown _: String,
-        remoteAssetIDs _: [String],
         idempotencyKey: String
-    ) throws -> NativeVersionResult {
-        lock.lock()
-        defer { lock.unlock() }
-        let result = versions[idempotencyKey] ?? NativeVersionResult(
-            versionID: "mock-version-\(versions.count + 1)",
-            readerURL: "http://127.0.0.1/_mock/atrium-capture/reader"
-        )
-        versions[idempotencyKey] = result
-        try failOnce(.version)
-        return result
+    ) async throws -> NativeVersionResult {
+        return try lock.withLock {
+            let result = versions[idempotencyKey] ?? NativeVersionResult(
+                versionID: "mock-version-\(versions.count + 1)",
+                readerURL: "http://127.0.0.1/_mock/atrium-capture/reader"
+            )
+            versions[idempotencyKey] = result
+            try failOnce(.version)
+            return result
+        }
     }
 
-    public func publishInternal(objectID _: String, versionID _: String, idempotencyKey: String) throws {
-        lock.lock()
-        defer { lock.unlock() }
-        publishes.insert(idempotencyKey)
-        try failOnce(.internalPublish)
+    public func publishInternal(
+        objectID _: String,
+        versionID _: String,
+        idempotencyKey: String
+    ) async throws {
+        try lock.withLock {
+            publishes.insert(idempotencyKey)
+            try failOnce(.internalPublish)
+        }
     }
 
     private func failOnce(_ point: MockNativeFailurePoint) throws {

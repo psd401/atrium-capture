@@ -132,7 +132,7 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
         XCTAssertEqual(session.assets[0].state, .deleted)
     }
 
-    func testPublisherRecoversEveryLostResponseWithoutRemoteDuplicates() throws {
+    func testPublisherRecoversEveryLostResponseWithoutRemoteDuplicates() async throws {
         for failure in [
             MockNativeFailurePoint.object,
             .asset,
@@ -142,7 +142,7 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
             let repository = MemoryNativePublishRepository(assets: ["assets/publishable.png": Data([1, 2, 3])])
             let gateway = MockNativeAtriumGateway(failAfterCommitAt: failure)
             let publisher = DurableNativePublisher(repository: repository, gateway: gateway)
-            let job = try publisher.enqueue(
+            let job = try await publisher.enqueue(
                 session: makeSession(
                     state: .publishable,
                     review: .approved,
@@ -152,8 +152,11 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
                 jobID: "job-\(failure.rawValue)"
             )
 
-            XCTAssertThrowsError(try publisher.resume(jobID: job.jobID, publishInternal: true))
-            let recovered = try publisher.resume(jobID: job.jobID, publishInternal: true)
+            do {
+                _ = try await publisher.resume(jobID: job.jobID, publishInternal: true)
+                XCTFail("Expected the synthetic committed-response failure.")
+            } catch {}
+            let recovered = try await publisher.resume(jobID: job.jobID, publishInternal: true)
             XCTAssertEqual(recovered.phase, .complete)
             let counts = gateway.remoteCounts
             XCTAssertEqual(counts.objects, 1)
@@ -163,33 +166,103 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
         }
     }
 
-    func testPublisherCannotEnqueueRawOrUnreviewedSession() throws {
+    func testPublisherCannotEnqueueRawOrUnreviewedSession() async throws {
         let repository = MemoryNativePublishRepository()
         let publisher = DurableNativePublisher(repository: repository, gateway: MockNativeAtriumGateway())
-        XCTAssertThrowsError(try publisher.enqueue(
-            session: makeSession(state: .review, review: .inReview, assetState: .rawLocal, stepReview: .flagged)
-        ))
-        XCTAssertThrowsError(try publisher.enqueue(
-            session: makeSession(
-                state: .publishable,
-                review: .approved,
-                assetState: .rawLocal,
-                stepReview: .approved
+        do {
+            _ = try await publisher.enqueue(
+                session: makeSession(
+                    state: .review,
+                    review: .inReview,
+                    assetState: .rawLocal,
+                    stepReview: .flagged
+                )
             )
-        )) { error in
+            XCTFail("Expected review-required rejection.")
+        } catch {}
+        do {
+            _ = try await publisher.enqueue(
+                session: makeSession(
+                    state: .publishable,
+                    review: .approved,
+                    assetState: .rawLocal,
+                    stepReview: .approved
+                )
+            )
+            XCTFail("Expected raw-asset rejection.")
+        } catch {
             XCTAssertEqual(error as? NativePublishError, .rawAssetRejected)
         }
-        XCTAssertThrowsError(try publisher.enqueue(
+        do {
+            _ = try await publisher.enqueue(
+                session: makeSession(
+                    state: .publishable,
+                    review: .approved,
+                    assetState: .publishableLocal,
+                    stepReview: .approved,
+                    action: .input
+                )
+            )
+            XCTFail("Expected sensitive-step review rejection.")
+        } catch {
+            XCTAssertEqual(error as? NativePublishError, .reviewRequired)
+        }
+    }
+
+    func testPublisherExcludesRetainedRawBytesAndDeletesThemAfterDraftCommit() async throws {
+        let repository = MemoryNativePublishRepository(assets: [
+            "assets/publishable.png": Data([1, 2, 3]),
+            "assets/retained-raw.png": Data("SYNTHETIC-RAW-NEVER-UPLOAD".utf8),
+        ])
+        let gateway = MockNativeAtriumGateway()
+        let publisher = DurableNativePublisher(repository: repository, gateway: gateway)
+        let job = try await publisher.enqueue(
             session: makeSession(
                 state: .publishable,
                 review: .approved,
                 assetState: .publishableLocal,
                 stepReview: .approved,
-                action: .input
+                rawRetention: .deleteAfterSubmit,
+                includeRetainedRaw: true
             )
-        )) { error in
-            XCTAssertEqual(error as? NativePublishError, .reviewRequired)
-        }
+        )
+        let ready = try await publisher.resume(jobID: job.jobID)
+        let stored = try XCTUnwrap(repository.loadSession(sessionID: ready.sessionID))
+
+        XCTAssertEqual(ready.phase, .readyAsDraft)
+        XCTAssertEqual(stored.state, .submitted)
+        XCTAssertEqual(stored.assets.first(where: { $0.localKey == "assets/retained-raw.png" })?.state, .deleted)
+        XCTAssertThrowsError(try repository.assetData(localKey: "assets/retained-raw.png"))
+        XCTAssertEqual(gateway.remoteCounts.assets, 1)
+    }
+
+    func testResumePendingRestoresTerminalDraftWithoutRepeatingRemoteWrites() async throws {
+        let repository = MemoryNativePublishRepository(assets: [
+            "assets/publishable.png": Data([1, 2, 3]),
+        ])
+        let gateway = MockNativeAtriumGateway()
+        let publisher = DurableNativePublisher(repository: repository, gateway: gateway)
+        let job = try await publisher.enqueue(
+            session: makeSession(
+                state: .publishable,
+                review: .approved,
+                assetState: .publishableLocal,
+                stepReview: .approved
+            )
+        )
+        let ready = try await publisher.resume(jobID: job.jobID)
+        let countsBeforeRestart = gateway.remoteCounts
+
+        let recovered = await DurableNativePublisher(
+            repository: repository,
+            gateway: gateway
+        ).resumePending()
+
+        XCTAssertEqual(recovered.map(\.jobID), [ready.jobID])
+        XCTAssertEqual(recovered.first?.phase, .readyAsDraft)
+        XCTAssertEqual(gateway.remoteCounts.objects, countsBeforeRestart.objects)
+        XCTAssertEqual(gateway.remoteCounts.assets, countsBeforeRestart.assets)
+        XCTAssertEqual(gateway.remoteCounts.versions, countsBeforeRestart.versions)
     }
 
     private func makeSession(
@@ -197,27 +270,43 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
         review: ReviewStatus,
         assetState: AssetState,
         stepReview: PrivacyReview,
-        action: Action = .click
+        action: Action = .click,
+        rawRetention: RawImageRetention = .deleteAfterFlatten,
+        includeRetainedRaw: Bool = false
     ) -> AtriumCaptureSession {
         let assetID = "30000000-0000-4000-8000-000000000010"
         let now = Date(timeIntervalSince1970: 1_000)
-        return AtriumCaptureSession(
-            assets: [AssetElement(
+        var assets = [AssetElement(
+            annotations: [],
+            assetID: assetID,
+            derivedFromAssetID: assetState == .publishableLocal ? "raw-source" : nil,
+            localKey: "assets/publishable.png",
+            mimeType: .imagePNG,
+            pixelHeight: 20,
+            pixelWidth: 20,
+            sha256: String(repeating: "a", count: 64),
+            state: assetState
+        )]
+        if includeRetainedRaw {
+            assets.append(AssetElement(
                 annotations: [],
-                assetID: assetID,
-                derivedFromAssetID: assetState == .publishableLocal ? "raw-source" : nil,
-                localKey: "assets/publishable.png",
+                assetID: "30000000-0000-4000-8000-000000000099",
+                derivedFromAssetID: nil,
+                localKey: "assets/retained-raw.png",
                 mimeType: .imagePNG,
                 pixelHeight: 20,
                 pixelWidth: 20,
-                sha256: String(repeating: "a", count: 64),
-                state: assetState
-            )],
+                sha256: String(repeating: "c", count: 64),
+                state: .rawLocal
+            ))
+        }
+        return AtriumCaptureSession(
+            assets: assets,
             createdAt: now,
             policy: Policy(
                 denyReason: nil,
                 policyVersion: "test-v1",
-                rawImageRetention: .deleteAfterFlatten,
+                rawImageRetention: rawRetention,
                 reviewStatus: review,
                 sourceURLRetention: .none
             ),

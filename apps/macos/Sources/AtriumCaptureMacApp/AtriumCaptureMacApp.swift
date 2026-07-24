@@ -15,6 +15,7 @@ final class CaptureAppModel: ObservableObject {
     @Published private(set) var statusCode = "READY"
     @Published private(set) var publishJob: AtriumCapturePublishJob?
     @Published private(set) var pins: [PinnedCapture] = []
+    @Published private(set) var atriumAuthentication: NativeAuthenticationStatus = .unconfigured
     @Published var manualInstruction = ""
 
     private let recorder: NativeRecorder
@@ -22,6 +23,10 @@ final class CaptureAppModel: ObservableObject {
     private let vault: NativeAssetVault
     private let monitor: MacEventMonitor
     private let publisher: DurableNativePublisher
+    private let oauthCoordinator: NativeOAuthCoordinator
+    private let productionSettings: NativeAtriumProductionSettings?
+    private let defaultCollectionID: String?
+    private let localMockEnabled: Bool
     private let capture: SerializedNativeCapture
     private let reader: AccessibilitySemanticReader
     private let regionSelector: RegionSelectionController
@@ -46,21 +51,51 @@ final class CaptureAppModel: ObservableObject {
                 capture: capture,
                 vault: vault
             )
-            let gateway: any NativeAtriumGateway = ProcessInfo.processInfo.environment["ATRIUM_CAPTURE_LOCAL_MOCK"] == "1"
-                ? MockNativeAtriumGateway()
-                : UnavailableNativeAtriumGateway()
+            let oauthCoordinator = NativeOAuthCoordinator()
+            let productionSettings = NativeAtriumProductionSettings.load()
+            let localMockEnabled = ProcessInfo.processInfo.environment["ATRIUM_CAPTURE_LOCAL_MOCK"] == "1"
+            let gateway: any NativeAtriumGateway
+            if localMockEnabled {
+                gateway = MockNativeAtriumGateway()
+            } else if let productionSettings {
+                gateway = try ProductionNativeAtriumGateway {
+                    try await oauthCoordinator.accessToken(configuration: productionSettings.oauth)
+                }
+            } else {
+                gateway = UnavailableNativeAtriumGateway()
+            }
             self.recorder = recorder
             repository = FileNativePublishRepository(rootURL: root)
             self.vault = vault
             monitor = MacEventMonitor(pipeline: pipeline)
             publisher = DurableNativePublisher(repository: repository, gateway: gateway)
+            self.oauthCoordinator = oauthCoordinator
+            self.productionSettings = productionSettings
+            defaultCollectionID = productionSettings?.defaultCollectionID
+            self.localMockEnabled = localMockEnabled
             self.capture = capture
             self.reader = reader
             regionSelector = RegionSelectionController(capture: capture)
             pinBoard = try PinBoard(
                 persistence: FilePinBoardPersistence(url: root.appendingPathComponent("pin-history.json"))
             )
-            session = recorder.snapshot()
+            let persistedJob = try repository.listJobs().last
+            publishJob = persistedJob
+            session = try persistedJob.flatMap {
+                try repository.loadSession(sessionID: $0.sessionID)
+            } ?? recorder.snapshot()
+            if let persistedJob {
+                switch persistedJob.phase {
+                case .readyAsDraft:
+                    statusCode = "PRIVATE_DRAFT_READY"
+                case .complete:
+                    statusCode = "INTERNAL_PUBLICATION_COMPLETE"
+                case .needsAttention:
+                    statusCode = "PUBLISH_NEEDS_ATTENTION"
+                default:
+                    statusCode = "PUBLISH_PENDING"
+                }
+            }
             pins = pinBoard.snapshot().pins
             for pin in pins {
                 if let data = try? vault.read(localKey: pin.localKey) {
@@ -77,12 +112,64 @@ final class CaptureAppModel: ObservableObject {
             permissionTimer = Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
                 Task { @MainActor in self?.handlePermissionChange() }
             }
+            if localMockEnabled {
+                atriumAuthentication = .signedIn
+                Task { @MainActor [weak self] in
+                    await self?.resumePendingPublications()
+                }
+            } else if let productionSettings {
+                atriumAuthentication = .signedOut
+                Task { @MainActor [weak self] in
+                    self?.atriumAuthentication = await oauthCoordinator.status(
+                        configuration: productionSettings.oauth
+                    )
+                    if self?.atriumAuthentication == .signedIn {
+                        await self?.resumePendingPublications()
+                    }
+                }
+            }
         } catch {
             fatalError("Atrium Capture could not initialize local storage.")
         }
     }
 
-    var liveAtriumAvailable: Bool { publisher.capabilities.privateDrafts }
+    var liveAtriumAvailable: Bool {
+        publisher.capabilities.privateDrafts && atriumAuthentication == .signedIn
+    }
+
+    var atriumConfigured: Bool {
+        localMockEnabled || productionSettings != nil
+    }
+
+    func signInToAtrium() {
+        guard let productionSettings else {
+            statusCode = "ATRIUM_OAUTH_UNCONFIGURED"
+            return
+        }
+        Task { @MainActor in
+            do {
+                _ = try await oauthCoordinator.signIn(configuration: productionSettings.oauth)
+                atriumAuthentication = .signedIn
+                statusCode = "ATRIUM_SIGNED_IN"
+                await resumePendingPublications()
+            } catch {
+                atriumAuthentication = .signedOut
+                statusCode = "ATRIUM_SIGN_IN_FAILED"
+            }
+        }
+    }
+
+    func signOutOfAtrium() {
+        Task { @MainActor in
+            do {
+                try await oauthCoordinator.signOut(configuration: productionSettings?.oauth)
+                atriumAuthentication = productionSettings == nil ? .unconfigured : .signedOut
+                statusCode = "ATRIUM_SIGNED_OUT"
+            } catch {
+                statusCode = "ATRIUM_SIGN_OUT_FAILED"
+            }
+        }
+    }
 
     func refreshPermissions() {
         permissions = MacPermissionCenter.snapshot()
@@ -182,15 +269,60 @@ final class CaptureAppModel: ObservableObject {
 
     func publishPrivateDraft() {
         guard let session else { return }
-        do {
-            var job = try publisher.enqueue(session: session)
-            job = try publisher.resume(jobID: job.jobID)
-            publishJob = job
-            statusCode = job.phase == .readyAsDraft ? "PRIVATE_DRAFT_READY" : "PUBLISH_PENDING"
-        } catch NativePublishError.capabilityUnavailable {
-            statusCode = "ATRIUM_API_UNAVAILABLE"
-        } catch {
-            statusCode = "PUBLISH_RETRY_REQUIRED"
+        statusCode = "PUBLISHING_PRIVATE_DRAFT"
+        Task { @MainActor in
+            do {
+                var job = try await publisher.enqueue(
+                    session: session,
+                    collectionID: defaultCollectionID
+                )
+                job = try await publisher.resume(jobID: job.jobID)
+                publishJob = job
+                self.session = try? repository.loadSession(sessionID: job.sessionID)
+                statusCode = job.phase == .readyAsDraft ? "PRIVATE_DRAFT_READY" : "PUBLISH_PENDING"
+            } catch NativePublishError.capabilityUnavailable {
+                statusCode = "ATRIUM_API_UNAVAILABLE"
+            } catch {
+                statusCode = "PUBLISH_RETRY_REQUIRED"
+            }
+        }
+    }
+
+    func publishInternally() {
+        guard let job = publishJob, job.phase == .readyAsDraft else { return }
+        statusCode = "PUBLISHING_INTERNAL"
+        Task { @MainActor in
+            do {
+                let complete = try await publisher.resume(
+                    jobID: job.jobID,
+                    publishInternal: true
+                )
+                publishJob = complete
+                self.session = try? repository.loadSession(sessionID: complete.sessionID)
+                statusCode = complete.phase == .complete
+                    ? "INTERNAL_PUBLICATION_COMPLETE"
+                    : "PUBLISH_PENDING"
+            } catch {
+                statusCode = "PUBLISH_RETRY_REQUIRED"
+            }
+        }
+    }
+
+    private func resumePendingPublications() async {
+        let recovered = await publisher.resumePending()
+        if let latest = recovered.last {
+            publishJob = latest
+            session = try? repository.loadSession(sessionID: latest.sessionID)
+            switch latest.phase {
+            case .readyAsDraft:
+                statusCode = "PRIVATE_DRAFT_READY"
+            case .complete:
+                statusCode = "INTERNAL_PUBLICATION_COMPLETE"
+            case .needsAttention:
+                statusCode = "PUBLISH_NEEDS_ATTENTION"
+            default:
+                statusCode = "PUBLISH_RETRY_REQUIRED"
+            }
         }
     }
 
