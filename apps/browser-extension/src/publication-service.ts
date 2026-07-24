@@ -122,15 +122,15 @@ export class BrowserPublicationService {
       await this.loadManagedDefaultCollectionId(),
     );
     const selectedCollectionId = collectionId ?? choices.collections[0]?.collectionId;
-    if (!selectedCollectionId) {
-      throw new GatewayError('collection_selection_required', false);
-    }
     if (
+      selectedCollectionId &&
       !choices.collections.some((collection) => collection.collectionId === selectedCollectionId)
     ) {
       throw new GatewayError('collection_not_available', false);
     }
-    const job = await this.publisher.enqueue(session, { collectionId: selectedCollectionId });
+    const job = await this.publisher.enqueue(session, {
+      ...(selectedCollectionId ? { collectionId: selectedCollectionId } : {}),
+    });
     return this.drive(job.jobId);
   }
 

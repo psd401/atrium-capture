@@ -839,23 +839,31 @@ export function App() {
                   </button>
                 </div>
               )}
-              <label htmlFor="collection-picker">Collection</label>
-              <select
-                id="collection-picker"
-                onChange={(event) => setSelectedCollectionId(event.target.value)}
-                value={selectedCollectionId}
-              >
-                {publication?.collections.map((collection) => (
-                  <option key={collection.collectionId} value={collection.collectionId}>
-                    {collection.name}
-                  </option>
-                ))}
-              </select>
+              {publication && publication.collections.length > 0 ? (
+                <>
+                  <label htmlFor="collection-picker">Collection</label>
+                  <select
+                    id="collection-picker"
+                    onChange={(event) => setSelectedCollectionId(event.target.value)}
+                    value={selectedCollectionId}
+                  >
+                    {publication.collections.map((collection) => (
+                      <option key={collection.collectionId} value={collection.collectionId}>
+                        {collection.name}
+                      </option>
+                    ))}
+                  </select>
+                </>
+              ) : (
+                <small>
+                  No selectable collection is required; the private draft will be unfiled.
+                </small>
+              )}
               {publication?.collectionSource === 'managed_default' && (
                 <small>Set by district managed policy.</small>
               )}
               <button
-                disabled={pending || !selectedCollectionId}
+                disabled={pending}
                 onClick={() => void publisherCommand('publisher.enqueue')}
                 type="button"
               >
