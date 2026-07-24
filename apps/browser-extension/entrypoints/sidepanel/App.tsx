@@ -424,12 +424,20 @@ export function App() {
   return (
     <main>
       <header>
-        <p className="eyebrow">Atrium Capture</p>
-        <h1>{session?.title ?? 'New visual guide'}</h1>
+        <div className="brand-lockup">
+          <span aria-hidden="true" className="brand-mark">
+            A
+          </span>
+          <div>
+            <p className="eyebrow">Atrium Capture</p>
+            <h1>{session?.title ?? 'New visual guide'}</h1>
+          </div>
+        </div>
         <p className={`status ${isRecording ? 'recording' : ''}`} role="status">
           <span aria-hidden="true" className="status-dot" />
           {stateLabel(state)}
         </p>
+        <p className="privacy-promise">Private by default · reviewed before publishing</p>
       </header>
 
       <section aria-label="Recording controls" className="controls">
