@@ -74,3 +74,7 @@ Every phase persists its remote IDs before continuing. A retry reuses the same i
 - Mac: Swift, SwiftUI, AppKit, ScreenCaptureKit, Accessibility, Core Graphics, Keychain, AuthenticationServices.
 - Workspace: pnpm monorepo for TypeScript; Xcode/Swift Package Manager for native code.
 - Testing: Vitest/unit tests, extension-loaded Playwright, JSON Schema contract fixtures, Swift XCTest, and image goldens.
+
+## Product visual language
+
+The side panel and Mac workspace share semantic presentation roles—evergreen primary actions, mint review states, warm neutral canvas, white panels, quiet metadata, and explicit privacy cues—while retaining platform-native layouts and controls. No production screenshot or Atrium frontend asset is shipped. [ADR 0005](adr/0005-atrium-aligned-visual-language.md) records the design boundary and accessibility requirements.
