@@ -22,6 +22,8 @@ Review date: 2026-07-22. Registry metadata was checked before the initial instal
 
 `quicktype-core` is used only during generation; generated files remain MIT-licensed project output. No dependency receives runtime capture data. A dependency upgrade requires re-running `pnpm licenses:check`, `pnpm security:audit`, all contract tests, and the affected application test suite.
 
+GitHub workflows pin the official MIT-licensed `actions/checkout` v7.0.1 commit (`3d3c42e5aac5ba805825da76410c181273ba90b1`). This Node 24-compatible release is active and unarchived; it replaces the mutable Node 20-based v4 reference that GitHub deprecated.
+
 The resolved development graph also includes `minimatch` under the permissive Blue Oak Model License 1.0.0 and `lightningcss` under MPL-2.0. Both are unmodified build-time dependencies: Blue Oak is permissive, and MPL-2.0 obligations remain file-scoped inside the dependency. Neither changes the MIT license of Atrium Capture source or generated artifacts.
 
 WXT's development-only packaging graph includes a small number of dual-license expressions. Atrium Capture selects the permissive alternative for JSZip (MIT), node-forge (BSD-3-Clause), `rc` (BSD-2-Clause/MIT/Apache-2.0), and type-fest (MIT/CC0); pako's combined MIT and Zlib terms are both permissive. `winreg@0.0.12` declares the legacy identifier `BSD` rather than a modern SPDX variant and is used only by cross-platform development tooling; that exact package/version is explicitly reviewed. The license checker allows these exact expressions so a new or changed expression still fails closed.
