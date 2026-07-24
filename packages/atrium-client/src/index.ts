@@ -26,6 +26,16 @@ export interface AtriumCollection {
   name: string;
 }
 
+export interface CaptureSourceRef {
+  capturedAt: string;
+  clientSurface: 'browser' | 'mac';
+  clientVersion: string;
+  externalId: string;
+  provider: 'atrium-capture';
+  sourceOrigins?: string[];
+  type: 'capture';
+}
+
 export interface CollectionChoices {
   collections: AtriumCollection[];
   source: 'discovery' | 'managed_default';
@@ -34,6 +44,7 @@ export interface CollectionChoices {
 export interface CreatePrivateObjectRequest {
   collectionId?: string;
   idempotencyKey: string;
+  sourceRef: CaptureSourceRef;
   title: string;
   visibility: 'private';
 }
@@ -44,6 +55,8 @@ export interface UploadImmutableAssetRequest {
   idempotencyKey: string;
   localAssetId: string;
   mimeType: string;
+  pixelHeight: number;
+  pixelWidth: number;
   sha256: string;
 }
 
@@ -61,7 +74,11 @@ export interface AtriumGateway {
   createPrivateObject(request: CreatePrivateObjectRequest): Promise<{ contentObjectId: string }>;
   formatAssetMarkdown(remoteAssetId: string, altText: string): string;
   listCollections(): Promise<AtriumCollection[]>;
-  publishInternal(request: { contentObjectId: string; idempotencyKey: string }): Promise<void>;
+  publishInternal(request: {
+    contentObjectId: string;
+    idempotencyKey: string;
+    versionId: string;
+  }): Promise<void>;
   uploadImmutableAsset(request: UploadImmutableAssetRequest): Promise<{ remoteAssetId: string }>;
 }
 
@@ -263,6 +280,7 @@ export class DurablePublisher {
     const session = await this.requireSession(job.sessionId);
     const response = await this.gateway.createPrivateObject({
       idempotencyKey: job.createIdempotencyKey,
+      sourceRef: captureSourceRef(session),
       title: session.title,
       visibility: 'private',
       ...(job.collectionId ? { collectionId: job.collectionId } : {}),
@@ -300,6 +318,8 @@ export class DurablePublisher {
         idempotencyKey: upload.idempotencyKey,
         localAssetId: asset.assetId,
         mimeType: asset.mimeType,
+        pixelHeight: asset.pixelHeight,
+        pixelWidth: asset.pixelWidth,
         sha256: asset.sha256,
       });
       uploads = replaceUpload(uploads, index, {
@@ -336,13 +356,15 @@ export class DurablePublisher {
   }
 
   private async publishInternal(job: AtriumCapturePublishJob): Promise<AtriumCapturePublishJob> {
-    if (!job.contentObjectId) {
+    if (!job.contentObjectId || !job.currentVersionId) {
       throw new GatewayError('content_object_missing', false);
     }
+    const versionId = job.currentVersionId;
     await this.requireCapability('internalPublication');
     await this.gateway.publishInternal({
       contentObjectId: job.contentObjectId,
       idempotencyKey: idempotencyKey(job.jobId, 'publish-internal'),
+      versionId,
     });
     return this.save({ ...job, phase: Phase.Complete });
   }
@@ -425,7 +447,7 @@ export function parseAuthorizationCallback(callbackUrl: string, expectedState: s
     throw new Error('oauth_authorization_denied');
   }
   const code = url.searchParams.get('code');
-  if (!code) {
+  if (!code || code.length > 16_384) {
     throw new Error('oauth_code_missing');
   }
   return code;
@@ -489,6 +511,41 @@ function replaceUpload<T>(uploads: readonly T[], index: number, value: T): T[] {
 
 function idempotencyKey(jobId: string, operation: string): string {
   return `capture:${jobId}:${operation}`;
+}
+
+function captureSourceRef(session: AtriumCaptureSession): CaptureSourceRef {
+  const sourceOrigins =
+    session.policy.sourceUrlRetention === 'none'
+      ? []
+      : [
+          ...new Set(
+            session.steps
+              .map((step) => step.target?.browser?.origin)
+              .filter((origin): origin is string => Boolean(origin))
+              .map(normalizeSourceOrigin)
+              .filter((origin): origin is string => Boolean(origin)),
+          ),
+        ].slice(0, 20);
+  return {
+    capturedAt: session.createdAt.toISOString(),
+    clientSurface: session.recorder.surface === 'macos' ? 'mac' : 'browser',
+    clientVersion: session.recorder.appVersion,
+    externalId: session.sessionId,
+    provider: 'atrium-capture',
+    ...(sourceOrigins.length > 0 ? { sourceOrigins } : {}),
+    type: 'capture',
+  };
+}
+
+function normalizeSourceOrigin(value: string): string | undefined {
+  try {
+    const url = new URL(value);
+    return (url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password
+      ? url.origin
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function normalizeError(error: unknown): LastError {

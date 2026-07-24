@@ -15,12 +15,13 @@ private enum VerificationFailure: Error {
     case redactionPixel
     case neighborPixel
     case metadata
+    case productionGateway
 }
 
 @main
 enum AtriumCaptureMacVerifier {
     @MainActor
-    static func main() throws {
+    static func main() async throws {
         let source = try sourcePNGWithMetadata(width: 10, height: 10)
         let flattened = try CoreGraphicsReviewRenderer.flatten(
             sourcePNG: source,
@@ -45,7 +46,8 @@ enum AtriumCaptureMacVerifier {
               !String(decoding: flattened.pngData, as: UTF8.self).contains("Synthetic Author")
         else { throw VerificationFailure.metadata }
         try verifyPinnedWindow(pngData: flattened.pngData)
-        print("native-verifier: redaction pixels and metadata passed")
+        try await verifyProductionGatewayContract()
+        print("native-verifier: redaction, metadata, pin, and production gateway checks passed")
     }
 
     private static func sourcePNGWithMetadata(width: Int, height: Int) throws -> Data {
@@ -146,7 +148,168 @@ enum AtriumCaptureMacVerifier {
         ) else { throw VerificationFailure.imageCreation }
         manager.closeAll()
     }
+
+    private static func verifyProductionGatewayContract() async throws {
+        let transport = VerifierAtriumTransport()
+        let gateway = try ProductionNativeAtriumGateway(transport: transport) {
+            "synthetic-access-token"
+        }
+        let draft = try await gateway.createPrivateDraft(
+            title: "Synthetic native guide",
+            sourceRef: NativeCaptureSourceRef(
+                capturedAt: Date(timeIntervalSince1970: 1_753_387_200),
+                clientVersion: "1.0.0",
+                externalID: verifierSessionID
+            ),
+            collectionID: verifierCollectionID,
+            idempotencyKey: "object:synthetic-job"
+        )
+        let asset = try await gateway.uploadPublishableAsset(
+            objectID: draft.objectID,
+            localAssetID: verifierLocalAssetID,
+            pngData: verifierAssetData,
+            pixelWidth: 1280,
+            pixelHeight: 720,
+            sha256: String(repeating: "0", count: 64),
+            idempotencyKey: "asset:synthetic-job"
+        )
+        let version = try await gateway.createVersion(
+            objectID: draft.objectID,
+            markdown: "# Synthetic\n\n" + (try gateway.formatAssetMarkdown(
+                remoteAssetID: asset.assetID,
+                altText: "Reviewed"
+            )),
+            idempotencyKey: "version:synthetic-job"
+        )
+        try await gateway.publishInternal(
+            objectID: draft.objectID,
+            versionID: version.versionID,
+            idempotencyKey: "publish:synthetic-job"
+        )
+
+        let requests = await transport.requests
+        guard let create = requests.first(where: {
+            $0.url?.path == "/api/v1/content" && $0.httpMethod == "POST"
+        }),
+        let createBody = try JSONSerialization.jsonObject(
+            with: create.httpBody ?? Data()
+        ) as? [String: Any],
+        (createBody["visibility"] as? [String: String])?["level"] == "private",
+        createBody["body"] == nil,
+        (createBody["sourceRef"] as? [String: Any])?["clientSurface"] as? String == "mac",
+        create.value(forHTTPHeaderField: "Idempotency-Key") == "object:synthetic-job",
+        let upload = requests.first(where: { $0.url?.host?.contains("amazonaws.com") == true }),
+        upload.value(forHTTPHeaderField: "Authorization") == nil,
+        Set(upload.allHTTPHeaderFields?.keys.map { $0.lowercased() } ?? [])
+            == Set(["content-type", "x-amz-checksum-sha256"]),
+        let versionRequest = requests.first(where: { $0.url?.path.hasSuffix("/versions") == true }),
+        versionRequest.value(forHTTPHeaderField: "If-Match") == "\"none\"",
+        let publishRequest = requests.first(where: { $0.url?.path.hasSuffix("/publish") == true }),
+        publishRequest.value(forHTTPHeaderField: "If-Match") == "\"\(verifierVersionID)\"",
+        version.readerURL == "https://aistudio.psd401.ai/c/synthetic-native-guide"
+        else { throw VerificationFailure.productionGateway }
+    }
 }
+
+private actor VerifierAtriumTransport: NativeHTTPTransport {
+    private(set) var requests: [URLRequest] = []
+
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        requests.append(request)
+        guard let url = request.url else { throw VerificationFailure.productionGateway }
+        if url.host?.contains("amazonaws.com") == true {
+            return response(url: url, status: 200, body: nil)
+        }
+        switch (request.httpMethod ?? "GET", url.path) {
+        case ("POST", "/api/v1/content"):
+            return response(url: url, status: 201, body: [
+                "data": [
+                    "id": verifierObjectID,
+                    "slug": "synthetic-native-guide",
+                    "visibilityLevel": "private",
+                    "currentVersionId": NSNull(),
+                ],
+            ])
+        case ("GET", "/api/v1/content/\(verifierObjectID)/assets"):
+            return response(url: url, status: 200, body: ["data": []])
+        case ("POST", "/api/v1/content/\(verifierObjectID)/assets"):
+            return response(url: url, status: 201, body: [
+                "data": assetRecord(state: "pending").merging([
+                    "upload": [
+                        "method": "PUT",
+                        "url": "https://synthetic-bucket.s3.us-west-2.amazonaws.com/upload?signature=fake",
+                        "headers": [
+                            "content-type": "image/png",
+                            "x-amz-checksum-sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                        ],
+                        "expiresAt": "2030-07-24T20:15:00.000Z",
+                    ],
+                ]) { _, new in new },
+            ])
+        case ("POST", "/api/v1/content/\(verifierObjectID)/assets/\(verifierAssetID)/complete"):
+            return response(url: url, status: 200, body: ["data": assetRecord(state: "ready")])
+        case ("POST", "/api/v1/content/\(verifierObjectID)/versions"):
+            return response(url: url, status: 201, body: [
+                "data": [
+                    "currentVersionId": verifierVersionID,
+                    "slug": "synthetic-native-guide",
+                    "version": ["id": verifierVersionID],
+                ],
+            ])
+        case ("POST", "/api/v1/content/\(verifierObjectID)/publish"):
+            return response(url: url, status: 200, body: [
+                "data": [
+                    "id": verifierObjectID,
+                    "destination": "intranet",
+                    "publishedVersionId": verifierVersionID,
+                ],
+            ])
+        default:
+            throw VerificationFailure.productionGateway
+        }
+    }
+
+    private func response(
+        url: URL,
+        status: Int,
+        body: [String: Any]?
+    ) -> (Data, URLResponse) {
+        let data = body.map { try! JSONSerialization.data(withJSONObject: $0) } ?? Data()
+        return (
+            data,
+            HTTPURLResponse(
+                url: url,
+                statusCode: status,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"]
+            )!
+        )
+    }
+
+    private func assetRecord(state: String) -> [String: Any] {
+        [
+            "id": verifierAssetID,
+            "objectId": verifierObjectID,
+            "filename": "atrium-capture-\(verifierLocalAssetID).png",
+            "contentType": "image/png",
+            "byteLength": verifierAssetData.count,
+            "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "purpose": "capture_step",
+            "state": state,
+            "width": 1280,
+            "height": 720,
+            "uploadExpiresAt": "2030-07-24T20:15:00.000Z",
+        ]
+    }
+}
+
+private let verifierCollectionID = "60000000-0000-4000-8000-000000000001"
+private let verifierSessionID = "10000000-0000-4000-8000-000000000001"
+private let verifierObjectID = "a1000000-0000-4000-8000-000000000001"
+private let verifierLocalAssetID = "a3000000-0000-4000-8000-000000000001"
+private let verifierAssetID = "a2000000-0000-4000-8000-000000000001"
+private let verifierVersionID = "a4000000-0000-4000-8000-000000000001"
+private let verifierAssetData = Data("synthetic-reviewed-image".utf8)
 #else
 @main
 enum AtriumCaptureMacVerifier {

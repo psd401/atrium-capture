@@ -138,10 +138,29 @@ struct AtriumCaptureWorkspaceView: View {
             .buttonStyle(AtriumPrimaryButtonStyle())
             .disabled(model.session?.state != .publishable || !model.liveAtriumAvailable)
 
-            if !model.liveAtriumAvailable {
+            if model.atriumConfigured && model.atriumAuthentication == .signedOut {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Connect to Atrium to create a private draft.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AtriumCaptureTheme.inkSoft)
+                    Button("Sign in to Atrium") { model.signInToAtrium() }
+                        .buttonStyle(AtriumSecondaryButtonStyle())
+                }
+            } else if model.atriumAuthentication == .signedIn {
+                HStack {
+                    Label("Connected to Atrium", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 11))
+                        .foregroundStyle(AtriumCaptureTheme.evergreen)
+                    Spacer()
+                    Button("Sign out") { model.signOutOfAtrium() }
+                        .buttonStyle(AtriumSecondaryButtonStyle())
+                }
+            }
+
+            if !model.atriumConfigured {
                 Label {
                     Text(
-                        "Live publishing remains capability-gated. Local capture and privacy review are available."
+                        "Atrium OAuth client registration is not configured. Local capture and privacy review remain available."
                     )
                 } icon: {
                     Image(systemName: "info.circle.fill")
@@ -151,6 +170,16 @@ struct AtriumCaptureWorkspaceView: View {
                 .padding(10)
                 .background(AtriumCaptureTheme.warningSoft)
                 .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
+
+            if model.publishJob?.phase == .readyAsDraft {
+                Button {
+                    model.publishInternally()
+                } label: {
+                    Label("Publish draft internally", systemImage: "person.2.badge.gearshape")
+                }
+                .buttonStyle(AtriumSecondaryButtonStyle())
+                .disabled(!model.liveAtriumAvailable)
             }
 
             Divider()
@@ -378,9 +407,20 @@ struct AtriumCaptureWorkspaceView: View {
             Text(label)
                 .foregroundStyle(AtriumCaptureTheme.ink)
             Spacer()
-            Text(state.rawValue)
+            Text(permissionStateLabel(state))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AtriumCaptureTheme.muted)
+        }
+    }
+
+    private func permissionStateLabel(_ state: NativePermissionState) -> String {
+        switch state {
+        case .granted:
+            "Granted"
+        case .denied:
+            "Denied"
+        case .notDetermined:
+            "Not determined"
         }
     }
 

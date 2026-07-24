@@ -3,6 +3,7 @@
   "type": "object",
   "properties": {
     "schemaVersion": { "type": "integer", "enum": [1] },
+    "atriumOAuthClientId": { "type": "string" },
     "allowedOrigins": {
       "type": "array",
       "items": { "type": "string" }

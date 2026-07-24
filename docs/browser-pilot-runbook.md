@@ -17,7 +17,7 @@ Checklist:
 - [x] Local deletion removes sessions, images, receipts, commands, and outbox jobs after explicit confirmation.
 - [x] Extension-loaded Chromium verifies keyboard focus, recording/restart recovery, review, redaction golden, capability gate, diagnostics download, and permission rationale.
 - [x] Rollback and staged update procedures are documented below.
-- [ ] Authenticated development-Atrium test. Blocked only by the production-capable OAuth, immutable authored-asset, collection, and idempotency contracts listed in `atrium-integration.md`.
+- [ ] Authenticated production-Atrium test with synthetic content. The API contract is implemented; this operator check requires an Atrium-registered public client UUID and test account.
 
 ## Pilot installation
 
@@ -25,7 +25,7 @@ Checklist:
 2. For engineering evaluation, load `apps/browser-extension/.output/chrome-mv3` unpacked into a dedicated synthetic Chrome profile.
 3. For a managed ring, use a district-signed/store-hosted artifact and Chrome `ExtensionSettings`; do not distribute the unpacked directory.
 4. Apply a versioned policy from `browser-managed-policy.md`, refresh `chrome://policy`, and export Support diagnostics.
-5. Keep live Atrium capabilities disabled until every required contract is documented and an authenticated development test passes.
+5. Supply `atriumOAuthClientId` only after the exact public-client registration is reviewed. Sign in, create one synthetic private draft, verify the reader and explicit internal-publication action, and retain no production screenshots.
 
 ## Permission rationale
 
@@ -33,7 +33,7 @@ Checklist:
 - `sidePanel` hosts the visible recorder/editor.
 - `storage` reads administrator policy; capture state and image blobs use IndexedDB. Managed storage is restricted to trusted extension contexts.
 - `unlimitedStorage` prevents Chrome's generic quota from corrupting a long recording. The smaller administrator-controlled `maxStorageBytes` budget is still enforced before image commit.
-- `identity` supports an interactive non-Google Authorization Code + PKCE flow. It is unused while the live Atrium OAuth capability is disabled.
+- `identity` supports Atrium Authorization Code + S256 PKCE. Tokens stay in trusted-only session storage, survive service-worker stops, and are cleared on browser exit or sign-out.
 
 No permission reads cookies, browsing history, page storage, network traffic, password values, or ordinary input values. M6 adds `nativeMessaging` as an optional, user-requested permission only; it is absent from the required install-time allowlist and forwards a strict semantic subset after worker validation and persistence.
 
@@ -44,7 +44,8 @@ No permission reads cookies, browsing history, page storage, network traffic, pa
 3. Check policy validity, extension version/ID, local image bytes, capture state, outbox phase, retryability code, and capability flags.
 4. If policy is invalid, compare only key names/types with the managed policy document; never request screenshots or a user's recorded guide.
 5. For a retryable outbox interruption, use Retry safely. Stable idempotency keys prevent duplicate remote state.
-6. If the live capability is unavailable, do not add a substitute host or route. Escalate using the exact missing capabilities.
+6. If live sign-in says it is unconfigured, verify the public client registration and managed UUID. Do not add a substitute host or route.
+7. If an asset retry remains blocked behind an expired reservation, record only the fixed error/request ID and follow the limitation in ADR 0006; never collect the image or upload it elsewhere.
 
 ## Rollback
 

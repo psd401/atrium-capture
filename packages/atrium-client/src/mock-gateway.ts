@@ -22,6 +22,8 @@ interface MockAsset {
   contentObjectId: string;
   localAssetId: string;
   mimeType: string;
+  pixelHeight: number;
+  pixelWidth: number;
   remoteAssetId: string;
   sha256: string;
   size: number;
@@ -141,9 +143,18 @@ export class MockAtriumGateway implements AtriumGateway {
   async publishInternal(request: {
     contentObjectId: string;
     idempotencyKey: string;
+    versionId: string;
   }): Promise<void> {
     this.count('publish_internal');
     const object = this.requireObject(request.contentObjectId);
+    const hasVersion = [...this.versionsByKey.values()].some(
+      (version) =>
+        version.contentObjectId === request.contentObjectId &&
+        version.versionId === request.versionId,
+    );
+    if (!hasVersion) {
+      throw new GatewayError('version_not_found', false);
+    }
     const existing = this.objectsByKey.get(request.idempotencyKey);
     if (existing) {
       this.assertSame(existing.contentObjectId, request.contentObjectId);
@@ -188,6 +199,8 @@ export class MockAtriumGateway implements AtriumGateway {
       contentObjectId: request.contentObjectId,
       localAssetId: request.localAssetId,
       mimeType: request.mimeType,
+      pixelHeight: request.pixelHeight,
+      pixelWidth: request.pixelWidth,
       remoteAssetId,
       sha256: request.sha256,
       size: request.bytes.size,

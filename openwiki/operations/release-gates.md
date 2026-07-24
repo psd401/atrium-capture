@@ -1,7 +1,7 @@
 ---
 type: Guide
 title: Release Gates and External Dependencies
-description: Locally complete milestones, build artifacts, operational approvals, and unavailable live Atrium capabilities.
+description: Locally complete milestones, build artifacts, operational approvals, and remaining Atrium deployment/server gates.
 tags: [release, milestones, browser, macos, blockers]
 ---
 
@@ -14,20 +14,18 @@ extension ZIP and an ad-hoc-signed macOS application for synthetic evaluation.
 
 - Shared TypeScript/Swift contracts and fixtures
 - Browser recording, worker restart recovery, editing, and irreversible redaction
-- Durable private-default publication against the local Atrium mock
+- Durable private-default publication against local and production-contract gateways
 - Managed browser policy, safe diagnostics, data deletion, and rollback
 - Native recording, permission degradation, region capture, pins, and mixed-display geometry
 - Dependency license allowlist and high-severity audit
 
 ## External or operator gates
 
-- Atrium production OAuth/token validation
-- Immutable authored-asset upload and collection discovery/default
-- Atrium idempotency and optimistic concurrency
-- RFC 8252 native redirect registration
+- Browser/native public OAuth client registration and UUID distribution
+- Idempotent or recoverable Atrium asset initiation
 - District Chrome signing/store or managed distribution
 - Apple distribution signing, notarization, MDM packaging, and physical-device acceptance
-- Authenticated development-Atrium acceptance
+- Authenticated synthetic production-Atrium acceptance
 
 Unavailable live capabilities fail closed and do not disable local recording or
 review. They must not be replaced with private image hosting or undocumented

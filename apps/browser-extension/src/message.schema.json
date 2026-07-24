@@ -129,6 +129,18 @@
     {
       "type": "object",
       "additionalProperties": false,
+      "required": ["kind"],
+      "properties": { "kind": { "const": "publisher.sign-in" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": { "kind": { "const": "publisher.sign-out" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
       "required": ["kind", "payload"],
       "properties": {
         "kind": { "const": "publisher.enqueue" },

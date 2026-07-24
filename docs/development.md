@@ -31,7 +31,7 @@ scripts/build-macos-app.sh
 
 `pnpm messages:generate` compiles the extension trust-boundary JSON Schema into a committed standalone validator. Runtime AJV compilation is intentionally forbidden because Manifest V3 disallows dynamic code generation. Install bundled Chromium once with `pnpm --filter @atrium-capture/browser-extension exec playwright install chromium`; the browser suite launches the production MV3 build in a persistent profile and runs the synthetic restart/review workflow plus byte-level image goldens.
 
-The Atrium client integration test binds a loopback-only synthetic server on an ephemeral port. It exposes only `/_mock/atrium-capture/v1`; the production client has no inferred Atrium route. Run `pnpm exec vitest run packages/atrium-client/test` to verify the mock HTTP boundary and failure-after-commit matrix.
+The Atrium client integration test binds a loopback-only synthetic server on an ephemeral port. It exposes only `/_mock/atrium-capture/v1`. Production-gateway tests inject documented v1 responses and assert exact private/source/asset/ETag behavior without credentials. Run `pnpm exec vitest run packages/atrium-client/test` for both boundaries. `pnpm smoke:atrium` is an optional read-only network check of production OIDC discovery and the unauthenticated content boundary.
 
 `pnpm package:browser` creates and inspects the unsigned Browser v1 ZIP, then writes a content hash manifest under the ignored `.output` directory. Packaging never signs, uploads, or deploys. Follow [browser-v1-release.md](browser-v1-release.md) for release acceptance and external signing custody.
 
@@ -39,7 +39,7 @@ The browser fixture site is entirely synthetic. Serve `packages/test-fixtures/si
 
 The Swift package also includes the native recorder, editor, publisher, bridge, display, and pin tests. On non-macOS hosts, use the official `swift:6.0-bookworm` image for the platform-neutral suite. On macOS, `scripts/build-macos-app.sh` compiles the actual Apple adapters and runs a standalone Core Graphics/AppKit verifier even when a Command Line Tools-only installation does not include a compatible XCTest module. Full Xcode CI runs all XCTest targets. See [macos-runbook.md](macos-runbook.md).
 
-The production manifest packages `public/managed-storage-schema.json`. Validate policy behavior with `apps/browser-extension/policy/example-managed-policy.json` and the unit tests; do not place real district origins or collection identifiers in repository fixtures. Deployment, support, update, and rollback steps are in [browser-pilot-runbook.md](browser-pilot-runbook.md).
+The production manifest packages `public/managed-storage-schema.json`. Validate policy behavior with `apps/browser-extension/policy/example-managed-policy.json` and the unit tests; do not place real district origins, OAuth client IDs, or collection identifiers in repository fixtures. The committed IDs are deliberately synthetic. Deployment, support, update, and rollback steps are in [browser-pilot-runbook.md](browser-pilot-runbook.md).
 
 ## Browser permission rationale
 
@@ -47,4 +47,4 @@ Chrome requires the literal `<all_urls>` host permission (or a short-lived `acti
 
 ## Local secrets and data
 
-Keep environment files, signing keys, Xcode user state, test recordings, and screenshots untracked. Tests use the local Atrium mock only. A live Atrium integration must remain capability-gated until its documented OAuth and immutable asset contracts are available.
+Keep environment files, signing keys, Xcode user state, test recordings, screenshots, and tokens untracked. Tests use synthetic local or injected production-contract boundaries. Live sign-in remains capability-gated until administrators distribute the Atrium-issued public client UUIDs; no client secret belongs in either application.

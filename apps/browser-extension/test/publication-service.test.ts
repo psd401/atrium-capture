@@ -47,6 +47,36 @@ describe('browser durable publication service', () => {
         ?.state,
     ).toBe('deleted');
   });
+
+  it('serializes overlapping publish commands before any remote asset reservation', async () => {
+    const repository = makeRepository();
+    await preparePublishableSession(repository);
+    const gateway = new MockAtriumGateway();
+    const service = new BrowserPublicationService(repository, gateway);
+
+    const [first, second] = await Promise.all([service.enqueue(), service.enqueue()]);
+
+    expect(first.jobId).toBe(second.jobId);
+    expect(first.phase).toBe(Phase.ReadyAsDraft);
+    expect(second.phase).toBe(Phase.ReadyAsDraft);
+    expect(gateway.snapshot().objects).toHaveLength(1);
+    expect(gateway.snapshot().assets).toHaveLength(1);
+    expect(gateway.snapshot().versions).toHaveLength(1);
+  });
+
+  it('creates an unfiled private draft when Atrium exposes no selectable collection', async () => {
+    const repository = makeRepository();
+    await preparePublishableSession(repository);
+    const gateway = new MockAtriumGateway({ collections: [] });
+    const service = new BrowserPublicationService(repository, gateway);
+
+    const job = await service.enqueue();
+
+    expect(job.phase).toBe(Phase.ReadyAsDraft);
+    const object = gateway.snapshot().objects[0];
+    expect(object?.visibility).toBe('private');
+    expect(object).not.toHaveProperty('collectionId');
+  });
 });
 
 function makeRepository(): CaptureRepository {

@@ -13,6 +13,7 @@ import {
 import { CaptureRepository } from './database.js';
 
 export interface PublicationSnapshot {
+  authentication: 'not_required' | 'signed_in' | 'signed_out' | 'unconfigured';
   capabilities: AtriumCapabilities;
   collectionSource?: 'discovery' | 'managed_default';
   collections: AtriumCollection[];
@@ -21,12 +22,16 @@ export interface PublicationSnapshot {
 
 export class BrowserPublicationService {
   private readonly publisher: DurablePublisher;
+  private operationQueue: Promise<void> = Promise.resolve();
 
   constructor(
     private readonly repository: CaptureRepository,
     private readonly gateway: AtriumGateway,
     private readonly loadManagedDefaultCollectionId: () => Promise<string | undefined> = async () =>
       undefined,
+    private readonly loadAuthenticationStatus?: () => Promise<
+      'signed_in' | 'signed_out' | 'unconfigured'
+    >,
   ) {
     const jobs: PublishJobStore = {
       load: (jobId) => repository.getPublishJob(jobId),
@@ -41,6 +46,7 @@ export class BrowserPublicationService {
 
   async snapshot(): Promise<PublicationSnapshot> {
     const capabilities = await this.gateway.capabilities();
+    const authentication = await this.authentication(capabilities);
     const session = await this.repository.getActiveSession();
     const job = session
       ? await this.repository.getLatestPublishJobForSession(session.sessionId)
@@ -52,18 +58,57 @@ export class BrowserPublicationService {
       );
       return {
         capabilities,
+        authentication,
         collections: choices.collections,
         collectionSource: choices.source,
         ...(job ? { job } : {}),
       };
     } catch {
-      return { capabilities, collections: [], ...(job ? { job } : {}) };
+      return { authentication, capabilities, collections: [], ...(job ? { job } : {}) };
     }
   }
 
   async enqueue(collectionId?: string): Promise<AtriumCapturePublishJob> {
+    return this.serialize(() => this.enqueueExclusive(collectionId));
+  }
+
+  async publishInternal(jobId: string): Promise<AtriumCapturePublishJob> {
+    return this.serialize(async () => {
+      const capabilities = await this.gateway.capabilities();
+      assertDraftPublishingAvailable(capabilities, await this.authentication(capabilities));
+      const job = await this.publisher.requestInternalPublication(jobId);
+      await this.markSubmitted(job);
+      await this.recordHealth(job);
+      return job;
+    });
+  }
+
+  async resume(jobId: string): Promise<AtriumCapturePublishJob> {
+    return this.serialize(() => this.drive(jobId));
+  }
+
+  async resumePending(): Promise<void> {
+    return this.serialize(async () => {
+      const capabilities = await this.gateway.capabilities();
+      if (!draftPublishingAvailable(capabilities, await this.authentication(capabilities))) {
+        return;
+      }
+      const jobs = await this.repository.listPublishJobs();
+      for (const job of jobs) {
+        if (job.phase === Phase.Complete || job.phase === Phase.ReadyAsDraft) {
+          await this.markSubmitted(job);
+          continue;
+        }
+        if (job.phase !== Phase.NeedsAttention) {
+          await this.drive(job.jobId);
+        }
+      }
+    });
+  }
+
+  private async enqueueExclusive(collectionId?: string): Promise<AtriumCapturePublishJob> {
     const capabilities = await this.gateway.capabilities();
-    assertDraftPublishingAvailable(capabilities);
+    assertDraftPublishingAvailable(capabilities, await this.authentication(capabilities));
     const session = await this.repository.getActiveSession();
     if (!session) {
       throw new GatewayError('publish_session_missing', false);
@@ -77,44 +122,16 @@ export class BrowserPublicationService {
       await this.loadManagedDefaultCollectionId(),
     );
     const selectedCollectionId = collectionId ?? choices.collections[0]?.collectionId;
-    if (!selectedCollectionId) {
-      throw new GatewayError('collection_selection_required', false);
-    }
     if (
+      selectedCollectionId &&
       !choices.collections.some((collection) => collection.collectionId === selectedCollectionId)
     ) {
       throw new GatewayError('collection_not_available', false);
     }
-    const job = await this.publisher.enqueue(session, { collectionId: selectedCollectionId });
+    const job = await this.publisher.enqueue(session, {
+      ...(selectedCollectionId ? { collectionId: selectedCollectionId } : {}),
+    });
     return this.drive(job.jobId);
-  }
-
-  async publishInternal(jobId: string): Promise<AtriumCapturePublishJob> {
-    const job = await this.publisher.requestInternalPublication(jobId);
-    await this.markSubmitted(job);
-    await this.recordHealth(job);
-    return job;
-  }
-
-  async resume(jobId: string): Promise<AtriumCapturePublishJob> {
-    return this.drive(jobId);
-  }
-
-  async resumePending(): Promise<void> {
-    const capabilities = await this.gateway.capabilities();
-    if (!draftPublishingAvailable(capabilities)) {
-      return;
-    }
-    const jobs = await this.repository.listPublishJobs();
-    for (const job of jobs) {
-      if (
-        job.phase !== Phase.Complete &&
-        job.phase !== Phase.ReadyAsDraft &&
-        job.phase !== Phase.NeedsAttention
-      ) {
-        await this.drive(job.jobId);
-      }
-    }
   }
 
   private async drive(jobId: string): Promise<AtriumCapturePublishJob> {
@@ -122,6 +139,27 @@ export class BrowserPublicationService {
     await this.markSubmitted(job);
     await this.recordHealth(job);
     return job;
+  }
+
+  private async authentication(
+    capabilities: AtriumCapabilities,
+  ): Promise<PublicationSnapshot['authentication']> {
+    if (capabilities.mode === 'mock') {
+      return 'not_required';
+    }
+    if (!capabilities.oauth) {
+      return 'unconfigured';
+    }
+    return this.loadAuthenticationStatus ? this.loadAuthenticationStatus() : 'signed_out';
+  }
+
+  private serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.operationQueue.then(operation, operation);
+    this.operationQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 
   private async markSubmitted(job: AtriumCapturePublishJob): Promise<void> {
@@ -145,16 +183,22 @@ export class BrowserPublicationService {
   }
 }
 
-function assertDraftPublishingAvailable(capabilities: AtriumCapabilities): void {
-  if (!draftPublishingAvailable(capabilities)) {
+function assertDraftPublishingAvailable(
+  capabilities: AtriumCapabilities,
+  authentication: PublicationSnapshot['authentication'],
+): void {
+  if (!draftPublishingAvailable(capabilities, authentication)) {
     throw new GatewayError('draft_publishing_unavailable', false);
   }
 }
 
-function draftPublishingAvailable(capabilities: AtriumCapabilities): boolean {
+function draftPublishingAvailable(
+  capabilities: AtriumCapabilities,
+  authentication: PublicationSnapshot['authentication'],
+): boolean {
   return (
     capabilities.idempotentWrites &&
     capabilities.immutableAssets &&
-    (capabilities.mode === 'mock' || capabilities.oauth)
+    (authentication === 'not_required' || authentication === 'signed_in')
   );
 }

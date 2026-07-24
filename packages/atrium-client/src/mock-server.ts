@@ -60,6 +60,7 @@ async function route(
       const body = requireRecord(await readJson(request));
       const result = await gateway.createPrivateObject({
         idempotencyKey: requireString(body, 'idempotencyKey'),
+        sourceRef: requireSourceRef(body.sourceRef),
         title: requireString(body, 'title'),
         visibility: requireLiteral(body, 'visibility', 'private'),
         ...(typeof body.collectionId === 'string' ? { collectionId: body.collectionId } : {}),
@@ -77,6 +78,8 @@ async function route(
         idempotencyKey: requireHeader(request, 'idempotency-key'),
         localAssetId: decodeURIComponent(assetMatch[2]),
         mimeType: requireHeader(request, 'content-type'),
+        pixelHeight: requirePositiveIntegerHeader(request, 'x-pixel-height'),
+        pixelWidth: requirePositiveIntegerHeader(request, 'x-pixel-width'),
         sha256: requireHeader(request, 'x-content-sha256'),
       });
       return json(response, 201, result);
@@ -97,6 +100,7 @@ async function route(
       await gateway.publishInternal({
         contentObjectId: decodeURIComponent(publicationMatch[1]),
         idempotencyKey: requireString(body, 'idempotencyKey'),
+        versionId: requireString(body, 'versionId'),
       });
       return json(response, 204, undefined);
     }
@@ -171,6 +175,55 @@ function requireHeader(request: IncomingMessage, name: string): string {
     throw new GatewayError(`missing_${name}`, false);
   }
   return value;
+}
+
+function requirePositiveIntegerHeader(request: IncomingMessage, name: string): number {
+  const value = Number(requireHeader(request, name));
+  if (!Number.isSafeInteger(value) || value < 1 || value > 12_000) {
+    throw new GatewayError(`invalid_${name}`, false);
+  }
+  return value;
+}
+
+function requireSourceRef(value: unknown): {
+  capturedAt: string;
+  clientSurface: 'browser' | 'mac';
+  clientVersion: string;
+  externalId: string;
+  provider: 'atrium-capture';
+  sourceOrigins?: string[];
+  type: 'capture';
+} {
+  const sourceRef = requireRecord(value);
+  const clientSurface = requireString(sourceRef, 'clientSurface');
+  if (clientSurface !== 'browser' && clientSurface !== 'mac') {
+    throw new GatewayError('invalid_clientSurface', false);
+  }
+  if (sourceRef.provider !== 'atrium-capture' || sourceRef.type !== 'capture') {
+    throw new GatewayError('invalid_sourceRef', false);
+  }
+  const capturedAt = requireString(sourceRef, 'capturedAt');
+  if (!Number.isFinite(Date.parse(capturedAt))) {
+    throw new GatewayError('invalid_capturedAt', false);
+  }
+  const origins = sourceRef.sourceOrigins;
+  if (
+    origins !== undefined &&
+    (!Array.isArray(origins) ||
+      origins.length > 20 ||
+      !origins.every((origin) => typeof origin === 'string' && origin.length <= 2_048))
+  ) {
+    throw new GatewayError('invalid_sourceOrigins', false);
+  }
+  return {
+    capturedAt,
+    clientSurface,
+    clientVersion: requireString(sourceRef, 'clientVersion'),
+    externalId: requireString(sourceRef, 'externalId'),
+    provider: 'atrium-capture',
+    ...(origins ? { sourceOrigins: origins as string[] } : {}),
+    type: 'capture',
+  };
 }
 
 function json(response: ServerResponse, status: number, body: unknown): void {

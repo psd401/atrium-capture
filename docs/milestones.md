@@ -38,7 +38,7 @@ Exit gate: golden tests prove exported pixels contain no recoverable redacted co
 
 Exit gate: network interruption at every phase resumes without duplicate content/assets/versions; private is the default.
 
-Dependencies: Atrium production OAuth and content assets. Collection discovery is required for the picker.
+Production status: the documented OAuth, collection, content, version, authored-asset, and internal-publication clients are implemented and contract-tested. Authenticated acceptance requires two administrator-registered public client UUIDs. Atrium asset initiation still lacks idempotency, so the exact post-reservation/pre-response interval remains an external row-level deduplication gap; clients recover every later upload/completion interval safely.
 
 ## M4 — District browser pilot
 
@@ -48,9 +48,9 @@ Dependencies: Atrium production OAuth and content assets. Collection discovery i
 
 Exit gate: pilot checklist, privacy review, rollback, and support diagnostics are approved.
 
-Dependency: Atrium idempotency/concurrency before broad rollout.
+Dependency: OAuth client registration plus idempotent/recoverable asset initiation before broad rollout.
 
-Local status: engineering-approved for synthetic/unpublished evaluation. Authenticated development-Atrium acceptance remains capability-gated by the dependency above.
+Local status: engineering-approved for synthetic/unpublished evaluation. Credential-free production smoke passes; authenticated production-Atrium acceptance remains capability-gated by the registration above.
 
 ## M5 — Browser v1
 
@@ -70,7 +70,7 @@ Local status: the `1.0.0` unsigned artifact passes automated production-Chromium
 
 Exit gate: a Finder/System Settings/Office workflow produces the same valid Atrium document model as a browser workflow.
 
-Dependency: RFC 8252 native redirect support and production OAuth.
+Production status: RFC 8252-style native redirects, production OAuth/refresh/revocation, Keychain storage, direct authored-asset upload, private drafts, and internal publication are implemented. The public native client UUID remains deployment configuration.
 
 ## M7 — Snipaste-style Mac tools
 

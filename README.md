@@ -2,7 +2,7 @@
 
 Atrium Capture records a workflow, turns meaningful actions into an editable visual guide, and saves the reviewed result as an Atrium draft. The first application is a Chrome extension; the same capture contract is designed for an immediate Mac companion phase.
 
-Browser v1 and the native Mac companion are locally buildable, tested, and packaged with unsigned/ad-hoc development artifacts. Live Atrium publication remains visibly capability-gated until its documented production contracts are available.
+Browser v1 and the native Mac companion are locally buildable, tested, and packaged with unsigned/ad-hoc development artifacts. Both contain the documented direct Atrium publisher and remain visibly capability-gated until administrators distribute their public OAuth client IDs.
 
 ## Product boundary
 
@@ -12,7 +12,7 @@ Browser v1 and the native Mac companion are locally buildable, tested, and packa
 
 ## Status
 
-M0 through M7 are implemented locally. The production Manifest V3 extension and native SwiftUI/AppKit companion record, recover, review, annotate, permanently redact, and package synthetic workflows through the same generated contracts. Durable browser and native publishers pass failure-after-commit tests against local gateways. Release signing/deployment and live Atrium OAuth/assets remain external gates.
+M0 through M7 are implemented locally. The production Manifest V3 extension and native SwiftUI/AppKit companion record, recover, review, annotate, permanently redact, and package synthetic workflows through the same generated contracts. Durable browser and native publishers pass failure-after-commit tests and production-contract request/response tests. Release signing/deployment and OAuth client registration remain external gates; Atrium's one non-idempotent asset-reservation interval is documented rather than hidden.
 
 ## Repository map
 
@@ -40,7 +40,7 @@ docs/                  Architecture, milestones, security, and Atrium integratio
 - Browser content scripts are untrusted. Validate every privileged message in the extension service worker.
 - The browser and Mac implementations share versioned contracts and fixtures, not platform-specific implementation code.
 
-See [docs/architecture.md](docs/architecture.md), [docs/milestones.md](docs/milestones.md), [docs/development.md](docs/development.md), and [docs/security-and-privacy.md](docs/security-and-privacy.md). The generated, agent-navigable documentation entry point is [openwiki/index.md](openwiki/index.md).
+See [docs/architecture.md](docs/architecture.md), [docs/milestones.md](docs/milestones.md), [docs/development.md](docs/development.md), [docs/atrium-integration.md](docs/atrium-integration.md), and [docs/security-and-privacy.md](docs/security-and-privacy.md). The generated, agent-navigable documentation entry point is [openwiki/index.md](openwiki/index.md).
 
 ## License
 

@@ -29,7 +29,7 @@
       <string>Atrium Capture OAuth callback</string>
       <key>CFBundleURLSchemes</key>
       <array>
-        <string>org.psd401.AtriumCapture</string>
+        <string>org.psd401.atrium-capture</string>
       </array>
     </dict>
   </array>
