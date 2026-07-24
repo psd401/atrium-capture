@@ -11,17 +11,18 @@ The production API is isolated behind small browser and native `AtriumGateway`
 interfaces. Capture and review remain testable when a live capability is
 unavailable.
 
-## Required capabilities
+## Production capabilities
 
 - Authorization Code with S256 PKCE
 - Immutable authored screenshot assets
 - Permission-filtered collection discovery or a managed default
-- Idempotent object, asset, and version writes
-- Optimistic concurrency for broad rollout
-- RFC 8252 native redirect support for macOS
+- Idempotent object/version/publication writes
+- ETag concurrency
+- Browser-extension and RFC 8252-style native redirects
 
-Live endpoints and scopes are not inferred. The local HTTP mock uses only the
-visibly non-production `/_mock/atrium-capture/v1` route.
+The clients use the documented AI Studio v1/OIDC routes. Public client UUIDs
+remain managed deployment configuration. The local HTTP mock still uses only
+the visibly non-production `/_mock/atrium-capture/v1` route.
 
 ## Durable phases
 
@@ -30,8 +31,12 @@ The outbox creates a private bodyless object, uploads only
 asset references, and records the reader URL. Internal publication is a
 separate explicit action. Every remote ID is persisted before the next phase.
 
-Failure-after-commit tests interrupt every phase and prove retry produces one
-object, one copy of each asset, and one version. No private screenshot host or
-undocumented production route exists in this repository.
+Failure-after-commit tests interrupt every idempotent phase and prove retry
+produces one object, one copy of each completed asset, and one version. Asset
+reservation itself is not idempotent; deterministic lookup/completion recovers
+later failures, while an initiation response lost before its presigned URL is
+received remains the external limitation in ADR 0006. No private screenshot
+host or undocumented production route exists.
 
-See [`docs/atrium-integration.md`](../../docs/atrium-integration.md).
+See [`docs/atrium-integration.md`](../../docs/atrium-integration.md) and
+[`docs/adr/0006-production-atrium-boundary.md`](../../docs/adr/0006-production-atrium-boundary.md).

@@ -30,7 +30,7 @@ ScreenCaptureKit + Accessibility events
   -> Swift editor using the shared command model
   -> flattened publishable images
   -> durable native outbox
-  -> native AtriumGateway + Keychain-backed OAuth
+  -> actor-serialized native AtriumGateway + Keychain-backed OAuth
 ```
 
 SwiftUI owns ordinary application UI. AppKit owns floating windows, always-on-top pins, click-through behavior, and global shortcuts. Core Graphics renders publishable images.
@@ -66,7 +66,7 @@ The durable `PublishJob` advances through these resumable phases:
 4. Leave the result as a private draft by default.
 5. If the user explicitly selected internal publication, publish to the intranet destination.
 
-Every phase persists its remote IDs before continuing. A retry reuses the same idempotency keys and never creates duplicate content.
+Every phase persists its remote IDs before continuing. Object, version, and publication retries reuse the same idempotency keys. Asset retries first recover by deterministic filename, digest, byte length, MIME type, and dimensions and never select a raw original. Atrium's non-idempotent reservation interval and safe client behavior are isolated in [ADR 0006](adr/0006-production-atrium-boundary.md).
 
 ## Technology choices
 

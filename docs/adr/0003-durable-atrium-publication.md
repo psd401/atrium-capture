@@ -7,13 +7,13 @@
 
 Manifest V3 workers can stop between any two statements, and a network connection can fail after Atrium commits a request but before the client receives the response. Publication also crosses the privacy boundary: raw images must never be selected, new objects must remain private by default, and live Atrium routes cannot be inferred while required production contracts are absent.
 
-The audited Atrium surface does not yet provide the complete production OAuth, immutable authored-asset, collection-discovery, and idempotent-write contract required by the client. Local implementation and recovery testing must continue without creating an unofficial image host or undocumented production API.
+At the time of this decision, the audited Atrium surface did not provide the complete production OAuth, immutable authored-asset, collection-discovery, and idempotent-write contract required by the client. Those routes are now documented and implemented by [ADR 0006](0006-production-atrium-boundary.md); the persistence and privacy decisions below remain in force.
 
 ## Decision
 
 - `AtriumGateway` is the only remote boundary. Its capabilities independently gate OAuth, collection discovery, immutable assets, idempotent writes, and internal publication.
-- The production gateway remains fail-closed and contains no guessed route. The HTTP mock is explicitly synthetic and accepts only the versioned `/_mock/atrium-capture/v1` namespace.
-- Authorization uses a public-client Authorization Code flow with S256 PKCE and Chrome's documented `identity.getRedirectURL`/`launchWebAuthFlow` boundary. No client secret is shipped, and token responses are accepted only in the trusted worker context. Live exchange endpoints and scopes remain unconfigured until Atrium publishes them.
+- A production gateway may use only current documented routes. The HTTP mock remains explicitly synthetic and accepts only the versioned `/_mock/atrium-capture/v1` namespace.
+- Authorization uses public-client Authorization Code with S256 PKCE and Chrome's documented `identity.getRedirectURL`/`launchWebAuthFlow` boundary. No client secret is shipped, and token responses are accepted only in the trusted worker context.
 - The outbox persists `creating_object`, each `uploading` asset state, `creating_version`, and `publishing_internal` before the corresponding remote call. Retries reuse deterministic idempotency keys derived from the durable job ID.
 - The gateway accepts only `publishable_local` derivatives. Raw or merely redacted local assets cannot enter an upload plan, even when a managed retention policy keeps their bytes temporarily.
 - Object creation requires `visibility: private`. A ready private draft and reader link are terminal for the default operation. Internal publication is a separate explicit command with its own idempotency key.
@@ -22,4 +22,4 @@ The audited Atrium surface does not yet provide the complete production OAuth, i
 
 ## Consequences
 
-The same durable publisher can back IndexedDB and a future native store. Failure-after-commit injection can prove duplicate prevention without production credentials. The browser can ship local capture and review while clearly disabling live publication, but an authenticated Atrium pilot remains blocked on the named production contracts rather than being simulated by an unofficial route.
+The same durable phase model backs IndexedDB and the native filesystem store. Failure-after-commit injection proves duplicate prevention without production credentials. Production integration details and the remaining asset-reservation limitation are recorded in ADR 0006 rather than weakening this outbox.

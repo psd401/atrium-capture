@@ -23,9 +23,10 @@ scripts/build-macos-app.sh
 
 1. compiles every native product in release mode;
 2. runs a Core Graphics golden that verifies opaque replacement pixels and absence of forbidden PNG metadata chunks;
-3. sends the shared bridge fixture to the native host and proves a payload containing `imageData` is rejected;
-4. validates `Info.plist`; and
-5. applies and verifies an ad-hoc local hardened-runtime signature unless `ATRIUM_CAPTURE_ADHOC_SIGN=0`.
+3. verifies a real AppKit floating pin and the production gateway's private/bodyless object, direct-upload header, version ETag, and internal-publication contract with synthetic responses;
+4. sends the shared bridge fixture to the native host and proves a payload containing `imageData` is rejected;
+5. validates `Info.plist`; and
+6. applies and verifies an ad-hoc local hardened-runtime signature unless `ATRIUM_CAPTURE_ADHOC_SIGN=0`.
 
 The local Command Line Tools installation may expose a default SDK whose Swift module version differs from its compiler. The build script selects the installed macOS 15.4 SDK when present. CI uses `macos-15` with full Xcode, runs XCTest, then assembles the app.
 
@@ -67,6 +68,7 @@ Use synthetic names and empty test documents only:
 6. Stop. Confirm three app identities, ordered generic actions, no typed literal, and no secure-field step.
 7. Edit an instruction, add a redaction/annotation, flatten, approve, and verify the session becomes `publishable` with only deleted or `publishable_local` assets.
 8. With `ATRIUM_CAPTURE_LOCAL_MOCK=1`, create a private draft, terminate after any injected phase in tests, retry, and confirm one object/asset/version. Do not use real district content.
+9. For authenticated acceptance only, register the public native callback `org.psd401.atrium-capture:/oauth/callback`, supply its public UUID through the `AtriumOAuthClientId` MDM preference, sign in, create one synthetic private draft, and exercise the separate internal-publication button.
 
 The committed `capture-session-macos-v1.json` fixture provides the automated language-neutral equivalent and decodes in TypeScript and Swift.
 
@@ -97,4 +99,11 @@ The installer writes a user-specific Chrome manifest with the stable extension I
 
 ## Live integration and release gates
 
-Normal builds use `UnavailableNativeAtriumGateway`. Live sign-in/publishing stays disabled until Atrium documents and provides RFC 8252 redirect registration, token behavior, immutable authored-asset upload, collection selection, and idempotent writes. District signing, notarization, MDM packaging, host installation, and deployment require explicit authorization and credentials outside this repository.
+Normal builds include the documented production gateway but fail closed until a public native client UUID is configured. MDM supplies:
+
+- `AtriumOAuthClientId`: required public `native` client UUID.
+- `AtriumDefaultCollectionId`: optional documented collection UUID.
+
+For local synthetic testing, the equivalent public-only environment variables are `ATRIUM_CAPTURE_OAUTH_CLIENT_ID` and `ATRIUM_CAPTURE_DEFAULT_COLLECTION_ID`. Tokens remain in Keychain, are refreshed through the public-client rotation flow, and never enter native messaging or local diagnostics.
+
+Run `pnpm smoke:atrium` before authenticated acceptance. The remaining asset-initiation recovery limitation is described in ADR 0006. District signing, notarization, MDM packaging, host installation, OAuth registration, and deployment require explicit authorization and credentials/configuration outside this repository.

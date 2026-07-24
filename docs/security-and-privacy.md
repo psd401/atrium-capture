@@ -30,16 +30,16 @@ Blur is not sufficient for secrets that must be irrecoverable; permanent redacti
 - Chrome: Authorization Code + PKCE through `chrome.identity.launchWebAuthFlow()`.
 - Mac: Authorization Code + PKCE through `ASWebAuthenticationSession`.
 - No permanent `sk-` key and no OAuth client secret in either application.
-- Browser access tokens live only in trusted extension contexts; content scripts never receive them.
+- Browser access/refresh tokens live in trusted-only extension session storage; content scripts never receive them and a full browser exit clears them.
 - Mac refresh credentials live in Keychain.
 
-The Mac token endpoint is supplied only from a documented deployment configuration. Responses are bounded and validated as Bearer tokens before an encoded credential record is stored through SecItem off the main thread. Tokens never enter session JSON, native messages, diagnostics, or console output.
+Both clients use the fixed production issuer and a deployment-supplied public client UUID. OAuth responses are bounded and validated as Bearer tokens; refresh rotation is serialized. The Mac credential record is stored through SecItem off the main thread. Tokens never enter session JSON, native messages, diagnostics, or console output.
 
 ## Permissions
 
 Use the smallest practical browser permission set. Continuous, cross-site recording may require broad optional/managed host access; explain it plainly and activate capture only during a user-started session. Add `nativeMessaging` only with the Mac bridge release, not preemptively.
 
-The production extension displays its permission rationale in-product. `unlimitedStorage` is bounded by a smaller managed image budget, and `identity` remains dormant while live OAuth is capability-gated.
+The production extension displays its permission rationale in-product. `unlimitedStorage` is bounded by a smaller managed image budget, and `identity` is used only from the explicit Atrium sign-in action when managed public-client configuration exists.
 
 Mac permissions are staged and explained at point of use: Screen Recording for pixels and Accessibility for semantic UI metadata. The app remains usable for screenshot editing when either permission is denied.
 
@@ -47,4 +47,4 @@ The optional Chrome-to-Mac bridge requests its warning-bearing permission from a
 
 ## Network boundary
 
-Atrium is the only production data destination. No analytics, external AI provider, image host, or crash reporter may receive capture content without a separate approved privacy decision.
+Atrium is the only production data destination. The authored-asset flow sends reviewed bytes directly to an Atrium-issued S3 URL, using only its constrained headers and never the bearer token. No analytics, external AI provider, private image host, or crash reporter may receive capture content without a separate approved privacy decision.

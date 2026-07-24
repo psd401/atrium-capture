@@ -1,38 +1,72 @@
 # Atrium integration
 
-Audit baseline: `psd401/aistudio` `dev` commit `ba2cc4cae06fd49e5954d0419a407c21174e954c` (2026-07-22).
+Audit baseline: `psd401/aistudio` `dev` commit `0dd5cbc` (2026-07-24), its current `docs/API/v1/openapi.yaml`, `docs/API/v1/context-graph.md`, and `docs/features/oauth-provider.md`. The content/OAuth contract is unchanged from the initially audited `264f718`. The client never imports or copies AI Studio source.
 
-## Existing usable surface
+## Production contract
 
-- OAuth/OIDC Authorization Code + PKCE registration and endpoints.
-- Content scopes: read, create, update, delete, publish internal/public, and delegate.
-- Create/list/get/update/delete content objects.
-- List/create immutable content versions.
-- Set visibility and publish/unpublish destinations.
-- Private-by-default content behavior and approval gating for public publication.
+Atrium Capture uses the documented production origin `https://aistudio.psd401.ai`:
 
-## Required Atrium work
+| Operation                      | Contract                                                                                                         |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| OIDC discovery                 | `GET /.well-known/openid-configuration`                                                                          |
+| Authorization/token/revocation | `/api/oauth/auth`, `/api/oauth/token`, `/api/oauth/revocation`                                                   |
+| Collection picker              | `GET /api/v1/content/collections?shape=flat`; show only `selectableForCreate`                                    |
+| Private bodyless draft         | `POST /api/v1/content` with `visibility.level: private`, `sourceRef`, and an idempotency key                     |
+| Asset recovery/reservation     | `GET/POST /api/v1/content/{id}/assets`                                                                           |
+| Asset bytes                    | Direct `PUT` to the server-issued S3 URL with only its exact content type/checksum headers                       |
+| Asset completion               | `POST /api/v1/content/{id}/assets/{assetId}/complete`                                                            |
+| Markdown snapshot              | `POST /api/v1/content/{id}/versions` with an idempotency key and `If-Match: "none"`                              |
+| Internal publication           | `POST /api/v1/content/{id}/publish` with `destination: intranet`, an idempotency key, and the exact version ETag |
 
-Browser publication depends on:
+The production gateways validate bounded response shapes and UUIDs. They upload only flattened `publishable_local` derivatives and insert only canonical Atrium asset directives. Raw bytes are never selected, a storage URL is never persisted in Markdown, and the bearer token is never sent to S3.
 
-1. Production-capable OAuth token signing/validation.
-2. Immutable authored content-asset upload/render APIs.
-3. Permission-filtered collection discovery for a reliable picker (or a temporary managed default collection).
+Every object includes:
 
-District beta should also require idempotent content writes and optimistic concurrency. Version-source reads enable cross-device reopen/conflict resolution. RFC 8252 redirect support is required before the Mac companion authenticates. Structured capture provenance is a useful follow-up.
+```json
+{
+  "type": "capture",
+  "provider": "atrium-capture",
+  "externalId": "<durable session UUID>",
+  "clientSurface": "browser | mac",
+  "clientVersion": "<application version>",
+  "capturedAt": "<ISO-8601>",
+  "sourceOrigins": ["<browser origins only when policy permits>"]
+}
+```
 
-Do not implement a private screenshot backend in this repository. Until the asset API exists, keep publishing behind an `AtriumGateway` mock/feature gate while the complete local recording and review loop is developed.
+The Mac client omits `sourceOrigins`; Accessibility application/window details never become web provenance. Browser origins are normalized to HTTP(S) origins and omitted when policy says `none`.
 
-## Implemented local boundary
+## OAuth registration and configuration
 
-The client now contains production-neutral browser and native `AtriumGateway` boundaries, durable phase machines, browser IndexedDB and native filesystem outboxes, collection-discovery/managed-default selection, Authorization Code + S256 PKCE primitives, Chrome Identity and `ASWebAuthenticationSession` adapters, and Keychain token storage. It creates private objects, selects only flattened `publishable_local` assets, creates Markdown through gateway-issued asset references, persists a reader link, and requires a separate explicit command for internal publication.
+Create two public clients at Atrium's administrator OAuth client screen. Select no client secret, require S256 PKCE, and allow:
 
-No live URL or scope is present. The synthetic in-memory and HTTP gateways use deterministic UUIDs and the visibly non-production `/_mock/atrium-capture/v1` route. Failure injection occurs after the mock commits each object, asset, version, and internal-publication operation; stable keys prove retries do not duplicate remote state. See [ADR 0003](adr/0003-durable-atrium-publication.md).
+`openid profile offline_access content:read content:create content:update content:publish_internal`
 
-As of 2026-07-22, a public-web search found no authoritative Atrium API publication beyond the repository audit baseline above. The live capability therefore remains disabled. Chrome's current Identity API documentation confirms that `identity` permission, `getRedirectURL`, and interactive `launchWebAuthFlow` are the supported extension boundary: <https://developer.chrome.com/docs/extensions/reference/api/identity>.
+| Client profile      | Exact redirect                                                    | Client ID delivery                       |
+| ------------------- | ----------------------------------------------------------------- | ---------------------------------------- |
+| `browser_extension` | `https://jldnpmcpimhabiphcglkbgmbffpoocpo.chromiumapp.org/atrium` | Chrome managed key `atriumOAuthClientId` |
+| `native`            | `org.psd401.atrium-capture:/oauth/callback`                       | MDM preference `AtriumOAuthClientId`     |
 
-## Client registration plan
+The generated UUID is public configuration, not a secret. Never invent a client ID, add a confidential secret to either application, or commit tokens. The Mac preference `AtriumDefaultCollectionId` and browser `defaultCollectionId` are optional documented collection UUIDs. Local Mac testing may supply the same public values through `ATRIUM_CAPTURE_OAUTH_CLIENT_ID` and `ATRIUM_CAPTURE_DEFAULT_COLLECTION_ID`.
 
-Atrium Capture uses public OAuth clients with Authorization Code and S256 PKCE; neither client ships a secret. The browser registration uses the immutable extension redirect in [ADR 0001](adr/0001-platform-identifiers-and-support.md). The Mac registration uses the ADR's claimed HTTPS/custom-scheme callback only after Atrium documents RFC 8252 native redirect support. Requested scopes will be selected from Atrium's current discovery and published API documentation at integration time rather than hard-coded from an inferred or private route.
+The browser keeps the token set in trusted-only `chrome.storage.session`, which survives MV3 service-worker stops but deliberately requires sign-in after a full browser exit. The native app stores tokens in Keychain. Both rotate public-client refresh tokens and revoke/clear them on sign-out.
 
-OAuth availability, immutable asset upload, collection discovery, idempotent writes, and optimistic concurrency are independent `AtriumGateway` capabilities. A missing capability disables only its live UI path. Local capture/review and the versioned mock gateway remain available, and a managed default collection may replace discovery only when policy supplies a valid identifier.
+## Recovery behavior
+
+Object, version, and internal-publication retries reuse durable idempotency keys. Asset filenames are deterministic from the local asset UUID. Before initiating an upload, clients list existing assets and reuse a matching ready row or complete a matching pending row. An ambiguous S3 response is followed by completion, so a committed upload is recoverable without another reservation.
+
+Atrium asset initiation currently has no `Idempotency-Key`. If the server commits a reservation but the response containing its presigned URL is lost, the client safely refuses a second reservation until the first expires. After expiry it can continue with a new reservation, but the expired row remains until server cleanup. [ADR 0006](adr/0006-production-atrium-boundary.md) records why strict row-level deduplication for this one interval requires a server contract change.
+
+## Verification
+
+Credential-free production boundary check:
+
+```sh
+pnpm smoke:atrium
+```
+
+It verifies the exact issuer/endpoints, S256, required scopes, and the structured unauthenticated `401` from collection discovery. It does not send capture content or credentials.
+
+Unit/contract tests inject synthetic production-shaped responses and assert private/bodyless creation, source provenance, direct-upload headers, no S3 authorization header, canonical asset Markdown, ETag preconditions, refresh rotation, and deterministic asset recovery. The versioned `/_mock/atrium-capture/v1` server remains available for offline end-to-end outbox tests and never claims to be a production route.
+
+Authenticated acceptance requires the two registered public client UUIDs and a district test account. Use only the repository's synthetic fixture and delete the resulting private draft after review according to district policy.

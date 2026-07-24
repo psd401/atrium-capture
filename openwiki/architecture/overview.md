@@ -47,8 +47,10 @@ Space/full-screen window behavior. Keychain stores native credentials.
 
 Each `PublishJob` persists stable idempotency keys and remote IDs while creating
 a private object, uploading publishable assets, creating a Markdown version,
-and optionally publishing internally after a separate explicit command. A
-retry resumes from durable state without duplicating committed remote results.
+and optionally publishing internally after a separate explicit command.
+Object/version/publication retries resume from durable idempotent state. Asset
+retries recover deterministic metadata before reservation; ADR 0006 isolates
+the server's remaining non-idempotent initiation interval.
 
 ## Key decisions
 
@@ -57,3 +59,4 @@ retry resumes from durable state without duplicating committed remote results.
 - [`docs/adr/0003-durable-atrium-publication.md`](../../docs/adr/0003-durable-atrium-publication.md)
 - [`docs/adr/0004-native-runtime-and-overlay-boundaries.md`](../../docs/adr/0004-native-runtime-and-overlay-boundaries.md)
 - [`docs/adr/0005-atrium-aligned-visual-language.md`](../../docs/adr/0005-atrium-aligned-visual-language.md) — cross-platform presentation tokens that feel at home beside Atrium without bundling assets
+- [`docs/adr/0006-production-atrium-boundary.md`](../../docs/adr/0006-production-atrium-boundary.md)
