@@ -67,6 +67,20 @@ pnpm smoke:atrium
 
 It verifies the exact issuer/endpoints, S256, required scopes, and the structured unauthenticated `401` from collection discovery. It does not send capture content or credentials.
 
+After the two public clients are registered, verify that Atrium accepted every
+required OIDC and content scope without signing in or storing either public ID:
+
+```sh
+ATRIUM_CAPTURE_BROWSER_OAUTH_CLIENT_ID=<public-browser-uuid> \
+ATRIUM_CAPTURE_MAC_OAUTH_CLIENT_ID=<public-native-uuid> \
+pnpm smoke:atrium
+```
+
+This optional mode starts each authorization request with a synthetic PKCE
+challenge and fails on registration errors such as `invalid_client`,
+`invalid_redirect_uri`, or `invalid_scope`. It does not follow the request into
+sign-in, exchange a code, receive a token, or print either client ID.
+
 Unit/contract tests inject synthetic production-shaped responses and assert private/bodyless creation, source provenance, direct-upload headers, no S3 authorization header, canonical asset Markdown, ETag preconditions, refresh rotation, and deterministic asset recovery. The versioned `/_mock/atrium-capture/v1` server remains available for offline end-to-end outbox tests and never claims to be a production route.
 
 Authenticated acceptance requires the two registered public client UUIDs and a district test account. Use only the repository's synthetic fixture and delete the resulting private draft after review according to district policy.

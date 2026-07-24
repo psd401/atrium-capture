@@ -5,7 +5,32 @@ This file records reproducible local evidence for milestone exit gates. A milest
 ## Production Atrium publishing update — locally complete (2026-07-24)
 
 - Audited current AI Studio `dev` commit `0dd5cbc`; its OIDC, content, collection, capture provenance, authored-asset, version, and publication contract is unchanged from the initial `264f718` audit. No AI Studio source or production asset was copied.
-- `pnpm smoke:atrium` verifies the deployed issuer, authorization/token/revocation endpoints, S256, required content scopes, and a structured fail-closed `401` from production collection discovery without sending a credential or capture.
+- `pnpm smoke:atrium` verifies the deployed issuer, authorization/token/revocation endpoints, S256, required content scopes, and a structured fail-closed `401` from production collection discovery without sending a credential or capture. When both documented public client-ID environment variables are supplied, it also proves the registered browser and native clients accept the exact callbacks and all required OIDC/content scopes without completing sign-in or printing the IDs.
+
+## Registered-client acceptance
+
+On 2026-07-24, production client registration succeeded for the exact browser
+and native callbacks, public PKCE, and the four required content scopes. The
+first live authorization attempt failed before sign-in with
+`invalid_scope` for `openid`; the credential-free registered-client smoke mode
+reproduced the same result for the browser profile. No user credential, token,
+or capture content was sent.
+
+This is an external Atrium registration blocker: its administrator form must
+allow the standard `openid`, `profile`, and `offline_access` scopes (or add them
+to public authorization-code clients by documented policy), and the two
+registered clients must contain those scopes alongside the four content scopes.
+After Atrium applies that change, rerun:
+
+```sh
+ATRIUM_CAPTURE_BROWSER_OAUTH_CLIENT_ID=<public-browser-uuid> \
+ATRIUM_CAPTURE_MAC_OAUTH_CLIENT_ID=<public-native-uuid> \
+pnpm smoke:atrium
+```
+
+The gate must report both registered profiles and `status: pass` before an
+interactive sign-in or production private-draft acceptance attempt continues.
+
 - The TypeScript production gateway contract tests verify private bodyless creation, capture `sourceRef`, selectable collection filtering, deterministic ready/pending asset recovery, recovery after an ambiguous direct-S3 response, rejection of non-AWS upload hosts before image bytes are sent, direct S3 upload without an Atrium bearer header, canonical asset Markdown, `If-Match` preconditions, reader URL, and explicit intranet publication.
 - Browser OAuth tests verify the immutable `/atrium` callback, code exchange, trusted-only token persistence, one refresh across concurrent callers, refresh rotation, revocation, malformed-store rejection, and token rejection at the runtime-message boundary. Publication commands are serialized before remote I/O.
 - The Mac production gateway compiles under Swift 6 strict concurrency. Its on-host release verifier and macOS-only contract tests inject the same production-shaped sequence and exact header assertions; the portable Swift suite continues to cover durable phase recovery and shared fixtures. Native OAuth now includes the documented callback, strict stored-token validation, Keychain storage, refresh rotation, and revocation.
