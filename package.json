@@ -35,6 +35,7 @@
     "openwiki:normalize": "node scripts/normalize-openwiki.mjs",
     "package:browser": "pnpm --filter @atrium-capture/browser-extension zip && node scripts/verify-browser-package.mjs",
     "security:audit": "pnpm audit --audit-level high",
+    "smoke:atrium": "node scripts/verify-atrium-production-boundary.mjs",
     "swift:test": "scripts/test-swift.sh",
     "test": "vitest run",
     "test:extension": "pnpm --filter @atrium-capture/browser-extension test:extension",

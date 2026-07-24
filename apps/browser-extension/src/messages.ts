@@ -64,6 +64,14 @@ export interface PublisherSnapshotMessage {
   kind: 'publisher.snapshot';
 }
 
+export interface PublisherSignInMessage {
+  kind: 'publisher.sign-in';
+}
+
+export interface PublisherSignOutMessage {
+  kind: 'publisher.sign-out';
+}
+
 export interface PublisherEnqueueMessage {
   kind: 'publisher.enqueue';
   payload: { collectionId?: string; commandId: string };
@@ -106,6 +114,8 @@ export type IncomingMessage =
   | EditorFinalizeMessage
   | EditorAssetMessage
   | PublisherSnapshotMessage
+  | PublisherSignInMessage
+  | PublisherSignOutMessage
   | PublisherEnqueueMessage
   | PublisherRetryMessage
   | PublisherPublishInternalMessage

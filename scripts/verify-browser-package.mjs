@@ -77,7 +77,10 @@ const releaseManifest = {
   extensionId: 'jldnpmcpimhabiphcglkbgmbffpoocpo',
   files: files.length,
   manifestVersion: 3,
-  privacy: { liveAtriumEnabled: false, telemetryEnabled: false },
+  privacy: {
+    liveAtriumConfiguration: 'managed-public-client',
+    telemetryEnabled: false,
+  },
   schemaVersion: 1,
   sha256: createHash('sha256').update(archiveBytes).digest('hex'),
   signed: false,

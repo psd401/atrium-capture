@@ -1,6 +1,13 @@
 import { browser } from 'wxt/browser';
-import { UnavailableAtriumGateway } from '@atrium-capture/atrium-client';
+import {
+  ATRIUM_OAUTH_AUTHORIZATION_ENDPOINT,
+  ATRIUM_OAUTH_REVOCATION_ENDPOINT,
+  ATRIUM_OAUTH_SCOPES,
+  ATRIUM_OAUTH_TOKEN_ENDPOINT,
+  ProductionAtriumGateway,
+} from '@atrium-capture/atrium-client/live';
 
+import { BrowserOAuthSession, BrowserTrustedTokenStore } from '../src/browser-oauth.js';
 import { CaptureRepository } from '../src/database.js';
 import { DiagnosticsService } from '../src/diagnostics-service.js';
 import { EditorService } from '../src/editor-service.js';
@@ -20,6 +27,33 @@ export default defineBackground(() => {
   void browser.storage.managed
     .setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' })
     .catch(() => undefined);
+  void browser.storage.session
+    .setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' })
+    .catch(() => undefined);
+  const auth = new BrowserOAuthSession(
+    browser.identity,
+    new BrowserTrustedTokenStore(browser.storage.session),
+    async () => {
+      const snapshot = await managedPolicy.load();
+      const clientId = snapshot.valid ? snapshot.policy.atriumOAuthClientId : undefined;
+      return clientId
+        ? {
+            authorizationEndpoint: ATRIUM_OAUTH_AUTHORIZATION_ENDPOINT,
+            clientId,
+            revocationEndpoint: ATRIUM_OAUTH_REVOCATION_ENDPOINT,
+            scopes: [...ATRIUM_OAUTH_SCOPES],
+            tokenEndpoint: ATRIUM_OAUTH_TOKEN_ENDPOINT,
+          }
+        : undefined;
+    },
+  );
+  const atriumGateway = new ProductionAtriumGateway({
+    accessToken: () => auth.accessToken(),
+    configured: async () => {
+      const snapshot = await managedPolicy.load();
+      return Boolean(snapshot.valid && snapshot.policy.atriumOAuthClientId);
+    },
+  });
   const screenshotCapture = new SerializedScreenshotCapture((windowId) =>
     browser.tabs.captureVisibleTab(windowId, { format: 'png' }),
   );
@@ -47,11 +81,12 @@ export default defineBackground(() => {
   const editor = new EditorService(repository, broadcastChanged);
   const publication = new BrowserPublicationService(
     repository,
-    new UnavailableAtriumGateway(),
+    atriumGateway,
     async () => {
       const snapshot = await managedPolicy.load();
       return snapshot.valid ? snapshot.policy.defaultCollectionId : undefined;
     },
+    () => auth.status(),
   );
   const diagnostics = new DiagnosticsService(repository, managedPolicy, publication, {
     extensionId: browser.runtime.id,
@@ -139,6 +174,20 @@ export default defineBackground(() => {
           throw new Error('content_cannot_read_publisher');
         }
         return publication.snapshot();
+      case 'publisher.sign-in':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_authenticate');
+        }
+        await auth.signIn();
+        await broadcastChanged();
+        return { authentication: await auth.status() };
+      case 'publisher.sign-out':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_authenticate');
+        }
+        await auth.signOut();
+        await broadcastChanged();
+        return { authentication: await auth.status() };
       case 'publisher.enqueue':
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_publish');

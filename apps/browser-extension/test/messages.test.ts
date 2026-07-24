@@ -78,6 +78,14 @@ describe('runtime message boundary', () => {
   });
 
   it('accepts publication control metadata but rejects tokens and screenshot bytes', () => {
+    expect(parseIncomingMessage({ kind: 'publisher.sign-in' })).toBeTruthy();
+    expect(parseIncomingMessage({ kind: 'publisher.sign-out' })).toBeTruthy();
+    expect(
+      parseIncomingMessage({
+        kind: 'publisher.sign-in',
+        payload: { accessToken: 'prohibited' },
+      }),
+    ).toBeUndefined();
     expect(
       parseIncomingMessage({
         kind: 'publisher.enqueue',

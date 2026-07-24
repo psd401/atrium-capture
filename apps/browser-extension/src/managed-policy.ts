@@ -7,6 +7,7 @@ export const DEFAULT_MAX_STORAGE_BYTES = 512 * 1024 * 1024;
 export const DEFAULT_MAX_SESSION_STEPS = 1_000;
 
 export interface RuntimeManagedPolicy extends CaptureSitePolicy {
+  atriumOAuthClientId?: string;
   defaultCollectionId?: string;
   maxSessionSteps: number;
   maxStorageBytes: number;
@@ -28,6 +29,7 @@ export interface ManagedStorageArea {
 
 const allowedKeys = new Set([
   'allowedOrigins',
+  'atriumOAuthClientId',
   'defaultCollectionId',
   'deniedOrigins',
   'maxSessionSteps',
@@ -113,6 +115,11 @@ export function parseManagedPolicy(value: unknown): ManagedPolicySnapshot {
     'default_collection_id_invalid',
     issues,
   );
+  const atriumOAuthClientId = parseOptionalUuid(
+    record.atriumOAuthClientId,
+    'atrium_oauth_client_id_invalid',
+    issues,
+  );
 
   if (issues.length > 0) {
     return invalidPolicy(issues);
@@ -126,6 +133,7 @@ export function parseManagedPolicy(value: unknown): ManagedPolicySnapshot {
       policyVersion: `managed-v${MANAGED_POLICY_SCHEMA_VERSION}`,
       rawImageRetention,
       sourceUrlRetention,
+      ...(atriumOAuthClientId ? { atriumOAuthClientId } : {}),
       ...(allowedOrigins ? { allowedOrigins } : {}),
       ...(deniedOrigins ? { deniedOrigins } : {}),
       ...(defaultCollectionId ? { defaultCollectionId } : {}),

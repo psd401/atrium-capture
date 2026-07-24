@@ -264,6 +264,26 @@ export function App() {
     }
   };
 
+  const authenticationCommand = async (kind: 'publisher.sign-in' | 'publisher.sign-out') => {
+    setPending(true);
+    setError(undefined);
+    try {
+      const result = await browser.runtime.sendMessage({ kind });
+      if (!result) {
+        throw new Error('authentication_command_failed');
+      }
+      await refresh();
+    } catch {
+      setError(
+        kind === 'publisher.sign-in'
+          ? 'Atrium sign-in could not be completed.'
+          : 'Atrium sign-out could not be completed.',
+      );
+    } finally {
+      setPending(false);
+    }
+  };
+
   const exportDiagnostics = async () => {
     setError(undefined);
     try {
@@ -325,7 +345,7 @@ export function App() {
   const canCreateDraft = Boolean(
     publication?.capabilities.idempotentWrites &&
     publication.capabilities.immutableAssets &&
-    (publication.capabilities.mode === 'mock' || publication.capabilities.oauth),
+    (publication.authentication === 'not_required' || publication.authentication === 'signed_in'),
   );
 
   const approveClearSteps = async () => {
@@ -777,7 +797,7 @@ export function App() {
               : 'Raw source bytes were deleted.'}
           </p>
 
-          {!canCreateDraft && !publication?.job && (
+          {publication?.authentication === 'unconfigured' && !publication.job && (
             <div className="capability-callout">
               <strong>Live Atrium publishing is not configured</strong>
               <p>Local recording and privacy review remain available. No capture data was sent.</p>
@@ -787,8 +807,38 @@ export function App() {
             </div>
           )}
 
+          {publication?.authentication === 'signed_out' && (
+            <div className="capability-callout">
+              <strong>Connect to Atrium</strong>
+              <p>
+                Sign in with your district account. Tokens stay in the trusted extension context and
+                are never shared with recorded pages.
+              </p>
+              <button
+                disabled={pending}
+                onClick={() => void authenticationCommand('publisher.sign-in')}
+                type="button"
+              >
+                Sign in to Atrium
+              </button>
+            </div>
+          )}
+
           {canCreateDraft && !publication?.job && (
             <div className="publish-controls">
+              {publication?.authentication === 'signed_in' && (
+                <div className="publish-authentication">
+                  <small>Connected to Atrium</small>
+                  <button
+                    className="secondary"
+                    disabled={pending}
+                    onClick={() => void authenticationCommand('publisher.sign-out')}
+                    type="button"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              )}
               <label htmlFor="collection-picker">Collection</label>
               <select
                 id="collection-picker"
@@ -816,6 +866,16 @@ export function App() {
 
           {publication?.job && (
             <div className="publish-status" role="status">
+              {publication.authentication === 'signed_in' && (
+                <button
+                  className="secondary"
+                  disabled={pending}
+                  onClick={() => void authenticationCommand('publisher.sign-out')}
+                  type="button"
+                >
+                  Sign out of Atrium
+                </button>
+              )}
               <p>
                 <strong>{publishPhaseLabel(publication.job.phase)}</strong>
               </p>

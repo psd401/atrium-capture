@@ -28,6 +28,7 @@ describe('managed policy boundary', () => {
   it('normalizes a complete managed policy and preserves deny precedence', () => {
     const snapshot = parseManagedPolicy({
       allowedOrigins: ['HTTPS://Portal.Example.Test', '*.Example.Test', '*.example.test'],
+      atriumOAuthClientId: '70000000-0000-4000-8000-000000000001',
       defaultCollectionId: '60000000-0000-4000-8000-000000000001',
       deniedOrigins: ['https://accounts.example.test'],
       maxSessionSteps: 500,
@@ -43,6 +44,7 @@ describe('managed policy boundary', () => {
       '*.example.test',
     ]);
     expect(snapshot.policy.deniedOrigins).toEqual(['https://accounts.example.test']);
+    expect(snapshot.policy.atriumOAuthClientId).toBe('70000000-0000-4000-8000-000000000001');
     expect(snapshot.policy.defaultCollectionId).toBe('60000000-0000-4000-8000-000000000001');
     expect(snapshot.policy.rawImageRetention).toBe('delete_after_submit');
   });

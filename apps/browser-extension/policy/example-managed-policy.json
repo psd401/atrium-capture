@@ -4,6 +4,7 @@
   "deniedOrigins": ["https://accounts.example.test"],
   "sourceUrlRetention": "origin",
   "rawImageRetention": "delete_after_flatten",
+  "atriumOAuthClientId": "70000000-0000-4000-8000-000000000001",
   "defaultCollectionId": "60000000-0000-4000-8000-000000000001",
   "maxStorageBytes": 536870912,
   "maxSessionSteps": 1000

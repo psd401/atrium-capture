@@ -55,10 +55,11 @@ export class HttpMockAtriumGateway implements AtriumGateway {
   async publishInternal(request: {
     contentObjectId: string;
     idempotencyKey: string;
+    versionId: string;
   }): Promise<void> {
     await this.sendJson(
       `/objects/${encodeURIComponent(request.contentObjectId)}/publications/internal`,
-      { idempotencyKey: request.idempotencyKey },
+      { idempotencyKey: request.idempotencyKey, versionId: request.versionId },
       () => undefined,
       true,
     );
@@ -75,6 +76,8 @@ export class HttpMockAtriumGateway implements AtriumGateway {
           'content-type': request.mimeType,
           'idempotency-key': request.idempotencyKey,
           'x-content-sha256': request.sha256,
+          'x-pixel-height': String(request.pixelHeight),
+          'x-pixel-width': String(request.pixelWidth),
         },
         method: 'PUT',
       },

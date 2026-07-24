@@ -13,6 +13,14 @@ describe('versioned mock Atrium HTTP boundary', () => {
       const object = await gateway.createPrivateObject({
         collectionId: collections[0]!.collectionId,
         idempotencyKey: 'synthetic-http-create-key',
+        sourceRef: {
+          capturedAt: '2026-01-15T15:00:00.000Z',
+          clientSurface: 'browser',
+          clientVersion: '0.1.0',
+          externalId: '10000000-0000-4000-8000-000000000001',
+          provider: 'atrium-capture',
+          type: 'capture',
+        },
         title: 'Synthetic HTTP guide',
         visibility: 'private',
       });
@@ -23,6 +31,8 @@ describe('versioned mock Atrium HTTP boundary', () => {
         idempotencyKey: 'synthetic-http-asset-key',
         localAssetId: '30000000-0000-4000-8000-000000000001',
         mimeType: 'image/png',
+        pixelHeight: 1,
+        pixelWidth: 1,
         sha256: await sha256Hex(bytes),
       });
       const version = await gateway.createMarkdownVersion({
@@ -38,6 +48,7 @@ describe('versioned mock Atrium HTTP boundary', () => {
       await gateway.publishInternal({
         contentObjectId: object.contentObjectId,
         idempotencyKey: 'synthetic-http-publish-key',
+        versionId: version.versionId,
       });
 
       expect(server.gateway.snapshot().objects[0]?.visibility).toBe('internal');
