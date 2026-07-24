@@ -10,6 +10,8 @@
   <string>AtriumCaptureMacApp</string>
   <key>CFBundleIdentifier</key>
   <string>org.psd401.AtriumCapture</string>
+  <key>CFBundleIconFile</key>
+  <string>AtriumCapture.icns</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
