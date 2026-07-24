@@ -211,6 +211,100 @@ describe('production Atrium v1 gateway', () => {
     expect(methods).toEqual([`GET https://aistudio.psd401.ai/api/v1/content/${OBJECT_ID}/assets`]);
   });
 
+  it('completes a matching pending reservation without reserving or uploading another', async () => {
+    const methods: string[] = [];
+    const gateway = new ProductionAtriumGateway({
+      accessToken: async () => 'synthetic-access-token',
+      request: async (input, init) => {
+        const methodAndUrl = `${init?.method ?? 'GET'} ${String(input)}`;
+        methods.push(methodAndUrl);
+        if (methodAndUrl.endsWith(`/content/${OBJECT_ID}/assets`)) {
+          return json({ data: [asset('pending', '2099-01-01T00:00:00.000Z')] });
+        }
+        if (methodAndUrl.endsWith(`/assets/${ASSET_ID}/complete`)) {
+          return json({ data: asset('ready') });
+        }
+        return json({ error: { code: 'NOT_FOUND', message: 'Synthetic route missing.' } }, 404);
+      },
+    });
+
+    await expect(gateway.uploadImmutableAsset(immutableAssetRequest())).resolves.toEqual({
+      remoteAssetId: ASSET_ID,
+    });
+    expect(methods).toEqual([
+      `GET https://aistudio.psd401.ai/api/v1/content/${OBJECT_ID}/assets`,
+      `POST https://aistudio.psd401.ai/api/v1/content/${OBJECT_ID}/assets/${ASSET_ID}/complete`,
+    ]);
+  });
+
+  it('recovers an ambiguous S3 response by completing the reserved asset exactly once', async () => {
+    const methods: string[] = [];
+    const gateway = new ProductionAtriumGateway({
+      accessToken: async () => 'synthetic-access-token',
+      request: async (input, init) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        methods.push(`${method} ${url}`);
+        if (url.endsWith(`/content/${OBJECT_ID}/assets`) && method === 'GET') {
+          return json({ data: [] });
+        }
+        if (url.endsWith(`/content/${OBJECT_ID}/assets`) && method === 'POST') {
+          return initiatedAssetResponse(
+            'https://synthetic-bucket.s3.us-west-2.amazonaws.com/upload?signature=fake',
+          );
+        }
+        if (url.startsWith('https://synthetic-bucket.s3.us-west-2.amazonaws.com/')) {
+          throw new TypeError('synthetic_transport_response_lost');
+        }
+        if (url.endsWith(`/assets/${ASSET_ID}/complete`)) {
+          return json({ data: asset('ready') });
+        }
+        return json({ error: { code: 'NOT_FOUND', message: 'Synthetic route missing.' } }, 404);
+      },
+    });
+
+    await expect(gateway.uploadImmutableAsset(immutableAssetRequest())).resolves.toEqual({
+      remoteAssetId: ASSET_ID,
+    });
+    expect(methods.filter((entry) => entry.endsWith(`/content/${OBJECT_ID}/assets`))).toHaveLength(
+      2,
+    );
+    expect(methods.filter((entry) => entry.includes('amazonaws.com/upload'))).toHaveLength(1);
+    expect(methods.filter((entry) => entry.endsWith(`/assets/${ASSET_ID}/complete`))).toHaveLength(
+      1,
+    );
+  });
+
+  it('rejects an untrusted upload URL before sending reviewed image bytes', async () => {
+    const methods: string[] = [];
+    let untrustedHostCalled = false;
+    const gateway = new ProductionAtriumGateway({
+      accessToken: async () => 'synthetic-access-token',
+      request: async (input, init) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        methods.push(`${method} ${url}`);
+        if (url.endsWith(`/content/${OBJECT_ID}/assets`) && method === 'GET') {
+          return json({ data: [] });
+        }
+        if (url.endsWith(`/content/${OBJECT_ID}/assets`) && method === 'POST') {
+          return initiatedAssetResponse('https://uploads.example.test/collect');
+        }
+        if (url.startsWith('https://uploads.example.test/')) {
+          untrustedHostCalled = true;
+        }
+        return json({ error: { code: 'NOT_FOUND', message: 'Synthetic route missing.' } }, 404);
+      },
+    });
+
+    await expect(gateway.uploadImmutableAsset(immutableAssetRequest())).rejects.toMatchObject({
+      code: 'atrium_asset_upload_url_invalid',
+      retryable: false,
+    });
+    expect(untrustedHostCalled).toBe(false);
+    expect(methods).not.toContain('PUT https://uploads.example.test/collect');
+  });
+
   it('fails closed when OAuth registration or server responses are invalid', async () => {
     let tokenRequests = 0;
     const unconfigured = new ProductionAtriumGateway({
@@ -239,7 +333,7 @@ describe('production Atrium v1 gateway', () => {
   });
 });
 
-function asset(state: 'pending' | 'ready') {
+function asset(state: 'pending' | 'ready', uploadExpiresAt = '2026-07-24T20:15:00.000Z') {
   return {
     byteLength: new Blob(['synthetic-reviewed-image']).size,
     contentType: 'image/png',
@@ -251,9 +345,42 @@ function asset(state: 'pending' | 'ready') {
     purpose: 'capture_step',
     sha256: DIGEST_BASE64URL,
     state,
-    uploadExpiresAt: '2026-07-24T20:15:00.000Z',
+    uploadExpiresAt,
     width: 1280,
   };
+}
+
+function immutableAssetRequest() {
+  return {
+    bytes: new Blob(['synthetic-reviewed-image'], { type: 'image/png' }),
+    contentObjectId: OBJECT_ID,
+    idempotencyKey: 'capture:job:asset',
+    localAssetId: LOCAL_ASSET_ID,
+    mimeType: 'image/png',
+    pixelHeight: 720,
+    pixelWidth: 1280,
+    sha256: DIGEST_HEX,
+  } as const;
+}
+
+function initiatedAssetResponse(uploadUrl: string): Response {
+  return json(
+    {
+      data: {
+        ...asset('pending', '2099-01-01T00:00:00.000Z'),
+        upload: {
+          expiresAt: '2099-01-01T00:00:00.000Z',
+          headers: {
+            'content-type': 'image/png',
+            'x-amz-checksum-sha256': 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+          },
+          method: 'PUT',
+          url: uploadUrl,
+        },
+      },
+    },
+    201,
+  );
 }
 
 function json(body: unknown, status = 200): Response {

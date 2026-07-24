@@ -56,7 +56,9 @@ test.afterAll(async () => {
 test('records a multi-page workflow across a forced service-worker stop', async () => {
   const panel = await context.newPage();
   await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
+  await panel.setViewportSize({ height: 900, width: 420 });
   await extensionWorker(context);
+  await expectNoHorizontalOverflow(panel);
   const page = await context.newPage();
   await page.goto(`${fixtureOrigin}/index.html`);
   await page.bringToFront();
@@ -100,9 +102,17 @@ test('records a multi-page workflow across a forced service-worker stop', async 
     expect(recoveredIds.filter((candidate) => candidate === stepId)).toHaveLength(1);
   }
 
+  await panel.reload();
+  await expect
+    .poll(async () => (await snapshot(panel))?.steps.length ?? 0, { timeout: 30_000 })
+    .toBe(recoveredIds.length);
+  await expect.poll(async () => (await snapshot(panel))?.state).toBe('recording');
+  await expectNoHorizontalOverflow(panel);
+
   await panel.getByRole('button', { name: 'Stop and review' }).click();
 
   await expect(panel.getByRole('status')).toContainText('Ready for review');
+  await expectNoHorizontalOverflow(panel);
   const finalSnapshot = await snapshot(panel);
   const finalIds = finalSnapshot?.steps.map((step) => step.stepId) ?? [];
   expect(new Set(finalIds).size).toBe(finalIds.length);
@@ -146,6 +156,8 @@ test('records a multi-page workflow across a forced service-worker stop', async 
   await expect(panel.getByText('raw source bytes were deleted', { exact: false })).toBeVisible();
   await expect(panel.getByText('Live Atrium publishing is not configured')).toBeVisible();
   await expect(panel.getByText('No capture data was sent.', { exact: false })).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Sign in to Atrium' })).toHaveCount(0);
+  await expectNoHorizontalOverflow(panel);
 
   await panel.getByText('Support diagnostics').click();
   await expect(
@@ -213,6 +225,18 @@ async function sendExtensionMessage(page: Page, message: unknown): Promise<unkno
 async function snapshot(page: Page): Promise<RecorderSnapshot | undefined> {
   return (await sendExtensionMessage(page, { kind: 'recorder.snapshot' })) as
     RecorderSnapshot | undefined;
+}
+
+async function expectNoHorizontalOverflow(page: Page): Promise<void> {
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <= document.documentElement.clientWidth &&
+          document.body.scrollWidth <= document.body.clientWidth,
+      ),
+    )
+    .toBe(true);
 }
 
 interface RecorderSnapshot {

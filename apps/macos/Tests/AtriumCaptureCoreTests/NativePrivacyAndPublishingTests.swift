@@ -265,6 +265,53 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
         XCTAssertEqual(gateway.remoteCounts.versions, countsBeforeRestart.versions)
     }
 
+    func testFileOutboxSurvivesRestartAndDeletesRetainedRawBytesAfterDraftCommit() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("atrium-capture-file-outbox-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let assets = root.appendingPathComponent("assets", isDirectory: true)
+        try FileManager.default.createDirectory(at: assets, withIntermediateDirectories: true)
+        let publishableURL = assets.appendingPathComponent("publishable.png")
+        let retainedRawURL = assets.appendingPathComponent("retained-raw.png")
+        try Data([1, 2, 3]).write(to: publishableURL, options: .atomic)
+        try Data("SYNTHETIC-RAW-NEVER-UPLOAD".utf8).write(to: retainedRawURL, options: .atomic)
+
+        let gateway = MockNativeAtriumGateway()
+        let firstRepository = FileNativePublishRepository(rootURL: root)
+        let queued = try await DurableNativePublisher(
+            repository: firstRepository,
+            gateway: gateway
+        ).enqueue(
+            session: makeSession(
+                state: .publishable,
+                review: .approved,
+                assetState: .publishableLocal,
+                stepReview: .approved,
+                rawRetention: .deleteAfterSubmit,
+                includeRetainedRaw: true
+            ),
+            jobID: "file-restart-job"
+        )
+
+        let restartedRepository = FileNativePublishRepository(rootURL: root)
+        let recovered = await DurableNativePublisher(
+            repository: restartedRepository,
+            gateway: gateway
+        ).resumePending()
+        let ready = try XCTUnwrap(recovered.first(where: { $0.jobID == queued.jobID }))
+        let stored = try XCTUnwrap(restartedRepository.loadSession(sessionID: ready.sessionID))
+
+        XCTAssertEqual(ready.phase, .readyAsDraft)
+        XCTAssertEqual(stored.state, .submitted)
+        XCTAssertEqual(
+            stored.assets.first(where: { $0.localKey == "assets/retained-raw.png" })?.state,
+            .deleted
+        )
+        XCTAssertTrue(FileManager.default.fileExists(atPath: publishableURL.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: retainedRawURL.path))
+        XCTAssertEqual(gateway.remoteCounts.assets, 1)
+    }
+
     private func makeSession(
         state: AtriumCaptureSessionState,
         review: ReviewStatus,

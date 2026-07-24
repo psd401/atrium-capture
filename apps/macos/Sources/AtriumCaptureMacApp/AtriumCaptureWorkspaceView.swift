@@ -407,9 +407,20 @@ struct AtriumCaptureWorkspaceView: View {
             Text(label)
                 .foregroundStyle(AtriumCaptureTheme.ink)
             Spacer()
-            Text(state.rawValue)
+            Text(permissionStateLabel(state))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(AtriumCaptureTheme.muted)
+        }
+    }
+
+    private func permissionStateLabel(_ state: NativePermissionState) -> String {
+        switch state {
+        case .granted:
+            "Granted"
+        case .denied:
+            "Denied"
+        case .notDetermined:
+            "Not determined"
         }
     }
 
