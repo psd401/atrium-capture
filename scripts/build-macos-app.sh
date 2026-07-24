@@ -22,7 +22,13 @@ mkdir -p "$app_path/Contents/MacOS" "$app_path/Contents/Helpers" "$app_path/Cont
 cp "$package_path/App/Info.plist" "$app_path/Contents/Info.plist"
 cp "$binary_path/AtriumCaptureMacApp" "$app_path/Contents/MacOS/AtriumCaptureMacApp"
 cp "$binary_path/AtriumCaptureNativeHost" "$app_path/Contents/Helpers/AtriumCaptureNativeHost"
+cp "$package_path/App/Assets/AtriumCapture.icns" "$app_path/Contents/Resources/AtriumCapture.icns"
 plutil -lint "$app_path/Contents/Info.plist"
+icon_file="$(plutil -extract CFBundleIconFile raw "$app_path/Contents/Info.plist")"
+if [[ "$icon_file" != "AtriumCapture.icns" || ! -f "$app_path/Contents/Resources/$icon_file" ]]; then
+  echo "Mac app icon is missing or does not match CFBundleIconFile." >&2
+  exit 1
+fi
 
 if [[ "${ATRIUM_CAPTURE_ADHOC_SIGN:-1}" == "1" ]]; then
   codesign --force --deep --sign - --options runtime "$app_path"
