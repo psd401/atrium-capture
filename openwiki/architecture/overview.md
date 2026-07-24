@@ -56,3 +56,4 @@ retry resumes from durable state without duplicating committed remote results.
 - [`docs/adr/0002-flattening-and-raw-retention.md`](../../docs/adr/0002-flattening-and-raw-retention.md)
 - [`docs/adr/0003-durable-atrium-publication.md`](../../docs/adr/0003-durable-atrium-publication.md)
 - [`docs/adr/0004-native-runtime-and-overlay-boundaries.md`](../../docs/adr/0004-native-runtime-and-overlay-boundaries.md)
+- [`docs/adr/0005-atrium-aligned-visual-language.md`](../../docs/adr/0005-atrium-aligned-visual-language.md) — cross-platform presentation tokens that feel at home beside Atrium without bundling assets
