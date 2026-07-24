@@ -61,7 +61,7 @@ final class ProductionNativeGatewayTests: XCTestCase {
         let upload = try XCTUnwrap(requests.first { $0.url?.host?.contains("amazonaws.com") == true })
         XCTAssertNil(upload.value(forHTTPHeaderField: "Authorization"))
         XCTAssertEqual(
-            Set(upload.allHTTPHeaderFields?.keys.map(\.lowercased) ?? []),
+            Set(upload.allHTTPHeaderFields?.keys.map { $0.lowercased() } ?? []),
             Set(["content-type", "x-amz-checksum-sha256"])
         )
         let versionRequest = try XCTUnwrap(requests.first { $0.url?.path.hasSuffix("/versions") == true })
