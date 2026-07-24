@@ -39,7 +39,14 @@ The browser fixture site is entirely synthetic. Serve `packages/test-fixtures/si
 
 The Swift package also includes the native recorder, editor, publisher, bridge, display, and pin tests. On non-macOS hosts, use the official `swift:6.0-bookworm` image for the platform-neutral suite. On macOS, `scripts/build-macos-app.sh` compiles the actual Apple adapters and runs a standalone Core Graphics/AppKit verifier even when a Command Line Tools-only installation does not include a compatible XCTest module. Full Xcode CI runs all XCTest targets. See [macos-runbook.md](macos-runbook.md).
 
-The production manifest packages `public/managed-storage-schema.json`. Validate policy behavior with `apps/browser-extension/policy/example-managed-policy.json` and the unit tests; do not place real district origins, OAuth client IDs, or collection identifiers in repository fixtures. The committed IDs are deliberately synthetic. Deployment, support, update, and rollback steps are in [browser-pilot-runbook.md](browser-pilot-runbook.md).
+The production manifest packages `public/managed-storage-schema.json`. Validate
+policy behavior with
+`apps/browser-extension/policy/example-managed-policy.json` and the unit tests;
+do not place real district origins, collection identifiers, or credentials in
+repository fixtures. The production source contains only the two approved public
+OAuth application identifiers; fixture identifiers remain synthetic. Deployment,
+support, update, and rollback steps are in
+[browser-pilot-runbook.md](browser-pilot-runbook.md).
 
 ## Browser permission rationale
 
@@ -47,4 +54,7 @@ Chrome requires the literal `<all_urls>` host permission (or a short-lived `acti
 
 ## Local secrets and data
 
-Keep environment files, signing keys, Xcode user state, test recordings, screenshots, and tokens untracked. Tests use synthetic local or injected production-contract boundaries. Live sign-in remains capability-gated until administrators distribute the Atrium-issued public client UUIDs; no client secret belongs in either application.
+Keep environment files, signing keys, Xcode user state, test recordings,
+screenshots, and tokens untracked. Tests use synthetic local or injected
+production-contract boundaries. The bundled production OAuth client UUIDs are
+public identifiers, not secrets; no client secret belongs in either application.

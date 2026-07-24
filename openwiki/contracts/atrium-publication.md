@@ -20,9 +20,10 @@ unavailable.
 - ETag concurrency
 - Browser-extension and RFC 8252-style native redirects
 
-The clients use the documented AI Studio v1/OIDC routes. Public client UUIDs
-remain managed deployment configuration. The local HTTP mock still uses only
-the visibly non-production `/_mock/atrium-capture/v1` route.
+The clients use the documented AI Studio v1/OIDC routes and bundle the approved
+non-secret production public client UUIDs. Managed configuration can override a
+UUID only for an approved test client. The local HTTP mock still uses only the
+visibly non-production `/_mock/atrium-capture/v1` route.
 
 ## Durable phases
 

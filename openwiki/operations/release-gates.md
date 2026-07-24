@@ -21,7 +21,7 @@ extension ZIP and an ad-hoc-signed macOS application for synthetic evaluation.
 
 ## External or operator gates
 
-- Browser/native public OAuth client registration and UUID distribution
+- Browser/native public OAuth client registration and bundled-UUID verification
 - Idempotent or recoverable Atrium asset initiation
 - District Chrome signing/store or managed distribution
 - Apple distribution signing, notarization, MDM packaging, and physical-device acceptance

@@ -4,7 +4,7 @@
 
 The browser package version is `1.0.0`. `pnpm package:browser` builds the production Manifest V3 extension, creates an unsigned Chrome ZIP under `apps/browser-extension/.output`, inspects its ZIP central directory, and writes `browser-release-manifest.json` with the artifact byte size and SHA-256 digest.
 
-Package verification fails if the archive omits the manifest, worker, content script, side panel, or managed schema; changes the reviewed required permissions or the single optional `nativeMessaging` permission; or includes source maps, TypeScript, tests, fixtures, dependencies, environment files, or key material. The optional permission is requested only from the Mac-enrichment user gesture and is removed when enrichment is disabled. The release manifest records that telemetry is disabled and live Atrium uses managed public-client configuration.
+Package verification fails if the archive omits the manifest, worker, content script, side panel, or managed schema; changes the reviewed required permissions or the single optional `nativeMessaging` permission; or includes source maps, TypeScript, tests, fixtures, dependencies, environment files, or key material. The optional permission is requested only from the Mac-enrichment user gesture and is removed when enrichment is disabled. The release manifest records that telemetry is disabled and live Atrium uses the bundled approved public client.
 
 The ZIP is intentionally unsigned. Chrome Web Store or district managed-distribution signing requires an authorized publisher and external signing custody. Per repository policy, no upload, signing-key creation, update host, deployment, or release occurs without explicit approval.
 
@@ -61,7 +61,7 @@ The manual ring uses only the repository's synthetic fixture. It must not record
 - [ ] Record artifact filename, SHA-256, size, permissions, extension ID, and version.
 - [ ] Review store description/screenshots/privacy disclosure with synthetic assets only.
 - [ ] Keep publisher/signing credentials outside the repository and build logs.
-- [ ] Register the immutable extension redirect and distribute only its public UUID through managed policy.
+- [x] Register the immutable extension redirect and bundle its public UUID; managed policy is only an approved test-client override.
 - [ ] Promote through the engineering/support/pilot rings in `browser-pilot-runbook.md`.
 - [ ] Exercise rollback before broad promotion.
 - [ ] Retain the signed artifact and its approval record; do not retain captured guide data.

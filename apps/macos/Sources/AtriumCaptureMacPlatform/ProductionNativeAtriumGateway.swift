@@ -4,6 +4,7 @@ import Foundation
 
 #if os(macOS)
 public let atriumProductionOrigin = URL(string: "https://aistudio.psd401.ai")!
+public let atriumMacProductionOAuthClientID = "fbdaa815-1b0f-435b-805f-1732805720c1"
 public let atriumMacOAuthRedirectScheme = "org.psd401.atrium-capture"
 public let atriumOAuthScopes = [
     "openid",
@@ -32,7 +33,8 @@ public struct NativeAtriumProductionSettings: Sendable {
         let clientID = firstNonempty(
             environment["ATRIUM_CAPTURE_OAUTH_CLIENT_ID"],
             defaults.string(forKey: "AtriumOAuthClientId"),
-            bundle.object(forInfoDictionaryKey: "AtriumOAuthClientId") as? String
+            bundle.object(forInfoDictionaryKey: "AtriumOAuthClientId") as? String,
+            atriumMacProductionOAuthClientID
         )
         guard let clientID, UUID(uuidString: clientID) != nil else { return nil }
         let collectionID = firstNonempty(

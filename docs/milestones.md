@@ -38,7 +38,7 @@ Exit gate: golden tests prove exported pixels contain no recoverable redacted co
 
 Exit gate: network interruption at every phase resumes without duplicate content/assets/versions; private is the default.
 
-Production status: the documented OAuth, collection, content, version, authored-asset, and internal-publication clients are implemented and contract-tested. Authenticated acceptance requires two administrator-registered public client UUIDs. Atrium asset initiation still lacks idempotency, so the exact post-reservation/pre-response interval remains an external row-level deduplication gap; clients recover every later upload/completion interval safely.
+Production status: the documented OAuth, collection, content, version, authored-asset, and internal-publication clients are implemented and contract-tested. Both administrator-registered public client UUIDs are bundled. Authenticated acceptance is blocked by Atrium returning HTTP 200 instead of its authorization redirect and by its current extra consent interaction for these first-party clients. Atrium asset initiation still lacks idempotency, so the exact post-reservation/pre-response interval remains an external row-level deduplication gap; clients recover every later upload/completion interval safely.
 
 ## M4 — District browser pilot
 
@@ -48,9 +48,9 @@ Production status: the documented OAuth, collection, content, version, authored-
 
 Exit gate: pilot checklist, privacy review, rollback, and support diagnostics are approved.
 
-Dependency: OAuth client registration plus idempotent/recoverable asset initiation before broad rollout.
+Dependency: correct first-party OAuth redirect/login behavior plus idempotent/recoverable asset initiation before broad rollout.
 
-Local status: engineering-approved for synthetic/unpublished evaluation. Credential-free production smoke passes; authenticated production-Atrium acceptance remains capability-gated by the registration above.
+Local status: engineering-approved for synthetic/unpublished evaluation. Credential-free discovery/content-boundary smoke passes; registered-client smoke correctly rejects production's HTTP 200 authorization response.
 
 ## M5 — Browser v1
 
@@ -70,7 +70,7 @@ Local status: the `1.0.0` unsigned artifact passes automated production-Chromium
 
 Exit gate: a Finder/System Settings/Office workflow produces the same valid Atrium document model as a browser workflow.
 
-Production status: RFC 8252-style native redirects, production OAuth/refresh/revocation, Keychain storage, direct authored-asset upload, private drafts, and internal publication are implemented. The public native client UUID remains deployment configuration.
+Production status: RFC 8252-style native redirects, production OAuth/refresh/revocation, Keychain storage, direct authored-asset upload, private drafts, and internal publication are implemented. The approved public native client UUID is bundled; live acceptance awaits the same Atrium redirect/first-party login fix.
 
 ## M7 — Snipaste-style Mac tools
 

@@ -179,6 +179,17 @@ final class CaptureAppModel: ObservableObject {
         _ = MacPermissionCenter.requestAccessibilityPrompt()
         _ = MacPermissionCenter.requestScreenRecording()
         refreshPermissions()
+        statusCode = permissions.screenRecording == .granted && permissions.accessibility == .granted
+            ? "CAPTURE_ACCESS_READY"
+            : "APPROVE_ACCESS_THEN_REOPEN"
+    }
+
+    func openScreenRecordingSettings() {
+        MacPermissionCenter.openSettings(.screenRecording)
+    }
+
+    func openAccessibilitySettings() {
+        MacPermissionCenter.openSettings(.accessibility)
     }
 
     func start() {

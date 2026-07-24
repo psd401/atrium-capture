@@ -110,6 +110,11 @@ async function verifyOAuthRegistration({ clientId, profile, redirectUri }) {
     headers: { accept: 'text/html', 'cache-control': 'no-store' },
     redirect: 'manual',
   });
+  if (response.status < 300 || response.status >= 400) {
+    throw new Error(
+      `Atrium ${profile} OAuth authorization returned HTTP ${response.status} instead of a redirect.`,
+    );
+  }
   const location = response.headers.get('location');
   if (!location) {
     throw new Error(`Atrium ${profile} OAuth registration did not start authorization.`);

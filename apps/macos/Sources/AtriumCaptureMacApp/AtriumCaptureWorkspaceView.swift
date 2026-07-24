@@ -61,9 +61,36 @@ struct AtriumCaptureWorkspaceView: View {
         sectionCard(title: "Capture access", systemImage: "checkmark.shield") {
             permissionRow("Screen Recording", model.permissions.screenRecording)
             permissionRow("Accessibility", model.permissions.accessibility)
-            Button("Review permissions") { model.requestPermissions() }
+            if captureAccessReady {
+                Label("Capture access is ready.", systemImage: "checkmark.circle.fill")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AtriumCaptureTheme.evergreen)
+            } else {
+                Text(
+                    "macOS requires both permissions to record steps. Approve Atrium Capture, then quit and reopen the app if a permission still shows as needed."
+                )
+                .font(.system(size: 11))
+                .foregroundStyle(AtriumCaptureTheme.inkSoft)
+
+                Button("Grant capture access") { model.requestPermissions() }
+                    .buttonStyle(AtriumPrimaryButtonStyle())
+
+                HStack(spacing: 8) {
+                    Button("Screen Recording settings") {
+                        model.openScreenRecordingSettings()
+                    }
+                    Button("Accessibility settings") {
+                        model.openAccessibilitySettings()
+                    }
+                }
                 .buttonStyle(AtriumSecondaryButtonStyle())
+            }
         }
+    }
+
+    private var captureAccessReady: Bool {
+        model.permissions.screenRecording == .granted
+            && model.permissions.accessibility == .granted
     }
 
     private var recordingCard: some View {
@@ -114,6 +141,14 @@ struct AtriumCaptureWorkspaceView: View {
 
     private var reviewAndPublishCard: some View {
         sectionCard(title: "Review & publish", systemImage: "checkmark.seal") {
+            Label(reviewGuidance, systemImage: "arrow.right.circle.fill")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AtriumCaptureTheme.inkSoft)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AtriumCaptureTheme.mint)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
             Button {
                 model.flattenAndApprove()
             } label: {
@@ -140,10 +175,12 @@ struct AtriumCaptureWorkspaceView: View {
 
             if model.atriumConfigured && model.atriumAuthentication == .signedOut {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Connect to Atrium to create a private draft.")
+                    Text(
+                        "Sign in with your district AI Studio account. You will return here automatically."
+                    )
                         .font(.system(size: 11))
                         .foregroundStyle(AtriumCaptureTheme.inkSoft)
-                    Button("Sign in to Atrium") { model.signInToAtrium() }
+                    Button("Sign in to AI Studio") { model.signInToAtrium() }
                         .buttonStyle(AtriumSecondaryButtonStyle())
                 }
             } else if model.atriumAuthentication == .signedIn {
@@ -159,9 +196,7 @@ struct AtriumCaptureWorkspaceView: View {
 
             if !model.atriumConfigured {
                 Label {
-                    Text(
-                        "Atrium OAuth client registration is not configured. Local capture and privacy review remain available."
-                    )
+                    Text("AI Studio sign-in is temporarily unavailable. Contact district support.")
                 } icon: {
                     Image(systemName: "info.circle.fill")
                 }
@@ -205,6 +240,26 @@ struct AtriumCaptureWorkspaceView: View {
             }
             .menuStyle(.borderlessButton)
             .foregroundStyle(AtriumCaptureTheme.evergreen)
+        }
+    }
+
+    private var reviewGuidance: String {
+        guard let state = model.session?.state else {
+            return "Start a recording or choose a quick capture. Stop the recording to review your steps."
+        }
+        switch state {
+        case .recording, .paused:
+            return "Finish the recording to review captured steps and remove private information."
+        case .review:
+            return "Review every step, add required redactions, then prepare publishable images."
+        case .publishable where model.atriumAuthentication == .signedOut:
+            return "Your reviewed images are ready. Sign in to AI Studio to create a private Atrium draft."
+        case .publishable:
+            return "Your reviewed images are ready to create as a private Atrium draft."
+        case .submitted:
+            return "Your private Atrium draft is ready. Publish it internally only when approved."
+        case .archived:
+            return "This capture is archived. Start a new recording when you are ready."
         }
     }
 
@@ -418,9 +473,9 @@ struct AtriumCaptureWorkspaceView: View {
         case .granted:
             "Granted"
         case .denied:
-            "Denied"
+            "Blocked"
         case .notDetermined:
-            "Not determined"
+            "Approval needed"
         }
     }
 

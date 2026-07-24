@@ -13,6 +13,7 @@ const API_PATH = '/api/v1';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const ATRIUM_PRODUCTION_ORIGIN = 'https://aistudio.psd401.ai';
+export const ATRIUM_BROWSER_PRODUCTION_OAUTH_CLIENT_ID = 'ae781263-20c0-4b0c-8a34-8be01ab72fb1';
 export const ATRIUM_OAUTH_AUTHORIZATION_ENDPOINT = `${ATRIUM_PRODUCTION_ORIGIN}/api/oauth/auth`;
 export const ATRIUM_OAUTH_TOKEN_ENDPOINT = `${ATRIUM_PRODUCTION_ORIGIN}/api/oauth/token`;
 export const ATRIUM_OAUTH_REVOCATION_ENDPOINT = `${ATRIUM_PRODUCTION_ORIGIN}/api/oauth/revocation`;

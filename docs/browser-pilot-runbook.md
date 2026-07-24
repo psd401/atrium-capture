@@ -25,7 +25,7 @@ Checklist:
 2. For engineering evaluation, load `apps/browser-extension/.output/chrome-mv3` unpacked into a dedicated synthetic Chrome profile.
 3. For a managed ring, use a district-signed/store-hosted artifact and Chrome `ExtensionSettings`; do not distribute the unpacked directory.
 4. Apply a versioned policy from `browser-managed-policy.md`, refresh `chrome://policy`, and export Support diagnostics.
-5. Supply `atriumOAuthClientId` only after the exact public-client registration is reviewed. Sign in, create one synthetic private draft, verify the reader and explicit internal-publication action, and retain no production screenshots.
+5. Use the bundled production client. Sign in to AI Studio, create one synthetic private draft, verify the reader and explicit internal-publication action, and retain no production screenshots. Set `atriumOAuthClientId` only when deliberately testing a separately approved client.
 
 ## Permission rationale
 
@@ -44,7 +44,7 @@ No permission reads cookies, browsing history, page storage, network traffic, pa
 3. Check policy validity, extension version/ID, local image bytes, capture state, outbox phase, retryability code, and capability flags.
 4. If policy is invalid, compare only key names/types with the managed policy document; never request screenshots or a user's recorded guide.
 5. For a retryable outbox interruption, use Retry safely. Stable idempotency keys prevent duplicate remote state.
-6. If live sign-in says it is unconfigured, verify the public client registration and managed UUID. Do not add a substitute host or route.
+6. If live sign-in is unavailable, verify the bundled public client remains active and that the production authorization endpoint returns an actual HTTP redirect. Do not ask the employee for a client UUID or add a substitute host/route.
 7. If an asset retry remains blocked behind an expired reservation, record only the fixed error/request ID and follow the limitation in ADR 0006; never collect the image or upload it elsewhere.
 
 ## Rollback

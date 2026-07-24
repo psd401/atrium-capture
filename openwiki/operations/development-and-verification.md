@@ -30,12 +30,15 @@ decoded output pixels and metadata chunks. Native tests decode the same fixtures
 and verify recorder recovery, privacy review, durable publication, display
 geometry, pins, and bridge rejection.
 
-The macOS build produces an ad-hoc-signed local app and runs real Apple-framework
-verifiers. It does not notarize, install, upload, or deploy.
+The macOS build runs real Apple-framework verifiers and produces either a
+stable-signed app when `ATRIUM_CAPTURE_CODESIGN_IDENTITY` is supplied or an
+ad-hoc build-only artifact. It does not notarize, install, upload, or deploy.
 
 `pnpm smoke:atrium` is an optional credential-free check of production OIDC
-discovery and the fail-closed collection boundary. Authenticated acceptance
-requires administrator-registered public client IDs and synthetic content.
+discovery and the fail-closed collection boundary. Registered-client mode also
+requires a real authorization HTTP redirect. Authenticated acceptance uses the
+bundled clients and synthetic content after Atrium's first-party login gate
+passes.
 
 CI is defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 Detailed evidence is in [`docs/verification.md`](../../docs/verification.md).

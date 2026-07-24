@@ -95,6 +95,21 @@ final class ProductionNativeGatewayTests: XCTestCase {
         XCTAssertEqual(settings.defaultCollectionID, collectionID)
         XCTAssertEqual(settings.oauth.tokenEndpoint.absoluteString, "https://aistudio.psd401.ai/api/oauth/token")
     }
+
+    func testProductionSettingsUseBundledPublicClientWithoutUserConfiguration() throws {
+        let suite = try XCTUnwrap(UserDefaults(suiteName: "ProductionNativeGatewayBundledTests"))
+        suite.removePersistentDomain(forName: "ProductionNativeGatewayBundledTests")
+        let settings = try XCTUnwrap(
+            NativeAtriumProductionSettings.load(
+                environment: [:],
+                defaults: suite,
+                bundle: Bundle(for: Self.self)
+            )
+        )
+
+        XCTAssertEqual(settings.oauth.clientID, atriumMacProductionOAuthClientID)
+        XCTAssertNil(settings.defaultCollectionID)
+    }
 }
 
 private actor SyntheticAtriumTransport: NativeHTTPTransport {

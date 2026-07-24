@@ -347,6 +347,27 @@ export function App() {
     publication.capabilities.immutableAssets &&
     (publication.authentication === 'not_required' || publication.authentication === 'signed_in'),
   );
+  const nextAction = (() => {
+    if (!session) {
+      return 'Start a recording. When you stop, Atrium Capture will walk you through privacy review.';
+    }
+    if (isRecording || isPaused) {
+      return 'Finish the recording to review the captured steps and remove private information.';
+    }
+    if (isReview) {
+      return 'Review each step, add required redactions, and prepare the images for publishing.';
+    }
+    if (isPublishable && publication?.authentication === 'signed_out') {
+      return 'Your reviewed images are ready. Sign in to AI Studio to create a private Atrium draft.';
+    }
+    if (isPublishable) {
+      return 'Your reviewed images are ready to save as a private Atrium draft.';
+    }
+    if (isSubmitted) {
+      return 'Your private Atrium draft is ready. Open it in Atrium or publish it internally when approved.';
+    }
+    return 'Start a new recording when you are ready.';
+  })();
 
   const approveClearSteps = async () => {
     if (!session) {
@@ -489,6 +510,11 @@ export function App() {
       </section>
 
       {error && <p className="error">{error}</p>}
+
+      <section aria-labelledby="next-action-heading" className="next-action">
+        <h2 id="next-action-heading">Next step</h2>
+        <p>{nextAction}</p>
+      </section>
 
       {diagnostics?.managedPolicy.valid === false && (
         <section className="policy-error" role="alert">
@@ -799,27 +825,27 @@ export function App() {
 
           {publication?.authentication === 'unconfigured' && !publication.job && (
             <div className="capability-callout">
-              <strong>Live Atrium publishing is not configured</strong>
-              <p>Local recording and privacy review remain available. No capture data was sent.</p>
-              {publication?.capabilities.reasons.map((reason) => (
-                <small key={reason}>{reason}</small>
-              ))}
+              <strong>AI Studio sign-in is temporarily unavailable</strong>
+              <p>
+                Contact district support. Your recording and privacy review remain available, and no
+                capture data was sent.
+              </p>
             </div>
           )}
 
           {publication?.authentication === 'signed_out' && (
             <div className="capability-callout">
-              <strong>Connect to Atrium</strong>
+              <strong>Sign in to AI Studio</strong>
               <p>
-                Sign in with your district account. Tokens stay in the trusted extension context and
-                are never shared with recorded pages.
+                Use your district account. You will return here automatically; tokens stay in the
+                trusted extension context and are never shared with recorded pages.
               </p>
               <button
                 disabled={pending}
                 onClick={() => void authenticationCommand('publisher.sign-in')}
                 type="button"
               >
-                Sign in to Atrium
+                Sign in to AI Studio
               </button>
             </div>
           )}

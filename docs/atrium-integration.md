@@ -42,12 +42,55 @@ Create two public clients at Atrium's administrator OAuth client screen. Select 
 
 `openid profile offline_access content:read content:create content:update content:publish_internal`
 
-| Client profile      | Exact redirect                                                    | Client ID delivery                       |
-| ------------------- | ----------------------------------------------------------------- | ---------------------------------------- |
-| `browser_extension` | `https://jldnpmcpimhabiphcglkbgmbffpoocpo.chromiumapp.org/atrium` | Chrome managed key `atriumOAuthClientId` |
-| `native`            | `org.psd401.atrium-capture:/oauth/callback`                       | MDM preference `AtriumOAuthClientId`     |
+| Client profile      | Exact redirect                                                    | Production configuration                      |
+| ------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
+| `browser_extension` | `https://jldnpmcpimhabiphcglkbgmbffpoocpo.chromiumapp.org/atrium` | Approved public UUID bundled in the extension |
+| `native`            | `org.psd401.atrium-capture:/oauth/callback`                       | Approved public UUID bundled in the Mac app   |
 
-The generated UUID is public configuration, not a secret. Never invent a client ID, add a confidential secret to either application, or commit tokens. The Mac preference `AtriumDefaultCollectionId` and browser `defaultCollectionId` are optional documented collection UUIDs. Local Mac testing may supply the same public values through `ATRIUM_CAPTURE_OAUTH_CLIENT_ID` and `ATRIUM_CAPTURE_DEFAULT_COLLECTION_ID`.
+The generated UUID is public application configuration, not a secret. Production
+builds bundle it so no employee configures OAuth. The Chrome managed key
+`atriumOAuthClientId`, Mac preference `AtriumOAuthClientId`, and local
+`ATRIUM_CAPTURE_OAUTH_CLIENT_ID` variable are optional administrator/developer
+overrides for an approved test client. Never invent a client ID, add a
+confidential secret to either application, or commit tokens. The Mac preference
+`AtriumDefaultCollectionId` and browser `defaultCollectionId` remain optional
+documented collection UUIDs.
+
+These are district-owned first-party clients. The end-user authorization flow is:
+
+1. select **Sign in to AI Studio** in Atrium Capture;
+2. complete the normal district AI Studio login if no session exists; and
+3. return automatically to Atrium Capture.
+
+It must not expose client registration, raw redirect responses, manual UUID
+settings, or an additional consent decision. Atrium must still validate the exact
+registered redirect, S256 PKCE challenge, and pre-approved scope allowlist. Login
+may be skipped only when a valid AI Studio session already exists.
+
+### Current production acceptance blockers
+
+As of 2026-07-24, both registered profiles accept the exact redirect and seven
+required scopes, but the authorization route returns HTTP 200 with a `Location`
+header and a textual “Redirecting…” body. Browsers correctly render that body
+instead of following it. The Atrium Next/Node response adapter must forward the
+actual provider status (including 303); an initialized fallback 200 must not
+override `ServerResponse.statusCode`.
+
+After that redirect is fixed, Atrium must distinguish the two administrator-owned
+first-party clients from third-party OAuth clients. It should create/reuse a
+grant containing only the intersection of requested scopes and the client's
+registered allowlist after the district user is authenticated. This should
+satisfy the consent checks for those exact client records while leaving the
+provider's login checks intact. Do not globally remove consent, trust a client by
+display name/redirect pattern, or grant a scope absent from its registration.
+
+Server acceptance must cover:
+
+- signed-out first-party user → normal district login → app callback, no consent;
+- signed-in first-party user → app callback, no consent;
+- unknown/untrusted client → normal consent or fail-closed rejection;
+- callback mismatch, missing S256, or unregistered scope → fail-closed error; and
+- authorization start → actual HTTP 3xx response, never a 200 redirect body.
 
 The browser keeps the token set in trusted-only `chrome.storage.session`, which survives MV3 service-worker stops but deliberately requires sign-in after a full browser exit. The native app stores tokens in Keychain. Both rotate public-client refresh tokens and revoke/clear them on sign-out.
 
@@ -77,7 +120,8 @@ pnpm smoke:atrium
 ```
 
 This optional mode starts each authorization request with a synthetic PKCE
-challenge and fails on registration errors such as `invalid_client`,
+challenge and requires a real HTTP 3xx response with a `Location` header. It
+fails on non-redirect responses and registration errors such as `invalid_client`,
 `invalid_redirect_uri`, or `invalid_scope`. It does not follow the request into
 sign-in, exchange a code, receive a token, or print either client ID.
 

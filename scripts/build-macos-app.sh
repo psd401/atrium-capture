@@ -30,7 +30,10 @@ if [[ "$icon_file" != "AtriumCapture.icns" || ! -f "$app_path/Contents/Resources
   exit 1
 fi
 
-if [[ "${ATRIUM_CAPTURE_ADHOC_SIGN:-1}" == "1" ]]; then
+if [[ -n "${ATRIUM_CAPTURE_CODESIGN_IDENTITY:-}" ]]; then
+  codesign --force --deep --sign "$ATRIUM_CAPTURE_CODESIGN_IDENTITY" --options runtime "$app_path"
+  codesign --verify --deep --strict "$app_path"
+elif [[ "${ATRIUM_CAPTURE_ADHOC_SIGN:-1}" == "1" ]]; then
   codesign --force --deep --sign - --options runtime "$app_path"
   codesign --verify --deep --strict "$app_path"
 fi

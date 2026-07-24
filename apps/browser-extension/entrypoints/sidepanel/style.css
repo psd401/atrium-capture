@@ -156,6 +156,7 @@ main {
 }
 
 header,
+.next-action,
 .steps,
 .review {
   border: 1px solid var(--atrium-border);
@@ -259,6 +260,27 @@ h1 {
 
 .controls button:only-child {
   grid-column: 1 / -1;
+}
+
+.next-action {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border-color: #c9dfd8;
+  background: var(--atrium-mint);
+}
+
+.next-action h2 {
+  margin: 0 0 0.25rem;
+  color: var(--atrium-evergreen);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.next-action p {
+  margin: 0;
+  color: var(--atrium-ink-soft);
+  font-size: 0.86rem;
 }
 
 .steps {

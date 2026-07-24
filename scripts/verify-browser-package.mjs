@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const extensionRoot = path.join(repositoryRoot, 'apps/browser-extension');
 const outputRoot = path.join(extensionRoot, '.output');
+const productionOAuthClientId = 'ae781263-20c0-4b0c-8a34-8be01ab72fb1';
 const extensionPackage = JSON.parse(
   await readFile(path.join(extensionRoot, 'package.json'), 'utf8'),
 );
@@ -70,6 +71,10 @@ if (
 ) {
   throw new Error('Packaged optional permissions differ from the reviewed Mac bridge allowlist.');
 }
+const background = await readFile(path.join(outputRoot, 'chrome-mv3/background.js'), 'utf8');
+if (!background.includes(productionOAuthClientId)) {
+  throw new Error('Packaged worker is missing the approved production OAuth public client ID.');
+}
 
 const releaseManifest = {
   artifact: archiveName,
@@ -78,7 +83,7 @@ const releaseManifest = {
   files: files.length,
   manifestVersion: 3,
   privacy: {
-    liveAtriumConfiguration: 'managed-public-client',
+    liveAtriumConfiguration: 'bundled-public-client',
     telemetryEnabled: false,
   },
   schemaVersion: 1,

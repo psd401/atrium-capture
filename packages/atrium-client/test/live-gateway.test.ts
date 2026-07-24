@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { GatewayError } from '../src/index.js';
-import { ProductionAtriumGateway } from '../src/live-gateway.js';
+import {
+  ATRIUM_BROWSER_PRODUCTION_OAUTH_CLIENT_ID,
+  ProductionAtriumGateway,
+} from '../src/live-gateway.js';
 
 const OBJECT_ID = 'a1000000-0000-4000-8000-000000000001';
 const ASSET_ID = 'a2000000-0000-4000-8000-000000000001';
@@ -12,6 +15,10 @@ const DIGEST_HEX = '00'.repeat(32);
 const DIGEST_BASE64URL = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
 
 describe('production Atrium v1 gateway', () => {
+  it('ships the approved non-secret browser public client identifier', () => {
+    expect(ATRIUM_BROWSER_PRODUCTION_OAUTH_CLIENT_ID).toBe('ae781263-20c0-4b0c-8a34-8be01ab72fb1');
+  });
+
   it('uses documented private, immutable-asset, version, and publication contracts', async () => {
     const calls: Array<{ body?: unknown; headers: Headers; method: string; url: string }> = [];
     const gateway = new ProductionAtriumGateway({

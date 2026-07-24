@@ -22,6 +22,11 @@ import AppKit
 import ApplicationServices
 import CoreGraphics
 
+public enum MacPrivacySettingsPane: Sendable {
+    case accessibility
+    case screenRecording
+}
+
 public enum MacPermissionCenter {
     public static func snapshot() -> NativePermissionSnapshot {
         NativePermissionSnapshot(
@@ -39,6 +44,19 @@ public enum MacPermissionCenter {
     public static func requestAccessibilityPrompt() -> Bool {
         let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
         return AXIsProcessTrustedWithOptions(options)
+    }
+
+    public static func openSettings(_ pane: MacPrivacySettingsPane) {
+        let anchor = switch pane {
+        case .accessibility:
+            "Privacy_Accessibility"
+        case .screenRecording:
+            "Privacy_ScreenCapture"
+        }
+        guard let url = URL(
+            string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)"
+        ) else { return }
+        NSWorkspace.shared.open(url)
     }
 }
 

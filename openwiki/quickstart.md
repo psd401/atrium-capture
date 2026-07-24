@@ -15,8 +15,8 @@ private Atrium draft. It is an independent MIT-licensed implementation.
 
 Milestones M0 through M7 are locally complete. The Chrome extension and native
 macOS app build and pass their shared contract, recovery, privacy, publication,
-and image-golden tests. Live Atrium authentication and publication remain
-capability-gated until the required documented Atrium endpoints exist.
+and image-golden tests. Live Atrium authentication remains capability-gated on
+the named production HTTP redirect and first-party login fixes.
 
 ## Repository map
 

@@ -1,5 +1,6 @@
 import { browser } from 'wxt/browser';
 import {
+  ATRIUM_BROWSER_PRODUCTION_OAUTH_CLIENT_ID,
   ATRIUM_OAUTH_AUTHORIZATION_ENDPOINT,
   ATRIUM_OAUTH_REVOCATION_ENDPOINT,
   ATRIUM_OAUTH_SCOPES,
@@ -35,7 +36,9 @@ export default defineBackground(() => {
     new BrowserTrustedTokenStore(browser.storage.session),
     async () => {
       const snapshot = await managedPolicy.load();
-      const clientId = snapshot.valid ? snapshot.policy.atriumOAuthClientId : undefined;
+      const clientId = snapshot.valid
+        ? (snapshot.policy.atriumOAuthClientId ?? ATRIUM_BROWSER_PRODUCTION_OAUTH_CLIENT_ID)
+        : undefined;
       return clientId
         ? {
             authorizationEndpoint: ATRIUM_OAUTH_AUTHORIZATION_ENDPOINT,
@@ -51,7 +54,7 @@ export default defineBackground(() => {
     accessToken: () => auth.accessToken(),
     configured: async () => {
       const snapshot = await managedPolicy.load();
-      return Boolean(snapshot.valid && snapshot.policy.atriumOAuthClientId);
+      return snapshot.valid;
     },
   });
   const screenshotCapture = new SerializedScreenshotCapture((windowId) =>

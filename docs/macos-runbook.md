@@ -5,7 +5,7 @@
 - macOS 14 Sonoma or newer on Apple silicon or Intel.
 - Full Xcode/Command Line Tools with a matching Swift compiler and SDK.
 - Screen Recording for pixels and Accessibility for semantic events/global shortcuts.
-- A district signing identity, notarization credentials, MDM profile, and registered OAuth redirect only for external release or live Atrium use.
+- A district signing identity, notarization credentials, and MDM profile only for external release. The approved production OAuth public client is bundled.
 
 The repository has no third-party Swift dependency. Native code links only Apple system frameworks and repository MIT code.
 
@@ -26,9 +26,28 @@ scripts/build-macos-app.sh
 3. verifies a real AppKit floating pin and the production gateway's private/bodyless object, direct-upload header, version ETag, and internal-publication contract with synthetic responses;
 4. sends the shared bridge fixture to the native host and proves a payload containing `imageData` is rejected;
 5. validates `Info.plist`; and
-6. applies and verifies an ad-hoc local hardened-runtime signature unless `ATRIUM_CAPTURE_ADHOC_SIGN=0`.
+6. applies and verifies a stable signature when
+   `ATRIUM_CAPTURE_CODESIGN_IDENTITY` is supplied, otherwise an ad-hoc local
+   hardened-runtime signature unless `ATRIUM_CAPTURE_ADHOC_SIGN=0`.
 
 The local Command Line Tools installation may expose a default SDK whose Swift module version differs from its compiler. The build script selects the installed macOS 15.4 SDK when present. CI uses `macos-15` with full Xcode, runs XCTest, then assembles the app.
+
+An ad-hoc signature is suitable for build verification but not durable macOS
+privacy authorization: rebuilding changes its code identity. System Settings can
+therefore retain an older Atrium Capture entry while the new local binary still
+needs approval. For interactive acceptance, use a stable Apple Development or
+district identity:
+
+```sh
+ATRIUM_CAPTURE_CODESIGN_IDENTITY="Apple Development: Approved Developer" \
+  scripts/build-macos-app.sh
+open "dist/macos/Atrium Capture.app"
+```
+
+The usage description in `Info.plist` explains the request; it does not grant the
+permission. The app links directly to the Screen Recording and Accessibility
+privacy panes. After enabling either permission, quit and reopen Atrium Capture
+when macOS requests it.
 
 ## Local data and privacy boundary
 
@@ -60,7 +79,7 @@ The Accessibility adapter never reads an element value. A secure-text role is re
 
 Use synthetic names and empty test documents only:
 
-1. Launch the app and grant Screen Recording and Accessibility when prompted.
+1. Launch the signed app, choose **Grant capture access**, approve Screen Recording and Accessibility in System Settings, then reopen the app if prompted.
 2. Start a recording.
 3. In Finder, select a folder named `Atrium Synthetic Fixture`.
 4. In System Settings, select a non-sensitive navigation item; do not open accounts, passwords, profiles, or production configuration.
@@ -68,7 +87,7 @@ Use synthetic names and empty test documents only:
 6. Stop. Confirm three app identities, ordered generic actions, no typed literal, and no secure-field step.
 7. Edit an instruction, add a redaction/annotation, flatten, approve, and verify the session becomes `publishable` with only deleted or `publishable_local` assets.
 8. With `ATRIUM_CAPTURE_LOCAL_MOCK=1`, create a private draft, terminate after any injected phase in tests, retry, and confirm one object/asset/version. Do not use real district content.
-9. For authenticated acceptance only, register the public native callback `org.psd401.atrium-capture:/oauth/callback`, supply its public UUID through the `AtriumOAuthClientId` MDM preference, sign in, create one synthetic private draft, and exercise the separate internal-publication button.
+9. For authenticated acceptance, use the bundled public native client, sign in to AI Studio, create one synthetic private draft, and exercise the separate internal-publication button. Use the `AtriumOAuthClientId` MDM preference only to target a separately approved test client.
 
 The committed `capture-session-macos-v1.json` fixture provides the automated language-neutral equivalent and decodes in TypeScript and Swift.
 
@@ -99,9 +118,10 @@ The installer writes a user-specific Chrome manifest with the stable extension I
 
 ## Live integration and release gates
 
-Normal builds include the documented production gateway but fail closed until a public native client UUID is configured. MDM supplies:
+Normal builds include the documented production gateway and approved public
+native client UUID. Employees do not configure it. MDM may supply:
 
-- `AtriumOAuthClientId`: required public `native` client UUID.
+- `AtriumOAuthClientId`: optional approved test-client override.
 - `AtriumDefaultCollectionId`: optional documented collection UUID.
 
 For local synthetic testing, the equivalent public-only environment variables are `ATRIUM_CAPTURE_OAUTH_CLIENT_ID` and `ATRIUM_CAPTURE_DEFAULT_COLLECTION_ID`. Tokens remain in Keychain, are refreshed through the public-client rotation flow, and never enter native messaging or local diagnostics.

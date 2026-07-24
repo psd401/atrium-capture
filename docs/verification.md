@@ -5,22 +5,19 @@ This file records reproducible local evidence for milestone exit gates. A milest
 ## Production Atrium publishing update — locally complete (2026-07-24)
 
 - Audited current AI Studio `dev` commit `0dd5cbc`; its OIDC, content, collection, capture provenance, authored-asset, version, and publication contract is unchanged from the initial `264f718` audit. No AI Studio source or production asset was copied.
-- `pnpm smoke:atrium` verifies the deployed issuer, authorization/token/revocation endpoints, S256, required content scopes, and a structured fail-closed `401` from production collection discovery without sending a credential or capture. When both documented public client-ID environment variables are supplied, it also proves the registered browser and native clients accept the exact callbacks and all required OIDC/content scopes without completing sign-in or printing the IDs.
+- `pnpm smoke:atrium` verifies the deployed issuer, authorization/token/revocation endpoints, S256, required content scopes, and a structured fail-closed `401` from production collection discovery without sending a credential or capture. When both documented public client-ID environment variables are supplied, it also requires each exact callback/scope request to produce a real HTTP 3xx authorization redirect without completing sign-in or printing the IDs.
 
 ## Registered-client acceptance
 
 On 2026-07-24, production client registration succeeded for the exact browser
-and native callbacks, public PKCE, and the four required content scopes. The
-first live authorization attempt failed before sign-in with
-`invalid_scope` for `openid`; the credential-free registered-client smoke mode
-reproduced the same result for the browser profile. No user credential, token,
-or capture content was sent.
+and native callbacks, public PKCE, and all seven required OIDC/content scopes.
+The original `invalid_scope` failure was resolved by the production update.
 
-This is an external Atrium registration blocker: its administrator form must
-allow the standard `openid`, `profile`, and `offline_access` scopes (or add them
-to public authorization-code clients by documented policy), and the two
-registered clients must contain those scopes alongside the four content scopes.
-After Atrium applies that change, rerun:
+The next live attempt exposed a separate server response-adapter failure.
+Production `/api/oauth/auth` returns a `Location` header and textual
+“Redirecting…” body with HTTP 200 for both clients instead of returning a 3xx
+response. `ASWebAuthenticationSession` therefore displays the raw body instead
+of following it. The stricter check reproduces both failures:
 
 ```sh
 ATRIUM_CAPTURE_BROWSER_OAUTH_CLIENT_ID=<public-browser-uuid> \
@@ -28,15 +25,27 @@ ATRIUM_CAPTURE_MAC_OAUTH_CLIENT_ID=<public-native-uuid> \
 pnpm smoke:atrium
 ```
 
-The gate must report both registered profiles and `status: pass` before an
-interactive sign-in or production private-draft acceptance attempt continues.
+Both currently fail with
+`OAuth authorization returned HTTP 200 instead of a redirect`. No user
+credential, token, or capture content is sent. The Atrium server adapter must
+forward the actual Node response status (including 303) rather than retaining
+its initialized 200.
+
+Atrium's current custom interaction route would then display a second
+**Authorize Application** decision. That is also incorrect for these two
+district-owned first-party clients. Atrium must pre-grant only each registered
+client's administrator-approved scopes while preserving the normal login prompt.
+Employees should see only district login when no valid AI Studio session exists,
+then return automatically to Atrium Capture. Third-party clients must retain
+explicit consent. The gate must report both registered profiles and
+`status: pass` before an interactive private-draft acceptance attempt continues.
 
 - The TypeScript production gateway contract tests verify private bodyless creation, capture `sourceRef`, selectable collection filtering, deterministic ready/pending asset recovery, recovery after an ambiguous direct-S3 response, rejection of non-AWS upload hosts before image bytes are sent, direct S3 upload without an Atrium bearer header, canonical asset Markdown, `If-Match` preconditions, reader URL, and explicit intranet publication.
 - Browser OAuth tests verify the immutable `/atrium` callback, code exchange, trusted-only token persistence, one refresh across concurrent callers, refresh rotation, revocation, malformed-store rejection, and token rejection at the runtime-message boundary. Publication commands are serialized before remote I/O.
 - The Mac production gateway compiles under Swift 6 strict concurrency. Its on-host release verifier and macOS-only contract tests inject the same production-shaped sequence and exact header assertions; the portable Swift suite continues to cover durable phase recovery and shared fixtures. Native OAuth now includes the documented callback, strict stored-token validation, Keychain storage, refresh rotation, and revocation.
 - Browser startup recovery revisits durable terminal drafts to finish local raw-data deletion/session submission. The native publisher orders that cleanup before its terminal job commit and restores ready/complete jobs into the UI after restart without repeating remote writes. A native test keeps a synthetic raw sentinel under `delete_after_submit`, uploads exactly one derivative, deletes the sentinel after the draft commit, and persists `submitted`.
 - The only remaining production durability limitation is Atrium's non-idempotent asset-initiation route. A lost initiation response can leave an expired reservation row; clients fail safely and never upload raw bytes or invent a host. ADR 0006 contains reproducible evidence and the required server-side remedy.
-- Authenticated production acceptance is not locally executable until administrators create and distribute the browser and native public client UUIDs. This is deployment configuration, not a locally fixable code gap.
+- Authenticated production acceptance is blocked only by the named Atrium HTTP redirect and first-party interaction behavior above. The approved public client UUIDs are bundled; employees do not configure them.
 
 ## M0 — complete (2026-07-22)
 
@@ -79,11 +88,11 @@ Exit-gate conclusion: golden and lifecycle tests prove redacted source pixels an
 - Authorization tests prove S256 PKCE state/challenge handling, use the fixed Chrome Identity redirect, keep the verifier out of the authorization URL, validate token responses, and send no token through a runtime message. The original unavailable boundary has since been superseded by the production update above.
 - Publisher tests inject a connection loss after remote commit at private-object creation, each asset upload, version creation, and internal publication. Every retry ends with exactly one object, one copy of each asset, and one version; visibility stays private until the separate internal-publication action.
 - IndexedDB version 3 stores the durable outbox. A browser-service test closes the repository after a committed-but-unacknowledged object creation, opens a new repository instance, resumes the job, and obtains one private draft and reader link without selecting the retained raw sentinel.
-- The side panel provides a collection picker/managed-default indication, phase/error status, safe retry, reader link, and explicit internal-publication action. It now exposes trusted-context Atrium sign-in when a managed public client ID exists and otherwise displays the named registration blocker.
+- The side panel provides contextual next-step guidance, a collection picker/managed-default indication, phase/error status, safe retry, reader link, and explicit internal-publication action. It exposes **Sign in to AI Studio** from the trusted extension context using the bundled production public client ID; managed policy can only override it for approved testing.
 - `pnpm typecheck`, `pnpm contracts:check`, `pnpm messages:check`, package/unit tests, the localhost HTTP integration test, production WXT build, and extension-loaded Chromium workflow pass. Swift 6 decodes the new ready-draft fixture in the official container.
 - [ADR 0003](adr/0003-durable-atrium-publication.md) records persistence-before-I/O, idempotency, private-default, raw-asset exclusion, PKCE, and the no-invented-route decision.
 
-Exit-gate conclusion: every locally mockable publication phase recovers from a post-commit interruption without duplicate remote state and private is the default. The production routes are implemented; registered public client IDs and the non-idempotent asset-initiation interval are the remaining external gates.
+Exit-gate conclusion: every locally mockable publication phase recovers from a post-commit interruption without duplicate remote state and private is the default. The production routes and bundled clients are implemented; Atrium's response adapter/first-party interaction behavior and the non-idempotent asset-initiation interval are the remaining external gates.
 
 ## M4 — locally complete (2026-07-22)
 
@@ -95,11 +104,11 @@ Exit-gate conclusion: every locally mockable publication phase recovers from a p
 - [Managed policy](browser-managed-policy.md) and the [pilot/support/rollback runbook](browser-pilot-runbook.md) record bounds, deployment rings, permissions, privacy/security review, support handling, update behavior, and rollback. The engineering checklist is approved for synthetic/unpublished evaluation.
 - The complete local gate passes formatting, lint, strict typechecking, schema/message generation checks, unit/integration tests, production WXT build, extension-loaded Chromium acceptance, Swift fixture decode, license allowlist, and dependency audit.
 
-Exit-gate conclusion: every locally buildable pilot control, privacy review, support diagnostic, and rollback check passes. Authenticated production acceptance requires the registered public client ID and synthetic operator account rather than an implementation substitute.
+Exit-gate conclusion: every locally buildable pilot control, privacy review, support diagnostic, and rollback check passes. Authenticated production acceptance requires Atrium's redirect/first-party login fix and a synthetic operator account rather than an implementation substitute.
 
 ## M5 — locally complete (2026-07-22)
 
-- Browser package and manifest versions are `1.0.0`. `pnpm package:browser` builds the production MV3 ZIP, validates required runtime/schema files and the exact reviewed permission set, rejects source/test/fixture/map/environment/key material, and emits an artifact size/SHA-256 manifest with telemetry disabled, managed public-client Atrium configuration, and signing explicitly false.
+- Browser package and manifest versions are `1.0.0`. `pnpm package:browser` builds the production MV3 ZIP, validates required runtime/schema files and the exact reviewed permission set, rejects source/test/fixture/map/environment/key material, and emits an artifact size/SHA-256 manifest with telemetry disabled, bundled public-client Atrium configuration, and signing explicitly false.
 - Capture-core classifies merged events before screenshot work. A service test proves a duplicate click captures exactly one image, while the reducer hardening test produces 1,000 ordered unique steps at the managed default ceiling.
 - IndexedDB version 4 adds a bounded 100-entry operational health ring. Fixed event codes record worker lifecycle, capture/quota/screenshot health, message failures, and publication readiness/retry/attention without content. Diagnostics export only the latest timestamp/code/severity tuples and never transmits them.
 - The production extension test covers keyboard focus, a forced worker stop, multi-page capture, input/password omission, review/redaction, private live-capability gate, safe diagnostics download, permission rationale, and confirmed data deletion. The separate pixel golden remains byte-level.
@@ -116,11 +125,11 @@ Exit-gate conclusion: every locally buildable Browser v1 implementation, hardeni
 - Accessibility source inspection and tests enforce the value-free boundary: the adapter never asks for `kAXValueAttribute`; secure roles return no name and are rejected before ScreenCaptureKit. Rejected-event receipts survive restart, frames pass through an explicit serialized queue, and merged-event raw files are discarded rather than retained as unreferenced assets.
 - Native review uses the same generated crop/annotation/session types. Input and otherwise flagged screenshot steps cannot be flattened, approved, or enqueued without an opaque redaction; mosaic does not satisfy the gate. The Core Graphics release verifier injects a synthetic metadata marker, replaces target pixels with opaque black, preserves neighboring pixels, and proves `tEXt`/`iTXt`/`zTXt`/`eXIf`/`tIME` are absent.
 - The native durable publisher persists every phase, accepts only `publishable_local`, defaults to private draft, and recovers lost responses after object, asset, version, and internal-publish commits with exactly one remote result each.
-- Native OAuth implements S256 PKCE, `ASWebAuthenticationSession`, the documented HTTPS token/revocation endpoints, bounded Bearer response validation, refresh rotation, and off-main-thread SecItem Keychain access. Production UI is capability-gated on the public client UUID rather than absent routes.
+- Native OAuth implements S256 PKCE, `ASWebAuthenticationSession`, the documented HTTPS token/revocation endpoints, bounded Bearer response validation, refresh rotation, and off-main-thread SecItem Keychain access. The production public client UUID is bundled, and the UI guides employees from capture access through **Sign in to AI Studio** without exposing deployment configuration.
 - The optional Chrome bridge requests `nativeMessaging` from a user gesture. Browser tests prove it omits browser URLs, screenshots, typed values, and tokens; the packaged Swift host accepts the shared fixture and rejects nested `imageData`.
 - `scripts/build-macos-app.sh` produces and verifies an ad-hoc-signed `Atrium Capture.app` with the native helper embedded. It does not install the host, notarize, upload, or deploy.
 
-Exit-gate conclusion: synthetic Finder/Settings/Office semantics produce the same valid capture document model and private-default publish phases as the browser. Every local M6 build, recovery, privacy, fixture, and packaging gate passes. Live authentication requires the externally registered native public client.
+Exit-gate conclusion: synthetic Finder/Settings/Office semantics produce the same valid capture document model and private-default publish phases as the browser. Every local M6 build, recovery, privacy, fixture, and packaging gate passes. Live authentication requires the named external Atrium redirect/first-party interaction fix.
 
 ## M7 — locally complete (2026-07-22)
 
@@ -140,7 +149,7 @@ Exit-gate conclusion: native overlay behavior is implemented and automatically v
 - The extension side panel renders its 420-point-wide empty state without horizontal overflow. Visual inspection confirms the brand lockup, private-default message, recorder action, step card, diagnostics, permission rationale, and typed-value/password notice remain legible in the side-panel hierarchy.
 - Browser semantic tokens use evergreen primary actions, mint review/selection states, warm neutral canvas, white panels, amber warnings, and restrained destructive red. The small-text muted role measures 5.01:1 against white; evergreen primary actions measure 12.40:1 with white text.
 - The Mac app uses equivalent native SwiftUI color roles and reusable button, panel, brand, status-pill, and section-label components. Its recorder, quick capture, review, private-draft capability gate, pins, and step editor remain platform-native rather than reproducing the Atrium content-library layout.
-- The ad-hoc-signed Mac bundle was launched with `CFFIXED_USER_HOME` pointed at an empty synthetic temporary root. A target-window-only Core Graphics capture verified its 1080×720 empty workspace, private-default hierarchy, permission card, recorder controls, and no-step state without reading the real Application Support store or the rest of the desktop. Permission labels now render as user-facing “Granted,” “Denied,” or “Not determined” text rather than raw enum values.
+- The ad-hoc-signed Mac bundle was launched with `CFFIXED_USER_HOME` pointed at an empty synthetic temporary root. A target-window-only Core Graphics capture verified its 1080×720 empty workspace, private-default hierarchy, permission card, recorder controls, and no-step state without reading the real Application Support store or the rest of the desktop. The rebuilt UI now says “Approval needed,” explains that both macOS grants and an app reopen may be required, links directly to both privacy panes, shows contextual review guidance, and exposes **Sign in to AI Studio** using the bundled public client.
 - The original Mac app icon was generated without an input image, production asset, third-party logo, font, or trademark. Its transparent 1024×1024 master remains recognizable at the 16-point Retina representation; the derived `.icns` is declared by `CFBundleIconFile`, copied into the bundle, and covered by a fail-closed build check.
 - `pnpm check` passes formatting, OpenWiki normalization, lint, strict typechecking, generated contract/message freshness, five shared fixture validations, 80 TypeScript tests, production builds, the real extension worker/panel restart workflow, the irreversible redaction golden, extension packaging, 29 Swift tests, and the dependency-license allowlist.
 - `scripts/build-macos-app.sh` compiles the production SwiftUI workspace, runs the native redaction, production-gateway, pin, and bridge verifiers, validates the plist, produces the app bundle, and verifies its ad-hoc signature. `pnpm security:audit` reports no known vulnerabilities.
