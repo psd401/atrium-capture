@@ -48,9 +48,13 @@ Production status: the documented OAuth, collection, content, version, authored-
 
 Exit gate: pilot checklist, privacy review, rollback, and support diagnostics are approved.
 
-Dependency: exact-client browser token CORS plus idempotent/recoverable asset initiation before broad rollout.
+Dependency: operator-attended synthetic production draft acceptance plus
+idempotent/recoverable asset initiation before broad rollout.
 
-Local status: engineering-approved for synthetic/unpublished evaluation. Credential-free discovery/content-boundary and registered-client smokes pass. `pnpm smoke:atrium:browser-token` reproducibly returns `invalid_request_origin` from production without a credential or real code.
+Local status: engineering-approved for synthetic/unpublished evaluation.
+Credential-free discovery/registration, token, and real extension-worker
+content-route smokes pass. The browser-native fetch receiver regression is fixed
+and covered; final image/version acceptance requires the operator login.
 
 ## M5 — Browser v1
 
@@ -70,7 +74,13 @@ Local status: the `1.0.0` unsigned artifact passes automated production-Chromium
 
 Exit gate: a Finder/System Settings/Office workflow produces the same valid Atrium document model as a browser workflow.
 
-Production status: RFC 8252-style native redirects, production OAuth/refresh/revocation, Keychain storage, direct authored-asset upload, private drafts, and internal publication are implemented. The approved public native client UUID is bundled. District sign-in, registered callback, token exchange, Keychain persistence, connected UI state, and both native capture permissions are live verified on an Apple Development-signed build. Private-draft acceptance remains a synthetic operator check and is independent of the browser-extension CORS blocker.
+Production status: RFC 8252-style native redirects, production
+OAuth/refresh/revocation, Keychain storage, direct authored-asset upload,
+private drafts, and internal publication are implemented. The approved public
+native client UUID is bundled. District sign-in, registered callback, token
+exchange, Keychain persistence, connected UI state, and both native capture
+permissions are live verified on an Apple Development-signed build.
+Private-draft acceptance remains a synthetic operator check.
 
 ## M7 — Snipaste-style Mac tools
 

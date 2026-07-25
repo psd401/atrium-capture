@@ -23,6 +23,7 @@ import {
   createBrowserNativeBridgeAdapter,
   NativeBridgeService,
 } from '../src/native-bridge-service.js';
+import { publicationFailureResponse } from '../src/publication-guidance.js';
 import { BrowserPublicationService } from '../src/publication-service.js';
 import { RecorderService } from '../src/recorder-service.js';
 import { SerializedScreenshotCapture } from '../src/screenshot.js';
@@ -228,17 +229,29 @@ export default defineBackground(() => {
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_publish');
         }
-        return publication.enqueue(message.payload.collectionId);
+        try {
+          return await publication.enqueue(message.payload.collectionId);
+        } catch (error) {
+          return publicationFailureResponse(error);
+        }
       case 'publisher.retry':
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_publish');
         }
-        return publication.resume(message.payload.jobId);
+        try {
+          return await publication.resume(message.payload.jobId);
+        } catch (error) {
+          return publicationFailureResponse(error);
+        }
       case 'publisher.publish-internal':
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_publish');
         }
-        return publication.publishInternal(message.payload.jobId);
+        try {
+          return await publication.publishInternal(message.payload.jobId);
+        } catch (error) {
+          return publicationFailureResponse(error);
+        }
       case 'diagnostics.snapshot':
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_read_diagnostics');

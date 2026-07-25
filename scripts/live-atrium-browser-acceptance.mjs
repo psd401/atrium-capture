@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -14,10 +14,18 @@ const extensionPath = path.join(repositoryRoot, 'apps/browser-extension/.output/
 const fixturePath = path.join(repositoryRoot, 'packages/test-fixtures/site');
 const browserPath = process.env.ATRIUM_CAPTURE_ACCEPTANCE_BROWSER_PATH;
 const publishInternal = process.env.ATRIUM_CAPTURE_ACCEPTANCE_PUBLISH_INTERNAL === '1';
-const userDataDirectory = await mkdtemp(path.join(tmpdir(), 'atrium-capture-live-browser-'));
+const configuredUserDataDirectory = process.env.ATRIUM_CAPTURE_ACCEPTANCE_PROFILE_DIR;
+const userDataDirectory = configuredUserDataDirectory
+  ? path.resolve(configuredUserDataDirectory)
+  : await mkdtemp(path.join(tmpdir(), 'atrium-capture-live-browser-'));
+if (configuredUserDataDirectory) {
+  await mkdir(userDataDirectory, { mode: 0o700, recursive: true });
+}
 
 let context;
 let server;
+let acceptancePassed = false;
+const atriumNetworkFailures = [];
 
 try {
   if (browserPath) {
@@ -39,57 +47,77 @@ try {
     ],
     serviceWorkers: 'allow',
   });
+  context.on('requestfailed', (request) => {
+    const url = new URL(request.url());
+    if (url.origin !== 'https://aistudio.psd401.ai') {
+      return;
+    }
+    const errorText = request.failure()?.errorText ?? 'net::ERR_FAILED';
+    atriumNetworkFailures.push({
+      error: /^net::[A-Z0-9_]{1,100}$/.test(errorText) ? errorText : 'net::ERR_FAILED',
+      method: request.method(),
+      path: url.pathname.slice(0, 500),
+    });
+  });
 
   const panel = context.pages()[0] ?? (await context.newPage());
   await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
   await panel.setViewportSize({ height: 900, width: 420 });
   await extensionWorker(context);
 
-  const fixturePage = await context.newPage();
-  await fixturePage.goto(`${fixture.origin}/index.html`);
-  await fixturePage.bringToFront();
-  await panel.getByRole('button', { name: 'Start recording' }).click();
-  await expect.poll(async () => (await snapshot(panel))?.state).toBe('recording');
+  let publishable = await snapshot(panel);
+  if (publishable?.state !== 'publishable') {
+    const fixturePage = await context.newPage();
+    await fixturePage.goto(`${fixture.origin}/index.html`);
+    await fixturePage.bringToFront();
+    await panel.getByRole('button', { name: 'Start recording' }).click();
+    await expect.poll(async () => (await snapshot(panel))?.state).toBe('recording');
 
-  await fixturePage.locator('#begin-request').click();
-  await fixturePage.locator('#request-label').fill('SYNTHETIC_LITERAL_MUST_NOT_PERSIST');
-  await fixturePage.locator('#request-label').blur();
-  await fixturePage.locator('#fixture-password').fill('SYNTHETIC_PASSWORD_MUST_NOT_PERSIST');
-  await fixturePage.locator('#fixture-password').blur();
-  await fixturePage.locator('#destination').selectOption('south');
-  await fixturePage.locator('#submit-request').click();
-  await fixturePage.waitForURL(`${fixture.origin}/complete.html**`);
+    await fixturePage.locator('#begin-request').click();
+    await fixturePage.locator('#request-label').fill('SYNTHETIC_LITERAL_MUST_NOT_PERSIST');
+    await fixturePage.locator('#request-label').blur();
+    await fixturePage.locator('#fixture-password').fill('SYNTHETIC_PASSWORD_MUST_NOT_PERSIST');
+    await fixturePage.locator('#fixture-password').blur();
+    await fixturePage.locator('#destination').selectOption('south');
+    await fixturePage.locator('#submit-request').click();
+    await fixturePage.waitForURL(`${fixture.origin}/complete.html**`);
 
-  await expect
-    .poll(async () => (await snapshot(panel))?.steps.length ?? 0, { timeout: 30_000 })
-    .toBeGreaterThanOrEqual(5);
-  const recorded = await snapshot(panel);
-  const recordedJson = JSON.stringify(recorded);
-  assertAbsent(recordedJson, 'SYNTHETIC_LITERAL_MUST_NOT_PERSIST', 'ordinary typed value');
-  assertAbsent(recordedJson, 'SYNTHETIC_PASSWORD_MUST_NOT_PERSIST', 'password value');
+    await expect
+      .poll(async () => (await snapshot(panel))?.steps.length ?? 0, { timeout: 30_000 })
+      .toBeGreaterThanOrEqual(5);
+    const recorded = await snapshot(panel);
+    const recordedJson = JSON.stringify(recorded);
+    assertAbsent(recordedJson, 'SYNTHETIC_LITERAL_MUST_NOT_PERSIST', 'ordinary typed value');
+    assertAbsent(recordedJson, 'SYNTHETIC_PASSWORD_MUST_NOT_PERSIST', 'password value');
 
-  await panel.bringToFront();
-  await panel.getByRole('button', { name: 'Stop and review' }).click();
-  await expect(panel.getByText('Ready for review', { exact: true })).toBeVisible();
+    await panel.bringToFront();
+    await panel.getByRole('button', { name: 'Stop and review' }).click();
+    await expect(panel.getByText('Ready for review', { exact: true })).toBeVisible();
 
-  const flaggedSteps = panel.locator('.step-select').filter({ hasText: 'redaction required' });
-  for (let remaining = await flaggedSteps.count(); remaining > 0; remaining -= 1) {
-    await flaggedSteps.first().click();
-    await panel.getByRole('button', { name: 'Add suggested redaction' }).click();
-    const approveStep = panel.getByRole('button', { name: 'Approve this step' });
-    await expect(approveStep).toBeEnabled();
-    await approveStep.click();
-    await expect.poll(async () => flaggedSteps.count()).toBe(remaining - 1);
+    const flaggedSteps = panel.locator('.step-select').filter({ hasText: 'redaction required' });
+    for (let remaining = await flaggedSteps.count(); remaining > 0; remaining -= 1) {
+      await flaggedSteps.first().click();
+      await panel.getByRole('button', { name: 'Add suggested redaction' }).click();
+      const approveStep = panel.getByRole('button', { name: 'Approve this step' });
+      await expect(approveStep).toBeEnabled();
+      await approveStep.click();
+      await expect.poll(async () => flaggedSteps.count()).toBe(remaining - 1);
+    }
+    await panel.getByRole('button', { name: 'Approve all clear steps' }).click();
+    const prepare = panel.getByRole('button', { name: 'Prepare publishable images' });
+    await expect(prepare).toBeEnabled({ timeout: 30_000 });
+    await prepare.click();
+    await expect
+      .poll(async () => (await snapshot(panel))?.state, { timeout: 30_000 })
+      .toBe('publishable');
+    publishable = await snapshot(panel);
   }
-  await panel.getByRole('button', { name: 'Approve all clear steps' }).click();
-  const prepare = panel.getByRole('button', { name: 'Prepare publishable images' });
-  await expect(prepare).toBeEnabled({ timeout: 30_000 });
-  await prepare.click();
-  await expect
-    .poll(async () => (await snapshot(panel))?.state, { timeout: 30_000 })
-    .toBe('publishable');
-
-  const publishable = await snapshot(panel);
+  if (publishable?.title !== 'Atrium Capture synthetic fixture') {
+    throw new Error('retained_profile_not_synthetic');
+  }
+  const publishableJson = JSON.stringify(publishable);
+  assertAbsent(publishableJson, 'SYNTHETIC_LITERAL_MUST_NOT_PERSIST', 'ordinary typed value');
+  assertAbsent(publishableJson, 'SYNTHETIC_PASSWORD_MUST_NOT_PERSIST', 'password value');
   if (publishable?.assets.some((asset) => asset.state === 'raw_local')) {
     throw new Error('raw_asset_remained_after_flatten');
   }
@@ -115,9 +143,45 @@ try {
   ]);
 
   await panel.getByRole('button', { name: 'Save private Atrium draft' }).click();
-  await expect(panel.getByText('Private draft ready', { exact: true })).toBeVisible({
-    timeout: 2 * 60_000,
-  });
+  const privateDraftReady = panel.getByText('Private draft ready', { exact: true });
+  const failedPublication = panel.locator('p.error[role="alert"]');
+  const failedPublishJob = panel.locator('.publish-status p.error');
+  await Promise.race([
+    privateDraftReady.waitFor({ state: 'visible', timeout: 2 * 60_000 }),
+    failedPublication.waitFor({ state: 'visible', timeout: 2 * 60_000 }).then(async () => {
+      const message = (await failedPublication.textContent()) ?? '';
+      const supportCode =
+        message.match(/Support code: (PUBLISH-[A-Z0-9-]{1,120})/)?.[1] ?? 'PUBLISH-FAILED';
+      const requestId = message.match(/Request ID: ([A-Za-z0-9._:-]{1,200})/)?.[1];
+      return Promise.reject(
+        new Error(
+          `browser_private_draft_failed:${supportCode}${
+            requestId ? `:request_id=${requestId}` : ''
+          }${formatNetworkFailures(atriumNetworkFailures)}`,
+        ),
+      );
+    }),
+    failedPublishJob.waitFor({ state: 'visible', timeout: 2 * 60_000 }).then(async () => {
+      const snapshot = await publisherSnapshot(panel);
+      const code =
+        typeof snapshot?.job?.lastError?.code === 'string' &&
+        /^[a-z0-9_]{1,100}$/.test(snapshot.job.lastError.code)
+          ? snapshot.job.lastError.code
+          : 'publication_failed';
+      const requestId =
+        typeof snapshot?.job?.lastError?.requestId === 'string' &&
+        /^[A-Za-z0-9._:-]{1,200}$/.test(snapshot.job.lastError.requestId)
+          ? snapshot.job.lastError.requestId
+          : undefined;
+      return Promise.reject(
+        new Error(
+          `browser_private_draft_job_failed:${code}${
+            requestId ? `:request_id=${requestId}` : ''
+          }${formatNetworkFailures(atriumNetworkFailures)}`,
+        ),
+      );
+    }),
+  ]);
   await expect(panel.getByRole('link', { name: 'Open Atrium reader' })).toBeVisible();
 
   let publication = 'private_draft';
@@ -139,10 +203,13 @@ try {
       status: 'pass',
     }),
   );
+  acceptancePassed = true;
 } finally {
   await context?.close();
   await closeServer(server);
-  await rm(userDataDirectory, { force: true, recursive: true });
+  if (!configuredUserDataDirectory || acceptancePassed) {
+    await rm(userDataDirectory, { force: true, recursive: true });
+  }
 }
 
 async function startFixtureServer() {
@@ -200,8 +267,34 @@ async function snapshot(page) {
   );
 }
 
+async function publisherSnapshot(page) {
+  return page.evaluate(
+    async () =>
+      new Promise((resolve, reject) => {
+        const chromeRuntime = globalThis.chrome.runtime;
+        chromeRuntime.sendMessage({ kind: 'publisher.snapshot' }, (response) => {
+          if (chromeRuntime.lastError) {
+            reject(new Error(chromeRuntime.lastError.message ?? 'runtime_message_failed'));
+          } else {
+            resolve(response);
+          }
+        });
+      }),
+  );
+}
+
 function assertAbsent(value, forbidden, label) {
   if (value.includes(forbidden)) {
     throw new Error(`${label.replaceAll(' ', '_')}_persisted`);
   }
+}
+
+function formatNetworkFailures(failures) {
+  if (failures.length === 0) {
+    return '';
+  }
+  return `:network=${failures
+    .slice(-5)
+    .map(({ error, method, path: requestPath }) => `${method}_${requestPath}_${error}`)
+    .join(',')}`;
 }

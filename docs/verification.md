@@ -2,11 +2,12 @@
 
 This file records reproducible local evidence for milestone exit gates. A milestone is listed as complete only after its stated gate passes; planned CI or source inspection alone is not counted as runtime evidence.
 
-## Production Atrium publishing update — locally complete, external browser token blocker (2026-07-24)
+## Production Atrium publishing update — browser boundaries pass; final operator draft pending (2026-07-24)
 
 - Audited current AI Studio `dev` merge `d4d6fb87`; its OIDC, content, collection, capture provenance, authored-asset, version, and publication contracts remain behind the same gateway boundary. No AI Studio source or production asset was copied.
 - `pnpm smoke:atrium` verifies the deployed issuer, authorization/token/revocation endpoints, S256, required content scopes, both bundled public-client registrations, and a structured fail-closed `401` from production collection discovery without sending a credential or capture. Each exact callback/scope request must produce a real HTTP 3xx authorization redirect without completing sign-in or printing the IDs. The two documented environment variables override both bundled IDs together only for separately approved test clients.
-- `pnpm smoke:atrium:browser-token` sends an intentionally invalid synthetic code with the exact stable extension origin. Production currently returns bounded evidence `invalid_request_origin` instead of reaching code validation and returning `invalid_grant`. No authorization, credential, capture, or token is involved.
+- `pnpm smoke:atrium:browser-token` sends an intentionally invalid synthetic code with the exact stable extension origin. Production reaches code validation and returns `invalid_grant`. No authorization, credential, capture, or token is involved.
+- `pnpm smoke:atrium:browser-content` loads the production build in Chromium and proves all eight gateway routes are reachable from the real extension worker with a synthetic invalid token. Each returns the bounded `401 INVALID_TOKEN` envelope.
 - The production native app completed district login, returned through `org.psd401.atrium-capture:/oauth/callback`, exchanged the code, persisted the token set in Keychain, displayed `Atrium Signed In` / `Connected to Atrium`, and remained running. The first callback exposed a Swift actor-isolation trap because AuthenticationServices completed on Safari's XPC queue; the callback bridge is now nonisolated and a background-queue regression test passes.
 
 ## Registered-client acceptance
@@ -60,23 +61,24 @@ Employees never configure a client ID, secret, callback, scope, or consent
 decision. The operator-attended private-draft acceptance records the remaining
 runtime evidence for that interaction without weakening third-party consent.
 
-The 2026-07-24 live extension run reached the callback and received an
-authorization code, then failed closed at token exchange with
-`OAUTH-INVALID-REQUEST`. A synthetic no-login probe isolated the reason:
-Atrium rejects the exact
-`chrome-extension://jldnpmcpimhabiphcglkbgmbffpoocpo` request origin before
-authorization-code validation. The extension stored no token, created no draft,
-and uploaded no bytes. The client now includes Atrium's issuer as the RFC 8707
-resource indicator on both browser and Mac authorization requests; TypeScript
-and Swift tests cover that configuration, but it does not replace the required
-server CORS decision.
+The 2026-07-24 live extension run completed district login, callback, and token
+exchange. Its first private-draft attempt exposed a browser-only client defect:
+`ProductionAtriumGateway` invoked stored native `fetch` with the gateway as its
+receiver, which Chrome rejects before network I/O. A real extension-worker probe
+reproduced direct-fetch success and method-bound failure; the gateway now uses a
+receiver-neutral wrapper and a regression test requires that calling convention.
+API/S3 deadlines and durable phase/request diagnostics prevent another
+indefinite or opaque acceptance failure.
 
 - The TypeScript production gateway contract tests verify private bodyless creation, capture `sourceRef`, selectable collection filtering, deterministic ready/pending asset recovery, recovery after an ambiguous direct-S3 response, rejection of non-AWS upload hosts before image bytes are sent, direct S3 upload without an Atrium bearer header, canonical asset Markdown, `If-Match` preconditions, reader URL, and explicit intranet publication.
 - Browser OAuth tests verify the immutable `/atrium` callback, code exchange, trusted-only token persistence, one refresh across concurrent callers, refresh rotation, revocation, malformed-store rejection, and token rejection at the runtime-message boundary. Publication commands are serialized before remote I/O.
 - The Mac production gateway compiles under Swift 6 strict concurrency. Its on-host release verifier and macOS-only contract tests inject the same production-shaped sequence and exact header assertions; the portable Swift suite continues to cover durable phase recovery and shared fixtures. Native OAuth now includes the documented callback, strict stored-token validation, Keychain storage, refresh rotation, revocation, and a nonisolated AuthenticationServices completion bridge.
 - Browser startup recovery revisits durable terminal drafts to finish local raw-data deletion/session submission. The native publisher orders that cleanup before its terminal job commit and restores ready/complete jobs into the UI after restart without repeating remote writes. A native test keeps a synthetic raw sentinel under `delete_after_submit`, uploads exactly one derivative, deletes the sentinel after the draft commit, and persists `submitted`.
 - The only remaining production durability limitation is Atrium's non-idempotent asset-initiation route. A lost initiation response can leave an expired reservation row; clients fail safely and never upload raw bytes or invent a host. ADR 0006 contains reproducible evidence and the required server-side remedy.
-- Browser authenticated production acceptance is blocked only by Atrium's exact-client token CORS policy. The approved public UUID is bundled, the strict authorization preflight passes, employees configure nothing, and the separate synthetic token-boundary probe reproduces the external failure.
+- Browser authenticated production acceptance now has passing registration,
+  token, and extension-worker content-route boundaries. The remaining evidence
+  is one operator-attended synthetic private draft through asset and version
+  completion; employees configure nothing.
 
 ## M0 — complete (2026-07-22)
 
@@ -123,7 +125,11 @@ Exit-gate conclusion: golden and lifecycle tests prove redacted source pixels an
 - `pnpm typecheck`, `pnpm contracts:check`, `pnpm messages:check`, package/unit tests, the localhost HTTP integration test, production WXT build, and extension-loaded Chromium workflow pass. Swift 6 decodes the new ready-draft fixture in the official container.
 - [ADR 0003](adr/0003-durable-atrium-publication.md) records persistence-before-I/O, idempotency, private-default, raw-asset exclusion, PKCE, and the no-invented-route decision.
 
-Exit-gate conclusion: every locally mockable publication phase recovers from a post-commit interruption without duplicate remote state and private is the default. The production routes, redirects, first-party login, and bundled clients are implemented; Atrium's exact browser-origin token CORS decision and the non-idempotent asset-initiation interval are the remaining external gates.
+Exit-gate conclusion: every locally mockable publication phase recovers from a
+post-commit interruption without duplicate remote state and private is the
+default. Production registration, token exchange, first-party login, and real
+extension-worker route access pass; final operator draft acceptance and the
+non-idempotent asset-initiation interval remain.
 
 ## M4 — locally complete (2026-07-22)
 
@@ -135,7 +141,10 @@ Exit-gate conclusion: every locally mockable publication phase recovers from a p
 - [Managed policy](browser-managed-policy.md) and the [pilot/support/rollback runbook](browser-pilot-runbook.md) record bounds, deployment rings, permissions, privacy/security review, support handling, update behavior, and rollback. The engineering checklist is approved for synthetic/unpublished evaluation.
 - The complete local gate passes formatting, lint, strict typechecking, schema/message generation checks, unit/integration tests, production WXT build, extension-loaded Chromium acceptance, Swift fixture decode, license allowlist, and dependency audit.
 
-Exit-gate conclusion: every locally buildable pilot control, privacy review, support diagnostic, and rollback check passes. Authenticated browser production acceptance is blocked only by Atrium rejecting the exact stable extension origin at the token endpoint.
+Exit-gate conclusion: every locally buildable pilot control, privacy review,
+support diagnostic, and rollback check passes. Browser authorization, token
+exchange, and worker route access pass; final authenticated image/version
+acceptance is operator-attended.
 
 ## M5 — locally complete (2026-07-22)
 
@@ -161,7 +170,12 @@ Exit-gate conclusion: every locally buildable Browser v1 implementation, hardeni
 - The optional Chrome bridge requests `nativeMessaging` from a user gesture. Browser tests prove it omits browser URLs, screenshots, typed values, and tokens; the packaged Swift host accepts the shared fixture and rejects nested `imageData`.
 - `scripts/build-macos-app.sh` produces and verifies an ad-hoc-signed `Atrium Capture.app` with the native helper embedded. It does not install the host, notarize, upload, or deploy.
 
-Exit-gate conclusion: synthetic Finder/Settings/Office semantics produce the same valid capture document model and private-default publish phases as the browser. Every local M6 build, recovery, privacy, fixture, and packaging gate passes; native production authentication and both capture permissions are live verified on an Apple Development-signed build. Private-draft acceptance remains separate from the browser-origin CORS blocker.
+Exit-gate conclusion: synthetic Finder/System Settings/Office semantics produce
+the same valid capture document model and private-default publish phases as the
+browser. Every local M6 build, recovery, privacy, fixture, and packaging gate
+passes; native production authentication and both capture permissions are live
+verified on an Apple Development-signed build. Private-draft acceptance remains
+an operator check.
 
 ## M7 — locally complete (2026-07-22)
 

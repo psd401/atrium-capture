@@ -17,7 +17,10 @@ Checklist:
 - [x] Local deletion removes sessions, images, receipts, commands, and outbox jobs after explicit confirmation.
 - [x] Extension-loaded Chromium verifies keyboard focus, recording/restart recovery, review, redaction golden, capability gate, diagnostics download, and permission rationale.
 - [x] Rollback and staged update procedures are documented below.
-- [ ] Authenticated production-Atrium private draft with synthetic content. Authorization and district login succeed, but production currently rejects the exact extension origin at token exchange; `pnpm smoke:atrium:browser-token` reproduces the external blocker without credentials.
+- [ ] Authenticated production-Atrium private draft with synthetic content.
+      Authorization, district login, token exchange, and real extension-worker
+      access to all content routes pass; final image/version acceptance is
+      operator-attended.
 
 ## Pilot installation
 
@@ -29,10 +32,11 @@ Checklist:
 6. During review, rename the guide in the side-panel header and verify the new title survives a service-worker restart. Rename it again after a private draft is ready and confirm Atrium receives the new title. The outbox preserves the original create title for ambiguous retries and reconciles the latest title through the documented metadata update.
 7. Choose **New guide** while an older durable outbox job exists. Confirm the older guide remains in **Saved guides**, background recovery does not replace the active guide, and either guide can be reopened after a service-worker restart.
 
-Before asking an operator to sign in, run `pnpm smoke:atrium` and
-`pnpm smoke:atrium:browser-token`. Do not repeat operator login while the second
-command reports `invalid_request_origin`; Atrium must permit the exact stable
-extension origin for the exact browser client first.
+Before asking an operator to sign in, run `pnpm smoke:atrium`,
+`pnpm smoke:atrium:browser-token`, and
+`pnpm smoke:atrium:browser-content`. Do not repeat operator login while any
+credential-free gate fails. The third command executes every content route from
+the built extension worker and catches browser-only gateway/network defects.
 
 ## Permission rationale
 
@@ -51,7 +55,7 @@ No permission reads cookies, browsing history, page storage, network traffic, pa
 3. Check policy validity, extension version/ID, local image bytes, capture state, outbox phase, retryability code, and capability flags.
 4. If policy is invalid, compare only key names/types with the managed policy document; never request screenshots or a user's recorded guide.
 5. For a retryable outbox interruption, use Retry safely. Stable idempotency keys prevent duplicate remote state.
-6. If live sign-in is unavailable, verify the bundled public client remains active and that the production authorization endpoint returns an actual HTTP redirect. Run the synthetic token-boundary probe; `invalid_request_origin` requires an Atrium server fix, not another employee login, a client UUID, or a substitute host/route.
+6. If live sign-in is unavailable, verify the bundled public client remains active and that the production authorization endpoint returns an actual HTTP redirect. Run both browser boundary probes before repeating employee login; never substitute a client UUID, proxy, or private host.
 7. If an asset retry remains blocked behind an expired reservation, record only the fixed error/request ID and follow the limitation in ADR 0006; never collect the image or upload it elsewhere.
 
 ## Rollback

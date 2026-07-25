@@ -48,10 +48,11 @@ HTTPS `chromiumapp.org` callback as its request origin and cannot suppress
 Chrome's `Origin` header. Atrium must therefore allow that exact origin only for
 the exact browser client. Wildcard CORS, a client-side proxy, a confidential
 secret, or an alternate screenshot host would weaken the reviewed boundary and
-are rejected. `pnpm smoke:atrium:browser-token` proves the current external
-failure without authorization or credentials: production returns
-`invalid_request_origin` instead of reaching synthetic code validation and
-returning `invalid_grant`. The Mac `URLSession` exchange is not a browser CORS
-request.
+are rejected. `pnpm smoke:atrium:browser-token` now proves production reaches
+synthetic code validation and returns `invalid_grant` without authorization or
+credentials. `pnpm smoke:atrium:browser-content` separately executes every
+documented content route from the built extension worker; this is required
+because a Node fetch cannot reproduce Chrome's native-function receiver rules.
+The Mac `URLSession` exchange is not a browser CORS request.
 
 One server-side durability gap remains: if the process dies after Atrium commits asset initiation but before the client receives and durably records the one-time presigned URL, the client cannot upload to that reservation. While it is unexpired, a deterministic retry fails safely rather than creating another row; after expiry, a retry may create a replacement reservation and leave the expired row for server lifecycle cleanup. Strict no-duplicate-asset-row recovery for that exact interval requires Atrium to make initiation idempotent or return a replacement upload request for a deterministic reservation. The client does not work around this with a private host, guessed route, or unredacted upload.

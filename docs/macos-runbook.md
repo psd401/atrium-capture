@@ -169,4 +169,12 @@ native client UUID. Employees do not configure it. MDM may supply:
 
 For local synthetic testing, the equivalent public-only environment variables are `ATRIUM_CAPTURE_OAUTH_CLIENT_ID` and `ATRIUM_CAPTURE_DEFAULT_COLLECTION_ID`. Tokens remain in Keychain, are refreshed through the public-client rotation flow, and never enter native messaging or local diagnostics.
 
-Run `pnpm smoke:atrium` before authenticated acceptance. The Mac token request is a native `URLSession` request and does not depend on the separate browser-extension CORS allowlist. District sign-in and callback/token persistence are live verified on an ad-hoc build; private-draft acceptance still requires the capture permissions above and should be repeated on the stably signed pilot build. The remaining browser token and asset-initiation limitations are described in ADR 0006. District signing, notarization, MDM packaging, host installation, OAuth registration, and deployment require explicit authorization and credentials/configuration outside this repository.
+Run `pnpm smoke:atrium` before authenticated acceptance. The Mac token request
+is a native `URLSession` request; browser token and extension-worker content
+boundaries have their own credential-free probes. District sign-in and
+callback/token persistence are live verified on an Apple Development-signed
+build; private-draft acceptance still requires the capture permissions above
+and should be repeated on the stably signed pilot build. The remaining
+asset-initiation limitation is described in ADR 0006. District notarization,
+MDM packaging, host installation, OAuth registration, and deployment require
+explicit authorization and credentials/configuration outside this repository.

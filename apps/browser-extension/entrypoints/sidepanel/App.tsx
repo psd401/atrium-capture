@@ -19,6 +19,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } 
 import { browser } from 'wxt/browser';
 
 import { authenticationFailureMessage } from '../../src/authentication-guidance.js';
+import {
+  parsePublicationFailureResponse,
+  publicationFailureMessage,
+} from '../../src/publication-guidance.js';
 import { arrowEndpoints, directionForArrow } from '../../src/arrow-geometry.js';
 import type { PublicationSnapshot } from '../../src/publication-service.js';
 import type { SupportDiagnostics } from '../../src/diagnostics-service.js';
@@ -285,8 +289,13 @@ export function App() {
       if (kind !== 'publisher.enqueue' && !payload.jobId) {
         throw new Error('publish_job_missing');
       }
-      const job = await browser.runtime.sendMessage({ kind, payload });
-      if (!job) {
+      const result = await browser.runtime.sendMessage({ kind, payload });
+      const failure = parsePublicationFailureResponse(result);
+      if (failure) {
+        setError(publicationFailureMessage(failure.errorCode, failure.requestId));
+        return;
+      }
+      if (!result) {
         throw new Error('publisher_command_failed');
       }
       await refresh();

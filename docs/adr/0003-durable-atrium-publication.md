@@ -23,4 +23,4 @@ At the time of this decision, the audited Atrium surface did not provide the com
 
 ## Consequences
 
-The same durable phase model backs IndexedDB and the native filesystem store. Failure-after-commit injection proves duplicate prevention without production credentials. Production integration details, the exact browser-origin CORS dependency, and the remaining asset-reservation limitation are recorded in ADR 0006 rather than weakening this outbox.
+The same durable phase model backs IndexedDB and the native filesystem store. Failure-after-commit injection proves duplicate prevention without production credentials. Production integration details, the exact browser-origin policy, real extension-worker smoke, and the remaining asset-reservation limitation are recorded in ADR 0006 rather than weakening this outbox.

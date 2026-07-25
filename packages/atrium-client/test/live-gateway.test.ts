@@ -360,6 +360,35 @@ describe('production Atrium v1 gateway', () => {
     });
     await expect(malformed.listCollections()).rejects.toBeInstanceOf(GatewayError);
   });
+
+  it('maps API transport failures to a bounded retryable error', async () => {
+    const gateway = new ProductionAtriumGateway({
+      accessToken: async () => 'synthetic-token',
+      request: async () => {
+        throw new TypeError('synthetic transport detail must not cross');
+      },
+    });
+
+    await expect(gateway.listCollections()).rejects.toMatchObject({
+      code: 'atrium_network_failed',
+      message: 'atrium_network_failed',
+      retryable: true,
+    });
+  });
+
+  it('invokes the request function without binding it to the gateway instance', async () => {
+    const gateway = new ProductionAtriumGateway({
+      accessToken: async () => 'synthetic-token',
+      request: async function (this: unknown) {
+        if (this !== undefined) {
+          throw new TypeError('synthetic illegal invocation');
+        }
+        return json({ data: [] });
+      },
+    });
+
+    await expect(gateway.listCollections()).resolves.toEqual([]);
+  });
 });
 
 function asset(state: 'pending' | 'ready', uploadExpiresAt = '2026-07-24T20:15:00.000Z') {

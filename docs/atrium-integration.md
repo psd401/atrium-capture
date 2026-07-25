@@ -68,24 +68,24 @@ settings, or an additional consent decision. Atrium must still validate the exac
 registered redirect, S256 PKCE challenge, and pre-approved scope allowlist. Login
 may be skipped only when a valid AI Studio session already exists.
 
-### Current production acceptance blocker
+### Current production acceptance status
 
 As of 2026-07-24, production accepts both exact redirects and all seven scopes,
-returns real authorization redirects, performs district login, and skips consent
-only for the two explicitly trusted first-party records. Browser authorization
-therefore reaches the registered `chromiumapp.org` callback and yields a code.
+returns real authorization redirects, performs district login, skips consent
+only for the two explicitly trusted first-party records, and accepts token
+exchange from the exact stable extension origin. Browser sign-in reaches the
+registered callback, exchanges the code, and reports `Connected to Atrium`.
 
-The browser's subsequent token POST originates from
-`chrome-extension://jldnpmcpimhabiphcglkbgmbffpoocpo`. Atrium's current
-client-based CORS rule compares that origin with the HTTPS callback origin,
-rejects it as `invalid_request`, and omits `Access-Control-Allow-Origin`. The
-extension correctly stores no token and uploads nothing.
-
-Atrium must permit only that exact stable extension origin for only the exact
-registered browser-extension client at the token endpoint. It must not add a
-wildcard, infer trust from a name or redirect shape, relax PKCE, or proxy token
-exchange through another host. Native `URLSession` token exchange does not
-depend on this browser CORS allowance.
+The first authenticated private-draft attempt exposed a client-only Chrome
+runtime defect: the production gateway stored native `fetch` as an object
+property and invoked it with the gateway as its receiver. Chrome rejects that
+illegal invocation before network I/O, while Node's injected contract transport
+does not. The gateway now calls a receiver-neutral wrapper, the regression test
+requires an unbound transport call, and
+`pnpm smoke:atrium:browser-content` proves the built extension worker reaches
+all eight documented content routes. API requests have a 30-second deadline and
+direct asset uploads have a 120-second deadline so a durable outbox phase cannot
+wait indefinitely.
 
 The production native flow has completed district login, returned through the
 registered callback, exchanged the code, stored the token set in Keychain, and
@@ -153,10 +153,26 @@ pnpm smoke:atrium:browser-token
 
 It submits a deliberately invalid synthetic code with the exact extension
 origin. A correct boundary reaches code validation and returns `invalid_grant`;
-the current production result is the bounded
-`invalid_request_origin` blocker. The script never requests authorization,
-receives a token, or prints the server's raw description.
+production now passes. The script never requests authorization, receives a
+token, or prints the server's raw description.
+
+Probe the actual built service worker without credentials:
+
+```sh
+pnpm smoke:atrium:browser-content
+```
+
+It exercises collection discovery, object creation, title update, asset
+recovery/initiation/completion, version creation, and internal publication with
+a synthetic invalid token. Each must reach Atrium and fail closed as
+`401 INVALID_TOKEN`.
 
 Unit/contract tests inject synthetic production-shaped responses and assert private/bodyless creation, source provenance, direct-upload headers, no S3 authorization header, canonical asset Markdown, ETag preconditions, refresh rotation, and deterministic asset recovery. The versioned `/_mock/atrium-capture/v1` server remains available for offline end-to-end outbox tests and never claims to be a production route.
 
-Authenticated acceptance requires the two registered public client UUIDs and a district test account. Native sign-in is verified. On 2026-07-24, the first native private-draft attempt reached production and made its bodyless title visible, but `POST /api/v1/content` returned retryable `INTERNAL_ERROR` before the client received the object ID. The outbox therefore remained at `creating_object`; no asset or version request ran and no screenshot bytes were uploaded. Production must reconcile an ambiguous committed create by the same idempotency key/source reference and replay the original `201` response before native publication can pass. Extension sign-in remains blocked independently at the separately probed token CORS boundary. Use only the repository's synthetic fixture and delete resulting private drafts after review according to district policy.
+Authenticated acceptance requires the two registered public client UUIDs and a
+district test account. Native sign-in and browser sign-in are verified. The
+browser runner uses only the committed synthetic fixture, reports bounded
+outbox/network diagnostics, and can retain an isolated profile after a failure
+when `ATRIUM_CAPTURE_ACCEPTANCE_PROFILE_DIR` is explicitly set. Final
+private-draft/image/version acceptance remains operator-attended; delete
+resulting synthetic private drafts after review according to district policy.

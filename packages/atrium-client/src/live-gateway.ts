@@ -10,6 +10,8 @@ import type {
 import { GatewayError } from './index.js';
 
 const MAX_JSON_RESPONSE_BYTES = 1_000_000;
+const API_REQUEST_TIMEOUT_MS = 30_000;
+const ASSET_UPLOAD_TIMEOUT_MS = 120_000;
 const API_PATH = '/api/v1';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -87,7 +89,8 @@ export class ProductionAtriumGateway implements AtriumGateway {
     }
     this.origin = origin.origin;
     this.apiBaseUrl = `${origin.origin}${API_PATH}`;
-    this.request = options.request ?? fetch;
+    const request = options.request ?? fetch;
+    this.request = (input, init) => request(input, init);
   }
 
   async capabilities(): Promise<AtriumCapabilities> {
@@ -282,6 +285,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
         body: await request.bytes.arrayBuffer(),
         headers: initiated.upload.headers,
         method: 'PUT',
+        signal: AbortSignal.timeout(ASSET_UPLOAD_TIMEOUT_MS),
       });
       if (!uploadResponse.ok) {
         uploadError = new GatewayError(
@@ -352,13 +356,19 @@ export class ProductionAtriumGateway implements AtriumGateway {
 
   private async getApiJson(path: string): Promise<unknown> {
     const token = await this.requireAccessToken();
-    const response = await this.request(`${this.apiBaseUrl}${path}`, {
-      headers: {
-        accept: 'application/json',
-        authorization: `Bearer ${token}`,
-        'cache-control': 'no-store',
-      },
-    });
+    let response: Response;
+    try {
+      response = await this.request(`${this.apiBaseUrl}${path}`, {
+        headers: {
+          accept: 'application/json',
+          authorization: `Bearer ${token}`,
+          'cache-control': 'no-store',
+        },
+        signal: AbortSignal.timeout(API_REQUEST_TIMEOUT_MS),
+      });
+    } catch {
+      throw new GatewayError('atrium_network_failed', true);
+    }
     return parseApiResponse(response);
   }
 
@@ -426,17 +436,23 @@ export class ProductionAtriumGateway implements AtriumGateway {
     method: 'PATCH' | 'POST' = 'POST',
   ): Promise<unknown> {
     const token = await this.requireAccessToken();
-    const response = await this.request(`${this.apiBaseUrl}${path}`, {
-      body: JSON.stringify(body),
-      headers: {
-        accept: 'application/json',
-        authorization: `Bearer ${token}`,
-        'cache-control': 'no-store',
-        'content-type': 'application/json',
-        ...extraHeaders,
-      },
-      method,
-    });
+    let response: Response;
+    try {
+      response = await this.request(`${this.apiBaseUrl}${path}`, {
+        body: JSON.stringify(body),
+        headers: {
+          accept: 'application/json',
+          authorization: `Bearer ${token}`,
+          'cache-control': 'no-store',
+          'content-type': 'application/json',
+          ...extraHeaders,
+        },
+        method,
+        signal: AbortSignal.timeout(API_REQUEST_TIMEOUT_MS),
+      });
+    } catch {
+      throw new GatewayError('atrium_network_failed', true);
+    }
     return parseApiResponse(response);
   }
 }

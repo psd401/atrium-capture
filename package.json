@@ -38,6 +38,7 @@
     "package:browser": "pnpm --filter @atrium-capture/browser-extension zip && node scripts/verify-browser-package.mjs",
     "security:audit": "pnpm audit --audit-level high",
     "smoke:atrium": "node scripts/verify-atrium-production-boundary.mjs",
+    "smoke:atrium:browser-content": "node scripts/verify-atrium-browser-content-boundary.mjs",
     "smoke:atrium:browser-token": "node scripts/verify-atrium-browser-token-boundary.mjs",
     "swift:test": "scripts/test-swift.sh",
     "test": "vitest run",
