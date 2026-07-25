@@ -1,9 +1,12 @@
 # Milestones
 
-Verification evidence is recorded in [verification.md](verification.md). M0
-through M7 are locally complete. Production private-draft publishing is accepted
-from both clients with synthetic fixtures; physical-device release acceptance
-and managed distribution remain in the browser and Mac runbooks.
+Verification evidence is recorded in [verification.md](verification.md).
+Production private-draft publishing is accepted from both clients with
+synthetic fixtures. M0-M3 and M6 meet their exit gates; M4, M5, and M7 have
+complete locally automatable engineering work but remain open until their
+documented district pilot, signed distribution, and physical-device matrices
+pass. An unsigned upload ZIP or ad-hoc app is never counted as a release
+artifact.
 
 ## M0 — Contracts and repository foundation
 
@@ -72,10 +75,12 @@ checklist, Chrome managed deployment approval, and supported-device validation.
 
 Exit gate: v1 release artifact passes automated and manual acceptance on district-supported Chrome/macOS combinations.
 
-Local status: the `1.0.0` production artifact passes automated
+Current status: the `1.0.0` store-upload bundle passes automated
 extension-loaded Chromium and authenticated Atrium acceptance and has a district
-Chrome/macOS ring checklist. Extension signing, store upload, and managed
-deployment require explicit approval and remain unperformed.
+Chrome/macOS ring checklist. Private PSD-only Web Store publication is approved
+but still requires district publisher authentication, an extension-ID custody
+check, store signing, `pnpm verify:pilot`, and managed-ring acceptance. The
+unsigned ZIP is not a release artifact.
 
 ## M6 — Mac recorder companion
 

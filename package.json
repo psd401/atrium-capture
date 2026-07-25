@@ -43,7 +43,9 @@
     "swift:test": "scripts/test-swift.sh",
     "test": "vitest run",
     "test:extension": "pnpm --filter @atrium-capture/browser-extension test:extension",
-    "typecheck": "pnpm --recursive --if-present typecheck"
+    "typecheck": "pnpm --recursive --if-present typecheck",
+    "verify:distribution": "node scripts/verify-pilot-artifacts.mjs --distribution",
+    "verify:pilot": "node scripts/verify-pilot-artifacts.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

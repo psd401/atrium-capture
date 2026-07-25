@@ -78,7 +78,9 @@ if (!background.includes(productionOAuthClientId)) {
 
 const releaseManifest = {
   artifact: archiveName,
+  artifactKind: 'chrome_web_store_upload',
   bytes: archiveBytes.byteLength,
+  distributionReady: false,
   extensionId: 'jldnpmcpimhabiphcglkbgmbffpoocpo',
   files: files.length,
   manifestVersion: 3,
@@ -92,7 +94,7 @@ const releaseManifest = {
   version: extensionPackage.version,
 };
 await writeFile(
-  path.join(outputRoot, 'browser-release-manifest.json'),
+  path.join(outputRoot, 'browser-upload-manifest.json'),
   `${JSON.stringify(releaseManifest, undefined, 2)}\n`,
 );
 console.log(JSON.stringify(releaseManifest));

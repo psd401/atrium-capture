@@ -27,6 +27,13 @@ swift test --package-path apps/macos
 scripts/build-macos-app.sh
 ```
 
+`pnpm check` runs the combined engineering gate. It deliberately does not claim
+that an unsigned browser upload or ad-hoc Mac build is ready for users.
+`pnpm verify:pilot` additionally requires a signed, published, private PSD-only
+Chrome Web Store receipt matching the exact upload SHA-256 and a stable
+Apple-signed Mac app. `pnpm verify:distribution` additionally requires a
+Developer ID Application signature accepted by Gatekeeper.
+
 `pnpm contracts:generate` updates both generated TypeScript and Swift models. Never edit either generated file directly. Contract fixtures under `packages/test-fixtures/fixtures` are decoded by both platforms.
 
 `pnpm messages:generate` compiles the extension trust-boundary JSON Schema into a committed standalone validator. Runtime AJV compilation is intentionally forbidden because Manifest V3 disallows dynamic code generation. Install bundled Chromium once with `pnpm --filter @atrium-capture/browser-extension exec playwright install chromium`; the browser suite launches the production MV3 build in a persistent profile and runs the synthetic restart/review workflow plus byte-level image goldens.
@@ -41,7 +48,11 @@ guards native browser-function receiver behavior that Node-only contract tests
 cannot reproduce. Run all three credential-free smokes before asking an
 operator to complete production login.
 
-`pnpm package:browser` creates and inspects the unsigned Browser v1 ZIP, then writes a content hash manifest under the ignored `.output` directory. Packaging never signs, uploads, or deploys. Follow [browser-v1-release.md](browser-v1-release.md) for release acceptance and external signing custody.
+`pnpm package:browser` creates and inspects the unsigned Browser v1 store-upload
+ZIP, then writes `browser-upload-manifest.json` under the ignored `.output`
+directory. Packaging never signs, uploads, or deploys. Follow
+[browser-v1-release.md](browser-v1-release.md) for private PSD-only store
+signing and release acceptance.
 
 The browser fixture site is entirely synthetic. Serve `packages/test-fixtures/site` at `http://127.0.0.1:4173`; no real district information belongs in local fixtures, test recordings, or golden images.
 

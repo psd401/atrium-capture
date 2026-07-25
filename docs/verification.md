@@ -168,9 +168,15 @@ support diagnostic, rollback check, and authenticated synthetic image/version
 acceptance passes. District rollout remains an operational approval and managed
 deployment action, not an implementation dependency.
 
-## M5 — locally complete (2026-07-22)
+## M5 — engineering complete; release gate open (2026-07-25)
 
-- Browser package and manifest versions are `1.0.0`. `pnpm package:browser` builds the production MV3 ZIP, validates required runtime/schema files and the exact reviewed permission set, rejects source/test/fixture/map/environment/key material, and emits an artifact size/SHA-256 manifest with telemetry disabled, bundled public-client Atrium configuration, and signing explicitly false.
+- Browser package and manifest versions are `1.0.0`. `pnpm package:browser`
+  builds the production MV3 Chrome Web Store upload ZIP, validates required
+  runtime/schema files and the exact reviewed permission set, rejects
+  source/test/fixture/map/environment/key material, and emits
+  `browser-upload-manifest.json` with an artifact size/SHA-256, telemetry
+  disabled, bundled public-client Atrium configuration, signing explicitly
+  false, and distribution readiness explicitly false.
 - Capture-core classifies merged events before screenshot work. A service test proves a duplicate click captures exactly one image, while the reducer hardening test produces 1,000 ordered unique steps at the managed default ceiling.
 - IndexedDB version 4 adds a bounded 100-entry operational health ring. Fixed event codes record worker lifecycle, capture/quota/screenshot health, message failures, and publication readiness/retry/attention without content. Diagnostics export only the latest timestamp/code/severity tuples and never transmits them.
 - The production extension test covers keyboard focus, a forced worker stop, multi-page capture, input/password omission, review/redaction, private live-capability gate, safe diagnostics download, permission rationale, and confirmed data deletion. The separate pixel golden remains byte-level.
@@ -179,8 +185,10 @@ deployment action, not an implementation dependency.
 
 Exit-gate conclusion: every locally buildable Browser v1 implementation,
 hardening, package, health, documentation, automated acceptance, and
-authenticated private-draft gate passes. The artifact is deliberately unsigned
-and undeployed; those external release actions were not authorized.
+authenticated private-draft gate passes. The M5 release exit gate remains open:
+the exact upload must be signed and published as a private PSD-only Chrome Web
+Store item, pass `pnpm verify:pilot`, and complete the supported-device managed
+ring. Public listing is forbidden.
 
 ## M6 — complete (2026-07-25)
 
@@ -204,7 +212,13 @@ and undeployed; those external release actions were not authorized.
   `{"assetCount":2,"phase":"ready_as_draft","status":"pass","stepCount":2,"titleSynchronized":true}`.
 - Native OAuth implements S256 PKCE, `ASWebAuthenticationSession`, the documented HTTPS token/revocation endpoints, bounded Bearer response validation, refresh rotation, and off-main-thread SecItem Keychain access. The production public client UUID is bundled, and the UI guides employees from capture access through **Sign in to AI Studio** without exposing deployment configuration.
 - The optional Chrome bridge requests `nativeMessaging` from a user gesture. Browser tests prove it omits browser URLs, screenshots, typed values, and tokens; the packaged Swift host accepts the shared fixture and rejects nested `imageData`.
-- `scripts/build-macos-app.sh` produces and verifies an ad-hoc-signed `Atrium Capture.app` with the native helper embedded. It does not install the host, notarize, upload, or deploy.
+- `scripts/build-macos-app.sh` produces the app with the native helper embedded.
+  On 2026-07-25 it was run with a valid Apple Development identity; the strict
+  code-sign check passed, the stable bundle was installed under the user's
+  Applications directory, and the rebuilt app immediately detected both
+  existing capture permissions so the permission card remained hidden. The
+  script still defaults to ad-hoc signing when no identity is supplied and does
+  not notarize, upload, or deploy.
 
 Exit-gate conclusion: synthetic Finder/System Settings/Office semantics produce
 the same valid capture document model and private-default publish phases as the
@@ -212,14 +226,17 @@ browser. Every M6 build, recovery, privacy, fixture, packaging, authentication,
 capture-permission, and production private-draft gate passes on an Apple
 Development-signed build.
 
-## M7 — locally complete (2026-07-22)
+## M7 — engineering complete; physical ring open (2026-07-25)
 
 - The AppKit region selector creates one overlay per active Quartz display, joins all Spaces/full-screen applications, supports reverse-direction drags, displays point dimensions, magnifies the preview without interpolation, and reports an sRGB hex color.
 - ScreenCaptureKit selects the display containing the region center and maps a display-local source rectangle to independent X/Y pixel scales. Core tests cover Retina 2× plus an external 1× display with a negative global origin.
 - Global `⌥⌘A`/`⌥⌘E`/`⌥⌘P` shortcuts initiate region capture, focused-element capture, and pin visibility. Permission checks gate point-of-use capture; an active recording pauses and removes monitors if Screen Recording or Accessibility changes.
 - Pin history is atomically persisted, count/byte bounded, grouped, removable, and restart recoverable; move/resize changes persist with the current display. Malformed persisted bounds fail closed and retention limits are normalized. Real AppKit verifier output asserts the pin is floating, click-through, all-Spaces, and full-screen auxiliary. Clipboard controls support no copy, keep-until-replaced, or owner-aware timed clearing that cannot erase newer clipboard content.
 - The SwiftUI editor exposes drag-to-place arrow, rectangle, text, highlight, blur, mosaic, and opaque-redaction commands; accurate crop/annotation previews; immediate undo; and the same flatten/approve/private-draft flow. Pinning accepts reviewed derivatives only.
-- The release native verifier, host verifier, parser check, Linux Swift suite, macOS debug/release builds, plist validation, ad-hoc signing verification, formatting/type/schema tests, and documented synthetic physical-device matrix pass their locally automatable checks.
+- The release native verifier, host verifier, parser check, Linux Swift suite,
+  macOS debug/release builds, plist validation, stable Apple Development signing
+  verification, formatting/type/schema tests, and documented synthetic
+  physical-device matrix pass their locally automatable checks.
 - [ADR 0004](adr/0004-native-runtime-and-overlay-boundaries.md) records native boundaries and [the Mac runbook](macos-runbook.md) records permission, display, Space, full-screen, pin, clipboard, and rollback acceptance.
 
 Exit-gate conclusion: native overlay behavior is implemented and automatically verified across coordinate origins, scale factors, AppKit Space/full-screen policy, permission-driven pause paths, pin recovery, and clipboard ownership. The runbook preserves the physical multi-display and district-signed release matrix; those operator checks do not weaken the local privacy or build gates.
@@ -239,7 +256,7 @@ Exit-gate conclusion: native overlay behavior is implemented and automatically v
 - The Mac app uses equivalent native SwiftUI color roles and reusable button, panel, brand, status-pill, and section-label components. Its recorder, quick capture, review, private-draft capability gate, pins, and step editor remain platform-native rather than reproducing the Atrium content-library layout.
 - Region and element quick captures append to the current unpublished guide instead of replacing it. The normalized session plus receipts recover after restart; manual steps can reopen a prepared guide for privacy review; and titles remain editable in every state. New-guide and saved-guide controls preserve older sessions while their outbox jobs recover independently. Publish jobs freeze the create title, then use the documented metadata update to reconcile later renames without changing an ambiguous idempotent create request. Step/image content remains frozen for an existing version.
 - The native app exposes the same capture model through a SwiftUI menu-bar extra and single workspace window. Region/element capture, recording control, workspace activation, and explicit `SMAppService` start-at-login control require no daemon, screenshot IPC, or second state owner.
-- The final ad-hoc-signed Mac bundle was launched with an isolated synthetic data
+- The final Apple Development-signed Mac bundle was launched with an isolated synthetic data
   root. A target-window-only Core Graphics capture verified its review workspace
   without reading the real Application Support store or the rest of the desktop.
   The two-column sidebar controls, title/save layout, two-step status, editor
@@ -250,7 +267,12 @@ Exit-gate conclusion: native overlay behavior is implemented and automatically v
   exposes **Sign in to AI Studio** using the bundled public client.
 - The original Mac app icon was generated without an input image, production asset, third-party logo, font, or trademark. Its transparent 1024×1024 master remains recognizable at the 16-point Retina representation; the derived `.icns` is declared by `CFBundleIconFile`, copied into the bundle, and covered by a fail-closed build check.
 - `pnpm check` passes formatting, OpenWiki normalization, lint, strict typechecking, generated contract/message freshness, five shared fixture validations, 109 TypeScript tests, production builds, the real extension worker/panel restart workflow, the irreversible redaction golden, extension packaging, 58 Swift tests, and the dependency-license allowlist.
-- `scripts/build-macos-app.sh` compiles the production SwiftUI workspace, runs the native redaction, production-gateway, pin, and bridge verifiers, validates the plist, produces the app bundle, and verifies its ad-hoc signature. `pnpm security:audit` reports no known vulnerabilities.
+- `scripts/build-macos-app.sh` compiles the production SwiftUI workspace, runs
+  the native redaction, production-gateway, pin, and bridge verifiers, validates
+  the plist, produces the app bundle, and verifies its configured signature.
+  The current pilot bundle passes strict verification under the Apple
+  Development team identity. `pnpm security:audit` reports no known
+  vulnerabilities.
 - GitHub CI and the automatic Claude review pass on PR #11. The review reported no code findings; its sole workflow annotation identified the deprecated Node 20-based checkout v4 action, so every workflow now pins the verified official checkout v7.0.1 commit.
 - [ADR 0005](adr/0005-atrium-aligned-visual-language.md) records the cross-platform presentation roles, privacy hierarchy, accessibility requirements, and no-production-asset boundary.
 

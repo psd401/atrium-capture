@@ -30,7 +30,11 @@ Checklist:
 
 1. Build and test the exact source revision with the commands in `development.md`.
 2. For engineering evaluation, load `apps/browser-extension/.output/chrome-mv3` unpacked into a dedicated synthetic Chrome profile.
-3. For a managed ring, use a district-signed/store-hosted artifact and Chrome `ExtensionSettings`; do not distribute the unpacked directory.
+3. For a managed ring, publish the exact verified ZIP as a private PSD-only
+   Chrome Web Store item, record its signed receipt, and run
+   `pnpm verify:pilot`. Add that store item through district Chrome Admin and
+   `ExtensionSettings`; do not distribute the unpacked directory or create a
+   public listing.
 4. Apply a versioned policy from `browser-managed-policy.md`, refresh `chrome://policy`, and export Support diagnostics.
 5. Use the bundled production client. Sign in to AI Studio, create one synthetic
    private draft, verify its title/instructions/images in the private Atrium
