@@ -12,7 +12,9 @@ struct AtriumCaptureWorkspaceView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     brandHeader
-                    permissionCard
+                    if !captureAccessReady {
+                        permissionCard
+                    }
                     recordingCard
                     reviewAndPublishCard
                     if !model.pins.isEmpty {
@@ -61,30 +63,32 @@ struct AtriumCaptureWorkspaceView: View {
         sectionCard(title: "Capture access", systemImage: "checkmark.shield") {
             permissionRow("Screen Recording", model.permissions.screenRecording)
             permissionRow("Accessibility", model.permissions.accessibility)
-            if captureAccessReady {
-                Label("Capture access is ready.", systemImage: "checkmark.circle.fill")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(AtriumCaptureTheme.evergreen)
-            } else {
-                Text(
-                    "macOS requires both permissions to record steps. Approve Atrium Capture, then quit and reopen the app if a permission still shows as needed."
-                )
-                .font(.system(size: 11))
-                .foregroundStyle(AtriumCaptureTheme.inkSoft)
+            Text(
+                model.permissions.screenRecording == .granted
+                    ? "Screen Recording is ready. Grant Accessibility next; Atrium Capture will then appear in that privacy list."
+                    : "Grant Screen Recording first. If macOS asks, quit and reopen Atrium Capture before granting Accessibility."
+            )
+            .font(.system(size: 11))
+            .foregroundStyle(AtriumCaptureTheme.inkSoft)
 
-                Button("Grant capture access") { model.requestPermissions() }
-                    .buttonStyle(AtriumPrimaryButtonStyle())
-
-                HStack(spacing: 8) {
-                    Button("Screen Recording settings") {
-                        model.openScreenRecordingSettings()
-                    }
-                    Button("Accessibility settings") {
-                        model.openAccessibilitySettings()
-                    }
-                }
-                .buttonStyle(AtriumSecondaryButtonStyle())
+            Button(
+                model.permissions.screenRecording == .granted
+                    ? "Grant Accessibility"
+                    : "Grant Screen Recording"
+            ) {
+                model.requestPermissions()
             }
+            .buttonStyle(AtriumPrimaryButtonStyle())
+
+            HStack(spacing: 8) {
+                Button("Screen Recording settings") {
+                    model.openScreenRecordingSettings()
+                }
+                Button("Accessibility settings") {
+                    model.openAccessibilitySettings()
+                }
+            }
+            .buttonStyle(AtriumSecondaryButtonStyle())
         }
     }
 
@@ -394,6 +398,8 @@ struct AtriumCaptureWorkspaceView: View {
                 }
             }
 
+            screenshotPreview(for: step)
+
             Divider()
 
             HStack(spacing: 7) {
@@ -442,6 +448,31 @@ struct AtriumCaptureWorkspaceView: View {
         }
         .padding(16)
         .atriumPanel()
+    }
+
+    @ViewBuilder
+    private func screenshotPreview(for step: StepElement) -> some View {
+        if let screenshot = model.screenshotImage(for: step) {
+            Image(nsImage: screenshot)
+                .resizable()
+                .interpolation(.medium)
+                .aspectRatio(contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .background(Color.black.opacity(0.04))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(AtriumCaptureTheme.border, lineWidth: 1)
+                }
+                .accessibilityLabel("Screenshot for step \(step.sequence + 1)")
+        } else {
+            Label("Screenshot preview unavailable", systemImage: "photo.badge.exclamationmark")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AtriumCaptureTheme.muted)
+                .frame(maxWidth: .infinity, minHeight: 120)
+                .background(AtriumCaptureTheme.canvas)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
     }
 
     private func permissionRow(

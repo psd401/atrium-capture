@@ -35,6 +35,7 @@ final class CaptureAppModel: ObservableObject {
     private let clipboard = MacClipboardController()
     private let shortcuts = GlobalCaptureShortcuts()
     private var permissionTimer: Timer?
+    private var screenshotImageCache: [String: NSImage] = [:]
 
     init() {
         do {
@@ -176,12 +177,20 @@ final class CaptureAppModel: ObservableObject {
     }
 
     func requestPermissions() {
-        _ = MacPermissionCenter.requestAccessibilityPrompt()
-        _ = MacPermissionCenter.requestScreenRecording()
+        let requested = MacPermissionCenter.requestNextMissing()
         refreshPermissions()
-        statusCode = permissions.screenRecording == .granted && permissions.accessibility == .granted
-            ? "CAPTURE_ACCESS_READY"
-            : "APPROVE_ACCESS_THEN_REOPEN"
+        if permissions.screenRecording == .granted && permissions.accessibility == .granted {
+            statusCode = "CAPTURE_ACCESS_READY"
+        } else {
+            statusCode = switch requested {
+            case .screenRecording:
+                "APPROVE_SCREEN_RECORDING_THEN_REOPEN"
+            case .accessibility:
+                "APPROVE_ACCESSIBILITY"
+            case nil:
+                "APPROVE_ACCESS_THEN_REOPEN"
+            }
+        }
     }
 
     func openScreenRecordingSettings() {
@@ -199,6 +208,7 @@ final class CaptureAppModel: ObservableObject {
             return
         }
         do {
+            screenshotImageCache.removeAll()
             session = try recorder.start(
                 appVersion: "1.0.0",
                 osVersion: ProcessInfo.processInfo.operatingSystemVersionString
@@ -232,6 +242,28 @@ final class CaptureAppModel: ObservableObject {
         } catch {
             statusCode = "RECORDER_STOP_FAILED"
         }
+    }
+
+    func screenshotImage(for step: StepElement) -> NSImage? {
+        guard
+            let assetID = step.screenshotAssetID,
+            let asset = session?.assets.first(where: {
+                $0.assetID == assetID && $0.state != .deleted
+            })
+        else {
+            return nil
+        }
+        if let cached = screenshotImageCache[assetID] {
+            return cached
+        }
+        guard
+            let data = try? vault.read(localKey: asset.localKey),
+            let image = NSImage(data: data)
+        else {
+            return nil
+        }
+        screenshotImageCache[assetID] = image
+        return image
     }
 
     func flattenAndApprove() {

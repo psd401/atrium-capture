@@ -70,7 +70,7 @@ Local status: the `1.0.0` unsigned artifact passes automated production-Chromium
 
 Exit gate: a Finder/System Settings/Office workflow produces the same valid Atrium document model as a browser workflow.
 
-Production status: RFC 8252-style native redirects, production OAuth/refresh/revocation, Keychain storage, direct authored-asset upload, private drafts, and internal publication are implemented. The approved public native client UUID is bundled. District sign-in, registered callback, token exchange, Keychain persistence, and connected UI state are live verified. Private-draft acceptance still requires Screen Recording and Accessibility approval on a stably signed pilot build and is independent of the browser-extension CORS blocker.
+Production status: RFC 8252-style native redirects, production OAuth/refresh/revocation, Keychain storage, direct authored-asset upload, private drafts, and internal publication are implemented. The approved public native client UUID is bundled. District sign-in, registered callback, token exchange, Keychain persistence, connected UI state, and both native capture permissions are live verified on an Apple Development-signed build. Private-draft acceptance remains a synthetic operator check and is independent of the browser-extension CORS blocker.
 
 ## M7 — Snipaste-style Mac tools
 

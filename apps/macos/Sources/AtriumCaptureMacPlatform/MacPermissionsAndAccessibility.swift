@@ -19,7 +19,7 @@ public struct NativePermissionSnapshot: Codable, Equatable, Sendable {
 
 #if os(macOS)
 import AppKit
-import ApplicationServices
+@preconcurrency import ApplicationServices
 import CoreGraphics
 
 public enum MacPrivacySettingsPane: Sendable {
@@ -27,7 +27,15 @@ public enum MacPrivacySettingsPane: Sendable {
     case screenRecording
 }
 
+public enum MacPermissionRequest: String, Equatable, Sendable {
+    case accessibility
+    case screenRecording
+}
+
 public enum MacPermissionCenter {
+    private static let accessibilityPromptKey =
+        kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
+
     public static func snapshot() -> NativePermissionSnapshot {
         NativePermissionSnapshot(
             screenRecording: CGPreflightScreenCaptureAccess() ? .granted : .notDetermined,
@@ -42,8 +50,30 @@ public enum MacPermissionCenter {
 
     @discardableResult
     public static func requestAccessibilityPrompt() -> Bool {
-        let options = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        let options = [accessibilityPromptKey: true] as CFDictionary
         return AXIsProcessTrustedWithOptions(options)
+    }
+
+    public static func nextRequest(for snapshot: NativePermissionSnapshot) -> MacPermissionRequest? {
+        if snapshot.screenRecording != .granted {
+            return .screenRecording
+        }
+        if snapshot.accessibility != .granted {
+            return .accessibility
+        }
+        return nil
+    }
+
+    @discardableResult
+    public static func requestNextMissing() -> MacPermissionRequest? {
+        guard let request = nextRequest(for: snapshot()) else { return nil }
+        switch request {
+        case .screenRecording:
+            _ = requestScreenRecording()
+        case .accessibility:
+            _ = requestAccessibilityPrompt()
+        }
+        return request
     }
 
     public static func openSettings(_ pane: MacPrivacySettingsPane) {

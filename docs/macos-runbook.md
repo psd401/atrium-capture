@@ -46,8 +46,11 @@ open "dist/macos/Atrium Capture.app"
 
 The usage description in `Info.plist` explains the request; it does not grant the
 permission. The app links directly to the Screen Recording and Accessibility
-privacy panes. After enabling either permission, quit and reopen Atrium Capture
-when macOS requests it.
+privacy panes. Atrium Capture requests one missing grant at a time so macOS
+cannot supersede one TCC prompt with the next: approve Screen Recording first,
+reopen if requested, then choose **Grant Accessibility**. After both grants are
+effective, the Capture Access card disappears; revoking either grant makes it
+reappear and pauses an active recording.
 
 ## Local data and privacy boundary
 
@@ -65,13 +68,13 @@ The safest default deletes raw bytes after flattening. The session tombstone is 
 
 ## Permission behavior
 
-| State                                  | Expected behavior                                                                 |
-| -------------------------------------- | --------------------------------------------------------------------------------- |
-| Neither permission granted             | App launches in editor/history mode; recording controls explain the requirement.  |
-| Screen Recording only                  | Region pixels are available; semantic workflow and element capture remain gated.  |
-| Accessibility only                     | No screenshots are captured; recording remains gated.                             |
-| Both granted                           | Workflow, region, element, shortcuts, magnifier, and color readout are available. |
-| Either permission revoked while active | The two-second point-of-use check pauses recording and stops global monitors.     |
+| State                                  | Expected behavior                                                                                            |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Neither permission granted             | App launches in editor/history mode; recording controls explain the requirement.                             |
+| Screen Recording only                  | Region pixels are available; semantic workflow and element capture remain gated.                             |
+| Accessibility only                     | No screenshots are captured; recording remains gated.                                                        |
+| Both granted                           | Capture Access card hides; workflow, region, element, shortcuts, magnifier, and color readout are available. |
+| Either permission revoked while active | The two-second point-of-use check pauses recording and stops global monitors.                                |
 
 The Accessibility adapter never reads an element value. A secure-text role is rejected before screenshot capture and its receipt is persisted so restart does not reprocess it. Ordinary input produces “Enter the requested value…” and never the literal text. Every screenshot-bearing input step requires an opaque redaction before flattening or publishing; blur and mosaic do not satisfy that gate.
 
@@ -79,12 +82,12 @@ The Accessibility adapter never reads an element value. A secure-text role is re
 
 Use synthetic names and empty test documents only:
 
-1. Launch the signed app, choose **Grant capture access**, approve Screen Recording and Accessibility in System Settings, then reopen the app if prompted.
+1. Launch the signed app, choose **Grant Screen Recording**, approve it in System Settings, and reopen if prompted. Then choose **Grant Accessibility** and reopen if macOS does not apply it live.
 2. Start a recording.
 3. In Finder, select a folder named `Atrium Synthetic Fixture`.
 4. In System Settings, select a non-sensitive navigation item; do not open accounts, passwords, profiles, or production configuration.
 5. In an Office application, use an empty document named `Synthetic Guide`; click a ribbon control and type only `SYNTHETIC-NONPERSONAL` into an ordinary field.
-6. Stop. Confirm three app identities, ordered generic actions, no typed literal, and no secure-field step.
+6. Stop. Confirm each step card visibly renders its local screenshot preview, three app identities, ordered generic actions, no typed literal, and no secure-field step.
 7. Edit an instruction, add a redaction/annotation, flatten, approve, and verify the session becomes `publishable` with only deleted or `publishable_local` assets.
 8. With `ATRIUM_CAPTURE_LOCAL_MOCK=1`, create a private draft, terminate after any injected phase in tests, retry, and confirm one object/asset/version. Do not use real district content.
 9. For authenticated acceptance, use the bundled public native client, sign in to AI Studio, create one synthetic private draft, and exercise the separate internal-publication button. Use the `AtriumOAuthClientId` MDM preference only to target a separately approved test client.
