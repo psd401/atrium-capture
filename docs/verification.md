@@ -176,7 +176,10 @@ deployment action, not an implementation dependency.
   source/test/fixture/map/environment/key material, and emits
   `browser-upload-manifest.json` with an artifact size/SHA-256, telemetry
   disabled, bundled public-client Atrium configuration, signing explicitly
-  false, and distribution readiness explicitly false.
+  false, and distribution readiness explicitly false. The installed/store and
+  toolbar icon set is derived from the original Atrium Capture master; packaging
+  fails if any 16, 32, 48, or 128 pixel PNG is missing or has the wrong
+  dimensions.
 - Capture-core classifies merged events before screenshot work. A service test proves a duplicate click captures exactly one image, while the reducer hardening test produces 1,000 ordered unique steps at the managed default ceiling.
 - IndexedDB version 4 adds a bounded 100-entry operational health ring. Fixed event codes record worker lifecycle, capture/quota/screenshot health, message failures, and publication readiness/retry/attention without content. Diagnostics export only the latest timestamp/code/severity tuples and never transmits them.
 - The production extension test covers keyboard focus, a forced worker stop, multi-page capture, input/password omission, review/redaction, private live-capability gate, safe diagnostics download, permission rationale, and confirmed data deletion. The separate pixel golden remains byte-level.

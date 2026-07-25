@@ -7,10 +7,20 @@ export default defineConfig({
   modules: ['@wxt-dev/module-react'],
   manifest: {
     action: {
+      default_icon: {
+        16: 'icons/16.png',
+        32: 'icons/32.png',
+      },
       default_title: 'Open Atrium Capture',
     },
     description: 'Record and review visual workflows before saving a private Atrium draft.',
     host_permissions: ['<all_urls>'],
+    icons: {
+      16: 'icons/16.png',
+      32: 'icons/32.png',
+      48: 'icons/48.png',
+      128: 'icons/128.png',
+    },
     key: manifestPublicKey,
     minimum_chrome_version: '116',
     name: 'Atrium Capture',

@@ -11,12 +11,18 @@ The manifest labels the ZIP as a Chrome Web Store upload and sets
 
 Package verification fails if the archive omits the manifest, worker, content script, side panel, or managed schema; changes the reviewed required permissions or the single optional `nativeMessaging` permission; or includes source maps, TypeScript, tests, fixtures, dependencies, environment files, or key material. The optional permission is requested only from the Mac-enrichment user gesture and is removed when enrichment is disabled. The release manifest records that telemetry is disabled and live Atrium uses the bundled approved public client.
 
+The manifest includes 16, 32, 48, and 128 pixel install icons, with 16 and 32
+pixel toolbar variants. They are exact mechanical derivatives of the original
+MIT-licensed Atrium Capture master used by the Mac app. Package verification
+checks that every PNG is present and has its declared dimensions.
+
 The approved distribution target is a **private PSD-only Chrome Web Store
 item**, promoted through district-managed Chrome rings. It must not be publicly
 listed, and this repository does not operate a private CRX update host. Store
 signing requires the authorized district publisher; credentials and signing
 custody remain outside the repository. See
-[ADR 0008](adr/0008-private-psd-distribution.md).
+[ADR 0008](adr/0008-private-psd-distribution.md) and the
+[private submission copy](browser-store-submission.md).
 
 ## Automated acceptance
 

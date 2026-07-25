@@ -19,3 +19,8 @@ Run `pnpm package:browser` from the repository root for the verified, unsigned
 installable release. The approved distribution target is a private PSD-only
 Chrome Web Store item; `pnpm verify:pilot` fails closed until a matching signed
 store receipt exists.
+
+The install/toolbar icons under `public/icons` are mechanically resized from the
+repository's original MIT-licensed Atrium Capture master described in
+`apps/macos/App/Assets/README.md`. Package verification checks every required PNG
+and its exact dimensions.

@@ -22,7 +22,18 @@ if (archiveCandidates.length !== 1) {
 const archiveName = archiveCandidates[0];
 const archiveBytes = await readFile(path.join(outputRoot, archiveName));
 const files = listZipEntries(archiveBytes);
-const required = ['manifest.json', 'managed-storage-schema.json', 'sidepanel.html'];
+const expectedIcons = {
+  16: 'icons/16.png',
+  32: 'icons/32.png',
+  48: 'icons/48.png',
+  128: 'icons/128.png',
+};
+const required = [
+  'manifest.json',
+  'managed-storage-schema.json',
+  'sidepanel.html',
+  ...Object.values(expectedIcons),
+];
 for (const name of required) {
   if (!files.includes(name)) {
     throw new Error(`Browser archive is missing ${name}.`);
@@ -56,6 +67,23 @@ if (
   manifest.host_permissions[0] !== '<all_urls>'
 ) {
   throw new Error('Packaged manifest does not match the reviewed v1 contract.');
+}
+if (
+  JSON.stringify(manifest.icons) !== JSON.stringify(expectedIcons) ||
+  JSON.stringify(manifest.action?.default_icon) !==
+    JSON.stringify({
+      16: expectedIcons[16],
+      32: expectedIcons[32],
+    })
+) {
+  throw new Error('Packaged install and toolbar icons differ from the reviewed v1 set.');
+}
+for (const [size, iconPath] of Object.entries(expectedIcons)) {
+  const icon = await readFile(path.join(outputRoot, 'chrome-mv3', iconPath));
+  const dimensions = pngDimensions(icon);
+  if (dimensions.width !== Number(size) || dimensions.height !== Number(size)) {
+    throw new Error(`Packaged ${iconPath} is ${dimensions.width}x${dimensions.height}.`);
+  }
 }
 const expectedPermissions = ['identity', 'sidePanel', 'storage', 'unlimitedStorage'];
 if (
@@ -125,4 +153,19 @@ function listZipEntries(bytes) {
     offset += 46 + nameLength + extraLength + commentLength;
   }
   return names.sort();
+}
+
+function pngDimensions(bytes) {
+  const signature = '89504e470d0a1a0a';
+  if (
+    bytes.length < 24 ||
+    bytes.subarray(0, 8).toString('hex') !== signature ||
+    bytes.subarray(12, 16).toString('ascii') !== 'IHDR'
+  ) {
+    throw new Error('Packaged icon is not a valid PNG.');
+  }
+  return {
+    height: bytes.readUInt32BE(20),
+    width: bytes.readUInt32BE(16),
+  };
 }

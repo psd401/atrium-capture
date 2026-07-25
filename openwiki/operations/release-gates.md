@@ -39,4 +39,6 @@ production routes.
 
 See [`docs/milestones.md`](../../docs/milestones.md),
 [`docs/browser-v1-release.md`](../../docs/browser-v1-release.md), and
+[`docs/browser-store-submission.md`](../../docs/browser-store-submission.md),
+and
 [`docs/macos-runbook.md`](../../docs/macos-runbook.md).
