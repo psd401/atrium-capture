@@ -6,10 +6,18 @@ import Foundation
 #if os(macOS)
 import AppKit
 import CoreGraphics
+import ServiceManagement
 import SwiftUI
 
 @MainActor
 final class CaptureAppModel: ObservableObject {
+    enum LaunchAtLoginState: Equatable {
+        case disabled
+        case enabled
+        case requiresApproval
+        case unavailable
+    }
+
     private struct ScreenshotPreviewCacheEntry {
         let assetID: String
         let revision: Int
@@ -20,8 +28,10 @@ final class CaptureAppModel: ObservableObject {
     @Published private(set) var permissions = MacPermissionCenter.snapshot()
     @Published private(set) var statusCode = "READY"
     @Published private(set) var publishJob: AtriumCapturePublishJob?
+    @Published private(set) var publicationStarting = false
     @Published private(set) var pins: [PinnedCapture] = []
     @Published private(set) var atriumAuthentication: NativeAuthenticationStatus = .unconfigured
+    @Published private(set) var launchAtLoginState: LaunchAtLoginState = .disabled
     @Published var manualInstruction = ""
 
     private let recorder: NativeRecorder
@@ -43,14 +53,64 @@ final class CaptureAppModel: ObservableObject {
     private var permissionTimer: Timer?
     private var screenshotImageCache: [String: ScreenshotPreviewCacheEntry] = [:]
 
+    var currentSessionHasPublishJob: Bool {
+        guard let session else { return false }
+        return publishJob?.sessionID == session.sessionID
+    }
+
+    var currentGuideLockedForPublish: Bool {
+        publicationStarting || currentSessionHasPublishJob
+    }
+
     var hasUnfinishedPublishJob: Bool {
-        guard let phase = publishJob?.phase else { return false }
+        if publicationStarting { return true }
+        guard currentSessionHasPublishJob, let phase = publishJob?.phase else { return false }
         return phase != .readyAsDraft && phase != .complete
     }
 
     var canRetryPublish: Bool {
-        publishJob?.lastError?.retryable == true
+        currentSessionHasPublishJob
+            && publishJob?.lastError?.retryable == true
             && publishJob?.phase != .needsAttention
+    }
+
+    var canEditGuideContent: Bool {
+        guard !currentGuideLockedForPublish, let state = session?.state else { return false }
+        return state == .review || state == .publishable
+    }
+
+    var canEditGuideTitle: Bool {
+        canEditGuideContent
+    }
+
+    var canStartRecording: Bool {
+        guard let session else { return true }
+        if currentGuideLockedForPublish {
+            return publishJob?.phase == .complete
+        }
+        return session.state == .submitted || session.state == .archived
+    }
+
+    var canQuickCapture: Bool {
+        guard let session else { return true }
+        if session.state == .recording || session.state == .paused {
+            return false
+        }
+        if currentGuideLockedForPublish {
+            return publishJob?.phase == .complete
+        }
+        return session.state == .review
+            || session.state == .publishable
+            || session.state == .submitted
+            || session.state == .archived
+    }
+
+    var launchAtLoginEnabled: Bool {
+        launchAtLoginState == .enabled
+    }
+
+    var launchAtLoginAvailable: Bool {
+        launchAtLoginState != .unavailable
     }
 
     var publishFailureGuidance: String? {
@@ -120,11 +180,16 @@ final class CaptureAppModel: ObservableObject {
                 persistence: FilePinBoardPersistence(url: root.appendingPathComponent("pin-history.json"))
             )
             let persistedJob = try repository.listJobs().last
-            publishJob = persistedJob
-            session = try persistedJob.flatMap {
-                try repository.loadSession(sessionID: $0.sessionID)
-            } ?? recorder.snapshot()
-            if let persistedJob {
+            let recorderSession = recorder.snapshot()
+            let shouldRestorePublishedSession = persistedJob.map { job in
+                job.phase != .complete
+                    || recorderSession == nil
+                    || recorderSession?.sessionID == job.sessionID
+            } ?? false
+            if shouldRestorePublishedSession, let persistedJob {
+                publishJob = persistedJob
+                session = try repository.loadSession(sessionID: persistedJob.sessionID)
+                    ?? recorderSession
                 switch persistedJob.phase {
                 case .readyAsDraft:
                     statusCode = "PRIVATE_DRAFT_READY"
@@ -137,7 +202,11 @@ final class CaptureAppModel: ObservableObject {
                         "PUBLISH_FAILED_\($0.code)"
                     } ?? "PUBLISH_PENDING"
                 }
+            } else {
+                publishJob = nil
+                session = recorderSession
             }
+            refreshLaunchAtLoginState()
             pins = pinBoard.snapshot().pins
             for pin in pins {
                 if let data = try? vault.read(localKey: pin.localKey) {
@@ -248,8 +317,15 @@ final class CaptureAppModel: ObservableObject {
             statusCode = "CAPTURE_PERMISSIONS_REQUIRED"
             return
         }
+        guard canStartRecording else {
+            statusCode = currentGuideLockedForPublish
+                ? "FINISH_CURRENT_ATRIUM_DRAFT_FIRST"
+                : "FINISH_CURRENT_GUIDE_FIRST"
+            return
+        }
         do {
             screenshotImageCache.removeAll()
+            publishJob = nil
             session = try recorder.start(
                 appVersion: "1.0.0",
                 osVersion: ProcessInfo.processInfo.operatingSystemVersionString
@@ -398,13 +474,17 @@ final class CaptureAppModel: ObservableObject {
 
     func publishPrivateDraft() {
         guard let session else { return }
+        guard !currentGuideLockedForPublish else { return }
+        publicationStarting = true
         statusCode = "PUBLISHING_PRIVATE_DRAFT"
         Task { @MainActor in
+            defer { publicationStarting = false }
             do {
                 var job = try await publisher.enqueue(
                     session: session,
                     collectionID: defaultCollectionID
                 )
+                publishJob = job
                 job = try await publisher.resume(jobID: job.jobID)
                 publishJob = job
                 self.session = try? repository.loadSession(sessionID: job.sessionID)
@@ -475,8 +555,10 @@ final class CaptureAppModel: ObservableObject {
     }
 
     func captureRegion() {
-        guard session?.state != .recording, session?.state != .paused else {
-            statusCode = "STOP_RECORDING_BEFORE_QUICK_CAPTURE"
+        guard canQuickCapture else {
+            statusCode = currentGuideLockedForPublish
+                ? "CURRENT_GUIDE_LOCKED_AFTER_PUBLISH"
+                : "STOP_RECORDING_BEFORE_QUICK_CAPTURE"
             return
         }
         refreshPermissions()
@@ -519,8 +601,10 @@ final class CaptureAppModel: ObservableObject {
     }
 
     func captureElement() {
-        guard session?.state != .recording, session?.state != .paused else {
-            statusCode = "STOP_RECORDING_BEFORE_QUICK_CAPTURE"
+        guard canQuickCapture else {
+            statusCode = currentGuideLockedForPublish
+                ? "CURRENT_GUIDE_LOCKED_AFTER_PUBLISH"
+                : "STOP_RECORDING_BEFORE_QUICK_CAPTURE"
             return
         }
         refreshPermissions()
@@ -604,6 +688,10 @@ final class CaptureAppModel: ObservableObject {
     }
 
     func updateInstruction(stepID: String, text: String) {
+        guard canEditGuideContent else {
+            statusCode = "CURRENT_GUIDE_LOCKED_AFTER_PUBLISH"
+            return
+        }
         guard let current = recorder.snapshot() else { return }
         do {
             let updated = try NativeReviewEditor.setInstruction(in: current, stepID: stepID, text: text)
@@ -672,7 +760,13 @@ final class CaptureAppModel: ObservableObject {
     }
 
     func insertManualStep() {
-        guard let current = recorder.snapshot(), !manualInstruction.trimmingCharacters(in: .whitespaces).isEmpty else {
+        guard canEditGuideContent else {
+            statusCode = "CURRENT_GUIDE_LOCKED_AFTER_PUBLISH"
+            return
+        }
+        guard let current = recorder.snapshot(),
+              !manualInstruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
             return
         }
         applyReviewMutation {
@@ -683,6 +777,42 @@ final class CaptureAppModel: ObservableObject {
             )
         }
         manualInstruction = ""
+    }
+
+    func updateTitle(_ title: String) {
+        guard canEditGuideTitle, let current = recorder.snapshot() else {
+            statusCode = "CURRENT_GUIDE_LOCKED_AFTER_PUBLISH"
+            return
+        }
+        do {
+            let updated = try NativeReviewEditor.setTitle(in: current, title: title)
+            try recorder.replaceReviewedSession(updated)
+            session = updated
+            statusCode = "GUIDE_TITLE_SAVED"
+        } catch {
+            statusCode = "GUIDE_TITLE_INVALID"
+        }
+    }
+
+    func setLaunchAtLogin(_ enabled: Bool) {
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+            refreshLaunchAtLoginState()
+            statusCode = launchAtLoginState == .requiresApproval
+                ? "APPROVE_START_AT_LOGIN"
+                : "START_AT_LOGIN_UPDATED"
+        } catch {
+            refreshLaunchAtLoginState()
+            statusCode = "START_AT_LOGIN_UPDATE_FAILED"
+        }
+    }
+
+    func openLoginItemSettings() {
+        SMAppService.openSystemSettingsLoginItems()
     }
 
     func pinFirstReviewedImage() {
@@ -775,15 +905,36 @@ final class CaptureAppModel: ObservableObject {
         event: NativeSemanticEvent,
         title: String
     ) throws {
-        let started = try recorder.start(
-            title: title,
-            appVersion: "1.0.0",
-            osVersion: ProcessInfo.processInfo.operatingSystemVersionString
-        )
-        let asset = try vault.writeRaw(frame: frame, sessionID: started.sessionID)
-        _ = try recorder.record(event, screenshot: asset)
-        session = try recorder.stop()
-        statusCode = "REVIEW_REQUIRED"
+        let existing = recorder.snapshot()
+        let appending = existing.map {
+            ($0.state == .review || $0.state == .publishable) && !currentGuideLockedForPublish
+        } ?? false
+        let targetSession: AtriumCaptureSession
+        if appending, let existing {
+            targetSession = existing
+        } else {
+            publishJob = nil
+            targetSession = try recorder.start(
+                title: title,
+                appVersion: "1.0.0",
+                osVersion: ProcessInfo.processInfo.operatingSystemVersionString
+            )
+        }
+        let asset = try vault.writeRaw(frame: frame, sessionID: targetSession.sessionID)
+        do {
+            if appending {
+                _ = try recorder.appendCaptureForReview(event, screenshot: asset)
+                session = recorder.snapshot()
+                statusCode = "CAPTURE_ADDED_TO_GUIDE"
+            } else {
+                _ = try recorder.record(event, screenshot: asset)
+                session = try recorder.stop()
+                statusCode = "REVIEW_REQUIRED"
+            }
+        } catch {
+            try? vault.delete(localKey: asset.localKey)
+            throw error
+        }
     }
 
     private func handlePermissionChange() {
@@ -829,6 +980,21 @@ final class CaptureAppModel: ObservableObject {
         }
     }
 
+    private func refreshLaunchAtLoginState() {
+        launchAtLoginState = switch SMAppService.mainApp.status {
+        case .notRegistered:
+            .disabled
+        case .enabled:
+            .enabled
+        case .requiresApproval:
+            .requiresApproval
+        case .notFound:
+            .unavailable
+        @unknown default:
+            .unavailable
+        }
+    }
+
     private func annotationColor(_ kind: Kind) -> String {
         switch kind {
         case .redaction, .blur, .mosaic:
@@ -844,10 +1010,118 @@ struct AtriumCaptureMacApplication: App {
     @StateObject private var model = CaptureAppModel()
 
     var body: some Scene {
-        WindowGroup("Atrium Capture") {
+        Window("Atrium Capture", id: "workspace") {
             AtriumCaptureWorkspaceView(model: model)
         }
         .defaultSize(width: 1080, height: 720)
+
+        MenuBarExtra("Atrium Capture", systemImage: "viewfinder") {
+            AtriumCaptureMenuBarView(model: model)
+        }
+
+        Settings {
+            AtriumCaptureSettingsView(model: model)
+        }
+    }
+}
+
+private struct AtriumCaptureMenuBarView: View {
+    @ObservedObject var model: CaptureAppModel
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Button("Show Atrium Capture") {
+            showWorkspace()
+        }
+
+        Divider()
+
+        Button("Capture Region") {
+            model.captureRegion()
+        }
+        .keyboardShortcut("a", modifiers: [.option, .command])
+        .disabled(!model.canQuickCapture)
+
+        Button("Capture Focused Element") {
+            model.captureElement()
+        }
+        .keyboardShortcut("e", modifiers: [.option, .command])
+        .disabled(!model.canQuickCapture)
+
+        if model.session?.state == .recording || model.session?.state == .paused {
+            Button(model.session?.state == .paused ? "Resume Recording" : "Pause Recording") {
+                model.pauseOrResume()
+            }
+            Button("Stop and Review") {
+                model.stop()
+                showWorkspace()
+            }
+        } else {
+            Button("Start New Recording") {
+                model.start()
+                showWorkspace()
+            }
+            .disabled(!model.canStartRecording)
+        }
+
+        Divider()
+
+        Toggle(
+            "Start at Login",
+            isOn: Binding(
+                get: { model.launchAtLoginEnabled },
+                set: { model.setLaunchAtLogin($0) }
+            )
+        )
+        .disabled(!model.launchAtLoginAvailable)
+
+        if model.launchAtLoginState == .requiresApproval {
+            Button("Approve in Login Items…") {
+                model.openLoginItemSettings()
+            }
+        }
+
+        Divider()
+
+        Button("Quit Atrium Capture") {
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
+    private func showWorkspace() {
+        NSApplication.shared.activate(ignoringOtherApps: true)
+        openWindow(id: "workspace")
+    }
+}
+
+private struct AtriumCaptureSettingsView: View {
+    @ObservedObject var model: CaptureAppModel
+
+    var body: some View {
+        Form {
+            Toggle(
+                "Start Atrium Capture at login",
+                isOn: Binding(
+                    get: { model.launchAtLoginEnabled },
+                    set: { model.setLaunchAtLogin($0) }
+                )
+            )
+            .disabled(!model.launchAtLoginAvailable)
+
+            if model.launchAtLoginState == .requiresApproval {
+                Text("macOS requires approval before Atrium Capture can start automatically.")
+                    .foregroundStyle(.secondary)
+                Button("Open Login Items Settings") {
+                    model.openLoginItemSettings()
+                }
+            } else if !model.launchAtLoginAvailable {
+                Text("Start at login is available from the installed Atrium Capture app.")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+        .frame(width: 430)
     }
 }
 #else

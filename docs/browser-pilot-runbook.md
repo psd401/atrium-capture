@@ -26,6 +26,7 @@ Checklist:
 3. For a managed ring, use a district-signed/store-hosted artifact and Chrome `ExtensionSettings`; do not distribute the unpacked directory.
 4. Apply a versioned policy from `browser-managed-policy.md`, refresh `chrome://policy`, and export Support diagnostics.
 5. Use the bundled production client. Sign in to AI Studio, create one synthetic private draft, verify the reader and explicit internal-publication action, and retain no production screenshots. Set `atriumOAuthClientId` only when deliberately testing a separately approved client. `pnpm acceptance:atrium:browser` performs this operator-attended flow in a disposable visible Playwright Chromium profile using only the committed synthetic fixture; add `ATRIUM_CAPTURE_ACCEPTANCE_PUBLISH_INTERNAL=1` only with explicit approval for the synthetic internal publication.
+6. During review, rename the guide in the side-panel header and verify the new title survives a service-worker restart. The title remains editable after image preparation but locks as soon as a durable Atrium publish job exists, preserving the exact body for idempotent retries.
 
 Before asking an operator to sign in, run `pnpm smoke:atrium` and
 `pnpm smoke:atrium:browser-token`. Do not repeat operator login while the second

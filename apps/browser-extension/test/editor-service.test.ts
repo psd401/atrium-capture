@@ -4,6 +4,8 @@ import {
   AtriumCaptureSessionState,
   Kind,
   MIMEType,
+  Phase,
+  SchemaVersion,
 } from '@atrium-capture/contracts';
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -44,6 +46,33 @@ describe('durable review and asset lifecycle', () => {
     await repository.applyEditorCommand(commandId, command);
 
     expect((await repository.getActiveSession())?.steps).toHaveLength(1);
+  });
+
+  it('locks the guide title once a durable publish job exists', async () => {
+    await repository.startSession('Synthetic title lock', '0.1.0');
+    await repository.transition('stop');
+    const session = await repository.getActiveSession();
+    if (!session) {
+      throw new Error('synthetic_session_missing');
+    }
+    await repository.putPublishJob({
+      attemptCount: 0,
+      createdAt: new Date(1),
+      createIdempotencyKey: 'synthetic-create-key',
+      jobId: '40000000-0000-4000-8000-000000000009',
+      phase: Phase.Queued,
+      schemaVersion: SchemaVersion.The10,
+      sessionId: session.sessionId,
+      updatedAt: new Date(1),
+    });
+
+    await expect(
+      repository.applyEditorCommand('40000000-0000-4000-8000-000000000010', {
+        kind: 'update_title',
+        title: 'Unsafe changed title',
+      }),
+    ).rejects.toThrow('guide_locked_after_publish');
+    expect((await repository.getActiveSession())?.title).toBe('Synthetic title lock');
   });
 
   it('atomically stores publishable derivatives and deletes raw bytes after privacy approval', async () => {

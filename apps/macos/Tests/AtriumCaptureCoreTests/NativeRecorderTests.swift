@@ -73,6 +73,43 @@ final class NativeRecorderTests: XCTestCase {
         XCTAssertEqual(steps.map { $0.target?.accessibleName }, ["Earlier", "Later"])
     }
 
+    func testQuickCapturesAppendToOneReviewedGuideAndRecoverAfterRestart() throws {
+        let persistence = MemoryNativeRecorderPersistence()
+        let recorder = try NativeRecorder(persistence: persistence)
+        let started = try recorder.start(
+            sessionID: "10000000-0000-4000-8000-000000000020",
+            title: "Synthetic region guide",
+            appVersion: "1.0.0",
+            osVersion: "synthetic"
+        )
+        _ = try recorder.record(
+            makeEvent(id: "region-1", action: .manual, timestamp: 1_000, name: "First region"),
+            screenshot: makeAsset(id: "region-asset-1")
+        )
+        _ = try recorder.stop()
+        _ = try recorder.appendCaptureForReview(
+            makeEvent(id: "region-2", action: .manual, timestamp: 1_001, name: "Second region"),
+            screenshot: makeAsset(id: "region-asset-2")
+        )
+
+        let restarted = try NativeRecorder(persistence: persistence)
+        let recovered = try XCTUnwrap(restarted.snapshot())
+        XCTAssertEqual(recovered.sessionID, started.sessionID)
+        XCTAssertEqual(recovered.title, "Synthetic region guide")
+        XCTAssertEqual(recovered.state, .review)
+        XCTAssertEqual(recovered.policy.reviewStatus, .inReview)
+        XCTAssertEqual(recovered.steps.map(\.sequence), [0, 1])
+        XCTAssertEqual(recovered.assets.map(\.assetID), ["region-asset-1", "region-asset-2"])
+        XCTAssertEqual(
+            try restarted.appendCaptureForReview(
+                makeEvent(id: "region-2", action: .manual, timestamp: 1_001, name: "Second region"),
+                screenshot: makeAsset(id: "region-asset-2")
+            ),
+            .duplicate
+        )
+        XCTAssertEqual(restarted.snapshot()?.steps.count, 2)
+    }
+
     func testFinderSettingsAndOfficeEventsProduceOneContractModel() throws {
         let recorder = try NativeRecorder(persistence: MemoryNativeRecorderPersistence())
         _ = try recorder.start(appVersion: "1.0.0", osVersion: "synthetic")

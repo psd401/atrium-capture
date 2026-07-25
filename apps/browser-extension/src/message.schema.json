@@ -257,6 +257,15 @@
         {
           "type": "object",
           "additionalProperties": false,
+          "required": ["kind", "title"],
+          "properties": {
+            "kind": { "const": "update_title" },
+            "title": { "type": "string", "minLength": 1, "maxLength": 500 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
           "required": ["kind", "stepId", "text"],
           "properties": {
             "kind": { "const": "update_instruction" },

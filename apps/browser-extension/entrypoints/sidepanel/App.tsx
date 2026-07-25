@@ -48,6 +48,7 @@ export function App() {
   const [assetDataUrl, setAssetDataUrl] = useState<string>();
   const [tool, setTool] = useState<DrawingTool>();
   const [zoom, setZoom] = useState(1);
+  const [titleDraft, setTitleDraft] = useState('');
   const [instructionDraft, setInstructionDraft] = useState('');
   const [manualDraft, setManualDraft] = useState('');
   const [textDraft, setTextDraft] = useState('Note');
@@ -156,6 +157,10 @@ export function App() {
       selectedStep?.instruction.editedText ?? selectedStep?.instruction.generatedText ?? '',
     );
   }, [selectedStep]);
+
+  useEffect(() => {
+    setTitleDraft(session?.title ?? '');
+  }, [session?.sessionId, session?.title]);
 
   useEffect(() => {
     let current = true;
@@ -350,6 +355,7 @@ export function App() {
   const isReview = state === AtriumCaptureSessionState.Review;
   const isPublishable = state === AtriumCaptureSessionState.Publishable;
   const isSubmitted = state === AtriumCaptureSessionState.Submitted;
+  const canEditTitle = Boolean((isReview || isPublishable) && !publication?.job);
   const canStart =
     (!session || (!isRecording && !isPaused && !isReview && !isPublishable)) &&
     diagnostics?.managedPolicy.valid !== false;
@@ -483,7 +489,32 @@ export function App() {
           </span>
           <div>
             <p className="eyebrow">Atrium Capture</p>
-            <h1>{session?.title ?? 'New visual guide'}</h1>
+            {session ? (
+              <div className="title-editor">
+                <input
+                  aria-label="Guide title"
+                  disabled={!canEditTitle}
+                  maxLength={500}
+                  onChange={(event) => setTitleDraft(event.target.value)}
+                  value={titleDraft}
+                />
+                {canEditTitle && (
+                  <button
+                    className="secondary"
+                    disabled={pending || !titleDraft.trim() || titleDraft === session.title}
+                    onClick={() => void editorCommand({ kind: 'update_title', title: titleDraft })}
+                    type="button"
+                  >
+                    Save
+                  </button>
+                )}
+              </div>
+            ) : (
+              <h1>New visual guide</h1>
+            )}
+            {session && publication?.job && (
+              <p className="title-lock">Title locked after Atrium draft creation began.</p>
+            )}
           </div>
         </div>
         <p className={`status ${isRecording ? 'recording' : ''}`} role="status">

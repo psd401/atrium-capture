@@ -191,6 +191,46 @@ h1 {
   line-height: 1.2;
 }
 
+.title-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.title-editor input {
+  min-width: 0;
+  border-color: transparent;
+  padding: 0.25rem 0.35rem;
+  color: var(--atrium-ink);
+  background: transparent;
+  box-shadow: none;
+  font-size: 1.35rem;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
+.title-editor input:not(:disabled):hover {
+  border-color: var(--atrium-border-strong);
+  background: var(--atrium-canvas);
+}
+
+.title-editor input:disabled {
+  opacity: 1;
+}
+
+.title-editor button {
+  min-height: 2rem;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.75rem;
+}
+
+.title-lock {
+  margin: 0.25rem 0 0;
+  color: var(--atrium-muted);
+  font-size: 0.72rem;
+}
+
 .brand-lockup {
   display: grid;
   grid-template-columns: 2.7rem minmax(0, 1fr);

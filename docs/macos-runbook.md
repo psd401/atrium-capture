@@ -52,6 +52,29 @@ reopen if requested, then choose **Grant Accessibility**. After both grants are
 effective, the Capture Access card disappears; revoking either grant makes it
 reappear and pauses an active recording.
 
+## Guide composition and app lifecycle
+
+The first **Region** or **Element** quick capture creates a reviewable guide.
+Every later quick capture appends another step to that same unpublished guide;
+it does not replace the prior region. The title at the top of the workspace is
+editable, and the manual-step row remains available both during review and
+after publishable images have been prepared. Adding a region, element, or
+manual step to a prepared guide returns it to privacy review so the new content
+cannot bypass flattening and approval.
+
+Title and content controls lock after **Create private Atrium draft** creates a
+durable outbox job. This preserves the exact request body used by safe retries.
+Finish or recover that Atrium job before starting another guide; do not mutate a
+failed create request under its existing idempotency key.
+
+Atrium Capture also remains available from its menu-bar item when the workspace
+window is closed. The menu can show the workspace, capture a region or focused
+element, control recording, and quit. **Start at Login** is available in that
+menu and in app Settings through the macOS `SMAppService` login-item API. If
+macOS reports that approval is required, choose **Approve in Login Items…** and
+enable Atrium Capture in System Settings. Direct SwiftPM executables are not
+installed apps and intentionally report this option as unavailable.
+
 ## Local data and privacy boundary
 
 Application data is under `~/Library/Application Support/AtriumCapture`:
@@ -83,15 +106,17 @@ The Accessibility adapter never reads an element value. A secure-text role is re
 Use synthetic names and empty test documents only:
 
 1. Launch the signed app, choose **Grant Screen Recording**, approve it in System Settings, and reopen if prompted. Then choose **Grant Accessibility** and reopen if macOS does not apply it live.
-2. Start a recording.
-3. In Finder, select a folder named `Atrium Synthetic Fixture`.
-4. In System Settings, select a non-sensitive navigation item; do not open accounts, passwords, profiles, or production configuration.
-5. In an Office application, use an empty document named `Synthetic Guide`; click a ribbon control and type only `SYNTHETIC-NONPERSONAL` into an ordinary field.
-6. Stop. Confirm each step card visibly renders its local screenshot preview, three app identities, ordered generic actions, no typed literal, and no secure-field step.
-7. Select each edit tool and drag directly over the screenshot. Confirm redaction, blur, mosaic, highlight, rectangle, arrow, and text render immediately; drag arrows in all four directions; verify **Undo** beside **Done** removes the latest annotation; apply and reset the center crop. Blur and mosaic must remain labeled as visual effects rather than privacy redactions.
-8. Add an opaque redaction to every flagged input screenshot, prepare publishable images, and verify the session becomes `publishable` with only deleted or `publishable_local` assets.
-9. With `ATRIUM_CAPTURE_LOCAL_MOCK=1`, create a private draft, terminate after any injected phase in tests, retry, and confirm one object/asset/version. Do not use real district content.
-10. For authenticated acceptance, use the bundled public native client, sign in to AI Studio, create one synthetic private draft, and exercise the separate internal-publication button. Use the `AtriumOAuthClientId` MDM preference only to target a separately approved test client.
+2. Choose **Region** twice using two synthetic areas. Confirm the second region appears as step 2 in the same guide, rename the guide, quit and reopen, and verify both steps and the edited title recover.
+3. Add a synthetic manual step. Prepare publishable images, add one more manual step, and confirm the guide returns to review before it can publish.
+4. Start a new recording only after the current synthetic guide is finished.
+5. In Finder, select a folder named `Atrium Synthetic Fixture`.
+6. In System Settings, select a non-sensitive navigation item; do not open accounts, passwords, profiles, or production configuration.
+7. In an Office application, use an empty document named `Synthetic Guide`; click a ribbon control and type only `SYNTHETIC-NONPERSONAL` into an ordinary field.
+8. Stop. Confirm each step card visibly renders its local screenshot preview, three app identities, ordered generic actions, no typed literal, and no secure-field step.
+9. Select each edit tool and drag directly over the screenshot. Confirm redaction, blur, mosaic, highlight, rectangle, arrow, and text render immediately; drag arrows in all four directions; verify **Undo** beside **Done** removes the latest annotation; apply and reset the center crop. Blur and mosaic must remain labeled as visual effects rather than privacy redactions.
+10. Add an opaque redaction to every flagged input screenshot, prepare publishable images, and verify the session becomes `publishable` with only deleted or `publishable_local` assets.
+11. With `ATRIUM_CAPTURE_LOCAL_MOCK=1`, create a private draft, terminate after any injected phase in tests, retry, and confirm one object/asset/version. Confirm title/content controls are now locked. Do not use real district content.
+12. For authenticated acceptance, use the bundled public native client, sign in to AI Studio, create one synthetic private draft, and exercise the separate internal-publication button. Use the `AtriumOAuthClientId` MDM preference only to target a separately approved test client.
 
 The committed `capture-session-macos-v1.json` fixture provides the automated language-neutral equivalent and decodes in TypeScript and Swift.
 
@@ -107,12 +132,13 @@ Shortcuts are `⌥⌘A` for a region, `⌥⌘E` for the focused element, and `�
 
 For each attached display and scale factor:
 
-1. Drag a region in all four directions; verify the size label, magnifier, and hex color readout.
-2. Capture near every display edge and verify dimensions against the selected point rectangle and Retina pixel scale.
-3. Pin a reviewed image, move/resize it, toggle click-through, assign a group, hide/show pins, and restart the app to verify history recovery.
-4. Verify the pin remains floating in another Space and beside a full-screen synthetic application.
-5. Select each clipboard policy. For timed clearing, copy another value before expiry and confirm Atrium Capture does not erase the newer clipboard owner.
-6. Revoke Screen Recording and Accessibility separately while recording and confirm recording pauses without storing a partial step.
+1. Close the workspace, use the menu-bar item to reopen it, and launch a region and focused-element capture. Toggle **Start at Login**, approve it in Login Items if required, relaunch, then disable it after acceptance.
+2. Drag a region in all four directions; verify the size label, magnifier, and hex color readout.
+3. Capture near every display edge and verify dimensions against the selected point rectangle and Retina pixel scale.
+4. Pin a reviewed image, move/resize it, toggle click-through, assign a group, hide/show pins, and restart the app to verify history recovery.
+5. Verify the pin remains floating in another Space and beside a full-screen synthetic application.
+6. Select each clipboard policy. For timed clearing, copy another value before expiry and confirm Atrium Capture does not erase the newer clipboard owner.
+7. Revoke Screen Recording and Accessibility separately while recording and confirm recording pauses without storing a partial step.
 
 Automated tests cover mixed positive/negative display origins, independent X/Y scales, drag normalization, pixel color addressing, history eviction, group/click-through persistence, clipboard policy persistence, serialized capture, and permission-driven pause source paths. The native verifier constructs a real AppKit pin and asserts floating, click-through, all-Spaces, and full-screen auxiliary behavior.
 

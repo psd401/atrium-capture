@@ -52,6 +52,24 @@ describe('runtime message boundary', () => {
       parseIncomingMessage({
         kind: 'editor.command',
         payload: {
+          command: { kind: 'update_title', title: 'Synthetic renamed guide' },
+          commandId: crypto.randomUUID(),
+        },
+      }),
+    ).toBeTruthy();
+    expect(
+      parseIncomingMessage({
+        kind: 'editor.command',
+        payload: {
+          command: { kind: 'update_title', title: 'x'.repeat(501) },
+          commandId: crypto.randomUUID(),
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      parseIncomingMessage({
+        kind: 'editor.command',
+        payload: {
           command: {
             annotation: {
               color: '#111827',

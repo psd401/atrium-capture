@@ -9,6 +9,7 @@ struct AtriumCaptureWorkspaceView: View {
     @State private var selectedToolByStep: [String: Kind] = [:]
     @State private var draftRectByStep: [String: CGRect] = [:]
     @State private var annotationTextByStep: [String: String] = [:]
+    @State private var guideTitleDraft = ""
 
     var body: some View {
         NavigationSplitView {
@@ -34,6 +35,15 @@ struct AtriumCaptureWorkspaceView: View {
         .background(AtriumCaptureTheme.canvas)
         .tint(AtriumCaptureTheme.evergreen)
         .frame(minWidth: 920, minHeight: 620)
+        .onAppear {
+            guideTitleDraft = model.session?.title ?? ""
+        }
+        .onChange(of: model.session?.sessionID) {
+            guideTitleDraft = model.session?.title ?? ""
+        }
+        .onChange(of: model.session?.title) {
+            guideTitleDraft = model.session?.title ?? ""
+        }
     }
 
     private var brandHeader: some View {
@@ -105,7 +115,7 @@ struct AtriumCaptureWorkspaceView: View {
             HStack(spacing: 8) {
                 Button("Start") { model.start() }
                     .buttonStyle(AtriumPrimaryButtonStyle())
-                    .disabled(model.session?.state == .recording)
+                    .disabled(!model.canStartRecording)
                 Button(model.session?.state == .paused ? "Resume" : "Pause") {
                     model.pauseOrResume()
                 }
@@ -132,6 +142,7 @@ struct AtriumCaptureWorkspaceView: View {
                     Label("Region", systemImage: "rectangle.dashed")
                 }
                 .buttonStyle(AtriumSecondaryButtonStyle())
+                .disabled(!model.canQuickCapture)
 
                 Button {
                     model.captureElement()
@@ -139,10 +150,14 @@ struct AtriumCaptureWorkspaceView: View {
                     Label("Element", systemImage: "scope")
                 }
                 .buttonStyle(AtriumSecondaryButtonStyle())
+                .disabled(!model.canQuickCapture)
             }
             Text("⌥⌘A region  ·  ⌥⌘E element  ·  ⌥⌘P pins")
                 .font(.system(size: 11))
                 .foregroundStyle(AtriumCaptureTheme.muted)
+            Text("Quick captures append to the current unpublished guide.")
+                .font(.system(size: 11))
+                .foregroundStyle(AtriumCaptureTheme.inkSoft)
         }
     }
 
@@ -169,8 +184,24 @@ struct AtriumCaptureWorkspaceView: View {
                     .textFieldStyle(.roundedBorder)
                 Button("Add") { model.insertManualStep() }
                     .buttonStyle(AtriumSecondaryButtonStyle())
+                    .disabled(
+                        !model.canEditGuideContent
+                            || model.manualInstruction
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                                .isEmpty
+                    )
             }
-            .disabled(model.session?.state != .review)
+            .disabled(!model.canEditGuideContent)
+
+            if model.session?.state == .publishable && !model.currentGuideLockedForPublish {
+                Text("Adding a step reopens privacy review before publishing.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(AtriumCaptureTheme.inkSoft)
+            } else if model.currentGuideLockedForPublish {
+                Text("Guide content is locked after Atrium draft creation begins so safe retries stay identical.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(AtriumCaptureTheme.muted)
+            }
 
             if !model.hasUnfinishedPublishJob {
                 Button {
@@ -179,7 +210,11 @@ struct AtriumCaptureWorkspaceView: View {
                     Label("Create private Atrium draft", systemImage: "arrow.up.doc")
                 }
                 .buttonStyle(AtriumPrimaryButtonStyle())
-                .disabled(model.session?.state != .publishable || !model.liveAtriumAvailable)
+                .disabled(
+                    model.session?.state != .publishable
+                        || !model.liveAtriumAvailable
+                        || model.currentGuideLockedForPublish
+                )
             }
 
             if let guidance = model.publishFailureGuidance,
@@ -339,9 +374,33 @@ struct AtriumCaptureWorkspaceView: View {
             HStack(alignment: .center, spacing: 14) {
                 VStack(alignment: .leading, spacing: 4) {
                     AtriumSectionLabel(title: "Visual guide", systemImage: "square.stack.3d.up")
-                    Text(model.session?.title ?? "New visual guide")
-                        .font(.system(size: 26, weight: .bold))
-                        .foregroundStyle(AtriumCaptureTheme.ink)
+                    HStack(spacing: 8) {
+                        TextField("Guide title", text: $guideTitleDraft)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 26, weight: .bold))
+                            .foregroundStyle(AtriumCaptureTheme.ink)
+                            .onSubmit {
+                                model.updateTitle(guideTitleDraft)
+                            }
+                            .disabled(!model.canEditGuideTitle)
+                        if model.canEditGuideTitle {
+                            Button("Save title") {
+                                model.updateTitle(guideTitleDraft)
+                            }
+                            .buttonStyle(AtriumSecondaryButtonStyle())
+                            .disabled(
+                                guideTitleDraft
+                                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                                    .isEmpty
+                                    || guideTitleDraft.count > 500
+                            )
+                        }
+                    }
+                    if model.currentGuideLockedForPublish {
+                        Text("Title locked after Atrium draft creation began.")
+                            .font(.system(size: 11))
+                            .foregroundStyle(AtriumCaptureTheme.muted)
+                    }
                 }
                 Spacer()
                 AtriumStatusPill(

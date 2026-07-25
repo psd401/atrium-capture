@@ -152,8 +152,47 @@ public final class NativeRecorder: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        guard var current = envelope else { throw NativeRecorderError.noSession }
+        guard let current = envelope else { throw NativeRecorderError.noSession }
         guard current.session.state == .recording else { return .notRecording }
+        return try persistEvent(
+            event,
+            screenshot: screenshot,
+            current: current,
+            stateAfterRecording: .recording,
+            reviewStatusAfterRecording: current.session.policy.reviewStatus
+        )
+    }
+
+    /// Adds an explicitly requested capture to the guide currently under review.
+    /// The session and event receipt are persisted before the capture is acknowledged.
+    public func appendCaptureForReview(
+        _ event: NativeSemanticEvent,
+        screenshot: NativeCapturedAsset? = nil
+    ) throws -> NativeRecordDecision {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard let current = envelope else { throw NativeRecorderError.noSession }
+        guard current.session.state == .review || current.session.state == .publishable else {
+            throw NativeRecorderError.invalidState
+        }
+        return try persistEvent(
+            event,
+            screenshot: screenshot,
+            current: current,
+            stateAfterRecording: .review,
+            reviewStatusAfterRecording: .inReview
+        )
+    }
+
+    private func persistEvent(
+        _ event: NativeSemanticEvent,
+        screenshot: NativeCapturedAsset?,
+        current: NativeRecorderEnvelope,
+        stateAfterRecording: AtriumCaptureSessionState,
+        reviewStatusAfterRecording: ReviewStatus
+    ) throws -> NativeRecordDecision {
+        var current = current
         guard !event.eventID.isEmpty, !event.appName.isEmpty, !event.bundleID.isEmpty else {
             throw NativeRecorderError.invalidEvent
         }
@@ -244,7 +283,9 @@ public final class NativeRecorder: @unchecked Sendable {
         current = NativeRecorderEnvelope(
             session: current.session.with(
                 assets: assets,
+                policy: current.session.policy.with(reviewStatus: reviewStatusAfterRecording),
                 revision: current.session.revision + 1,
+                state: stateAfterRecording,
                 steps: steps,
                 updatedAt: max(current.session.updatedAt, event.occurredAt)
             ),

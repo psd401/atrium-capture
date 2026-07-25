@@ -374,7 +374,10 @@ export class CaptureRepository {
     now = new Date(),
   ): Promise<AtriumCaptureSession> {
     const database = await this.open();
-    const transaction = database.transaction(['commands', 'meta', 'sessions'], 'readwrite');
+    const transaction = database.transaction(
+      ['commands', 'meta', 'publishJobs', 'sessions'],
+      'readwrite',
+    );
     const commandStore = transaction.objectStore('commands');
     const existing = await commandStore.get(commandId);
     const active = await transaction.objectStore('meta').get(activeSessionKey);
@@ -386,6 +389,15 @@ export class CaptureRepository {
     if (existing) {
       await transaction.done;
       return session;
+    }
+    if (command.kind === 'update_title') {
+      const jobs = await transaction
+        .objectStore('publishJobs')
+        .index('by-session')
+        .getAll(session.sessionId);
+      if (jobs.length > 0) {
+        throw new Error('guide_locked_after_publish');
+      }
     }
     const next = reduceEditorCommand(session, command, { idFactory: this.idFactory, now });
     await sessionStore.put(next);

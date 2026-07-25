@@ -19,6 +19,11 @@ A serialized frame queue prevents overlapping ScreenCaptureKit calls.
 Reprocessed receipts and merged events cannot leave duplicate or unreferenced
 publishable assets.
 
+Region and focused-element quick captures append to the current unpublished
+guide. The title and manual steps remain editable through preparation; adding
+content reopens privacy review. A durable Atrium outbox job locks the title and
+content so a retry cannot change its idempotent request.
+
 Native review uses generated crop and annotation commands. Screenshot-bearing
 input steps require an opaque redaction before flattening and approval. Core
 Graphics creates metadata-stripped PNG derivatives, and the filesystem outbox
@@ -30,5 +35,10 @@ accepts only `publishable_local` assets.
 Keychain holds validated bearer credentials. Live authentication remains gated
 on documented Atrium native redirect support. The optional Chrome bridge allows
 only small semantic/control JSON and rejects image/token fields recursively.
+
+The SwiftUI workspace and menu-bar extra share one `CaptureAppModel`. The menu
+can show the workspace, initiate capture, and control recording. Start at login
+uses the user-controlled `SMAppService.mainApp` login item and introduces no
+background daemon or privileged helper.
 
 See [`docs/macos-runbook.md`](../../docs/macos-runbook.md).

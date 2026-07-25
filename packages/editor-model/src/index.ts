@@ -13,6 +13,7 @@ import {
 
 export type EditorCommand =
   | { kind: 'begin_review' }
+  | { kind: 'update_title'; title: string }
   | { kind: 'update_instruction'; stepId: string; text: string }
   | { kind: 'move_step'; stepId: string; toIndex: number }
   | { kind: 'delete_step'; stepId: string }
@@ -48,10 +49,24 @@ export function applyEditorCommand(
   command: EditorCommand,
   context: EditorContext = {},
 ): AtriumCaptureSession {
-  assertEditable(session);
   const now = context.now ?? new Date();
   const idFactory = context.idFactory ?? defaultIdFactory;
 
+  if (command.kind === 'update_title') {
+    assertTitleEditable(session);
+    const title = command.title.trim();
+    if (!title || title.length > 500) {
+      throw new Error('invalid_title');
+    }
+    return {
+      ...session,
+      revision: session.revision + 1,
+      title,
+      updatedAt: now,
+    };
+  }
+
+  assertEditable(session);
   switch (command.kind) {
     case 'begin_review':
       return changed(session, session.steps, now);
@@ -292,6 +307,15 @@ function mapStep(
 
 function assertEditable(session: AtriumCaptureSession): void {
   if (session.state !== AtriumCaptureSessionState.Review) {
+    throw new Error('session_not_editable');
+  }
+}
+
+function assertTitleEditable(session: AtriumCaptureSession): void {
+  if (
+    session.state !== AtriumCaptureSessionState.Review &&
+    session.state !== AtriumCaptureSessionState.Publishable
+  ) {
     throw new Error('session_not_editable');
   }
 }

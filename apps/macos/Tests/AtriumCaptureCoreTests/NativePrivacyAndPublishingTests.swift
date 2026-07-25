@@ -110,6 +110,11 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
             assetState: .rawLocal,
             stepReview: .notReviewed
         )
+        session = try NativeReviewEditor.setTitle(
+            in: session,
+            title: "  Synthetic renamed guide  "
+        )
+        XCTAssertEqual(session.title, "Synthetic renamed guide")
         session = try NativeReviewEditor.insertManualStep(
             in: session,
             afterStepID: session.steps[0].stepID,
@@ -132,6 +137,33 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
         session = try NativeReviewEditor.deleteStep(in: session, stepID: session.steps[0].stepID)
         XCTAssertTrue(session.steps.isEmpty)
         XCTAssertEqual(session.assets[0].state, .deleted)
+    }
+
+    func testManualStepReopensPreparedGuideButTitleRenamePreservesItsState() throws {
+        var session = makeSession(
+            state: .publishable,
+            review: .approved,
+            assetState: .publishableLocal,
+            stepReview: .approved
+        )
+        session = try NativeReviewEditor.setTitle(in: session, title: "Prepared synthetic guide")
+        XCTAssertEqual(session.state, .publishable)
+        XCTAssertEqual(session.policy.reviewStatus, .approved)
+
+        session = try NativeReviewEditor.insertManualStep(
+            in: session,
+            afterStepID: session.steps.last?.stepID,
+            text: "Complete the synthetic manual step."
+        )
+        XCTAssertEqual(session.state, .review)
+        XCTAssertEqual(session.policy.reviewStatus, .inReview)
+        XCTAssertEqual(session.steps.last?.action, .manual)
+
+        XCTAssertThrowsError(
+            try NativeReviewEditor.setTitle(in: session, title: String(repeating: "x", count: 501))
+        ) { error in
+            XCTAssertEqual(error as? NativeReviewError, .invalidTitle)
+        }
     }
 
     func testPublisherRecoversEveryLostResponseWithoutRemoteDuplicates() async throws {

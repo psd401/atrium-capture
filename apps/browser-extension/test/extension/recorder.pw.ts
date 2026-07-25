@@ -124,6 +124,16 @@ test('records a multi-page workflow across a forced service-worker stop', async 
     panel.getByText('Typed values are omitted. Password fields are never captured.'),
   ).toBeVisible();
 
+  const guideTitle = panel.getByLabel('Guide title');
+  await guideTitle.fill('Synthetic renamed browser guide');
+  await panel.locator('.title-editor').getByRole('button', { name: 'Save', exact: true }).click();
+  await expect
+    .poll(async () => (await snapshot(panel))?.title)
+    .toBe('Synthetic renamed browser guide');
+  await cdp.send('ServiceWorker.stopAllWorkers');
+  await panel.reload();
+  await expect(panel.getByLabel('Guide title')).toHaveValue('Synthetic renamed browser guide');
+
   const flaggedSteps = panel.locator('.step-select').filter({ hasText: 'redaction required' });
   await expect(flaggedSteps.first()).toBeVisible();
   await flaggedSteps.first().click();
@@ -246,4 +256,5 @@ interface RecorderSnapshot {
   assets: Array<{ state: string }>;
   state: string;
   steps: Array<{ stepId: string }>;
+  title: string;
 }
