@@ -418,8 +418,19 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
             let error = try? Self.record(record?["error"])
             let rawCode = Self.string(error?["code"], maximum: 100)
             let code = rawCode?.uppercased() ?? "ATRIUM_HTTP_\(http.statusCode)"
-            let retryable = http.statusCode == 408 || http.statusCode == 429 || http.statusCode >= 500
-            throw NativeGatewayFailure(code: code, retryable: retryable)
+            let requestID = Self.string(record?["requestId"], maximum: 200)
+                ?? http.value(forHTTPHeaderField: "X-Request-Id").flatMap {
+                    $0.isEmpty || $0.count > 200 ? nil : $0
+                }
+            let retryable = http.statusCode == 408
+                || http.statusCode == 429
+                || http.statusCode >= 500
+                || code == "IDEMPOTENCY_IN_PROGRESS"
+            throw NativeGatewayFailure(
+                code: code,
+                requestID: requestID,
+                retryable: retryable
+            )
         }
         return json
     }

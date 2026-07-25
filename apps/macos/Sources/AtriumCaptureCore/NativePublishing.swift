@@ -75,10 +75,12 @@ public struct NativeCaptureSourceRef: Equatable, Sendable {
 
 public struct NativeGatewayFailure: Error, Equatable, Sendable {
     public let code: String
+    public let requestID: String?
     public let retryable: Bool
 
-    public init(code: String, retryable: Bool) {
+    public init(code: String, requestID: String? = nil, retryable: Bool) {
         self.code = code
+        self.requestID = requestID
         self.retryable = retryable
     }
 }
@@ -583,7 +585,7 @@ public actor DurableNativePublisher {
                 lastError: .some(LastError(
                     code: failure.code,
                     message: failure.code,
-                    requestID: nil,
+                    requestID: failure.requestID,
                     retryable: failure.retryable
                 )),
                 phase: failedPhase,
@@ -663,9 +665,14 @@ public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Send
     private var versions: [String: NativeVersionResult] = [:]
     private var publishes: Set<String> = []
     private var failurePoint: MockNativeFailurePoint?
+    private let failureRequestID: String?
 
-    public init(failAfterCommitAt failurePoint: MockNativeFailurePoint? = nil) {
+    public init(
+        failAfterCommitAt failurePoint: MockNativeFailurePoint? = nil,
+        failureRequestID: String? = nil
+    ) {
         self.failurePoint = failurePoint
+        self.failureRequestID = failureRequestID
     }
 
     public var remoteCounts: (objects: Int, assets: Int, versions: Int, publishes: Int) {
@@ -744,6 +751,10 @@ public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Send
     private func failOnce(_ point: MockNativeFailurePoint) throws {
         guard failurePoint == point else { return }
         failurePoint = nil
-        throw NativeGatewayFailure(code: "MOCK_LOST_RESPONSE", retryable: true)
+        throw NativeGatewayFailure(
+            code: "MOCK_LOST_RESPONSE",
+            requestID: failureRequestID,
+            retryable: true
+        )
     }
 }

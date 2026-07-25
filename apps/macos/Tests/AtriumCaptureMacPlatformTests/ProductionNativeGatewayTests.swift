@@ -138,6 +138,55 @@ final class ProductionNativeGatewayTests: XCTestCase {
         XCTAssertEqual(settings.oauth.clientID, atriumMacProductionOAuthClientID)
         XCTAssertNil(settings.defaultCollectionID)
     }
+
+    func testIdempotencyInProgressIsRetryableAndPreservesSupportRequestID() async throws {
+        let gateway = try ProductionNativeAtriumGateway(
+            transport: SyntheticFailureTransport()
+        ) {
+            "synthetic-access-token"
+        }
+
+        do {
+            _ = try await gateway.createPrivateDraft(
+                title: "Synthetic pending guide",
+                sourceRef: NativeCaptureSourceRef(
+                    capturedAt: Date(timeIntervalSince1970: 1_753_387_200),
+                    clientVersion: "1.0.0",
+                    externalID: sessionID
+                ),
+                collectionID: nil,
+                idempotencyKey: "object:synthetic-pending"
+            )
+            XCTFail("Expected the synthetic idempotency response.")
+        } catch let failure as NativeGatewayFailure {
+            XCTAssertEqual(failure.code, "IDEMPOTENCY_IN_PROGRESS")
+            XCTAssertEqual(failure.requestID, "req_synthetic_pending")
+            XCTAssertTrue(failure.retryable)
+        }
+    }
+}
+
+private actor SyntheticFailureTransport: NativeHTTPTransport {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        let url = try XCTUnwrap(request.url)
+        let data = try JSONSerialization.data(withJSONObject: [
+            "error": [
+                "code": "IDEMPOTENCY_IN_PROGRESS",
+                "message": "Synthetic request is still pending.",
+            ],
+            "requestId": "req_synthetic_pending",
+        ])
+        let response = try XCTUnwrap(HTTPURLResponse(
+            url: url,
+            statusCode: 409,
+            httpVersion: "HTTP/1.1",
+            headerFields: [
+                "Content-Type": "application/json",
+                "X-Request-Id": "req_synthetic_pending",
+            ]
+        ))
+        return (data, response)
+    }
 }
 
 private actor SyntheticAtriumTransport: NativeHTTPTransport {

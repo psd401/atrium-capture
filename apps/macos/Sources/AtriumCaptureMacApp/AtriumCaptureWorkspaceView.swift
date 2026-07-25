@@ -172,13 +172,40 @@ struct AtriumCaptureWorkspaceView: View {
             }
             .disabled(model.session?.state != .review)
 
-            Button {
-                model.publishPrivateDraft()
-            } label: {
-                Label("Create private Atrium draft", systemImage: "arrow.up.doc")
+            if !model.hasUnfinishedPublishJob {
+                Button {
+                    model.publishPrivateDraft()
+                } label: {
+                    Label("Create private Atrium draft", systemImage: "arrow.up.doc")
+                }
+                .buttonStyle(AtriumPrimaryButtonStyle())
+                .disabled(model.session?.state != .publishable || !model.liveAtriumAvailable)
             }
-            .buttonStyle(AtriumPrimaryButtonStyle())
-            .disabled(model.session?.state != .publishable || !model.liveAtriumAvailable)
+
+            if let guidance = model.publishFailureGuidance,
+               let failure = model.publishJob?.lastError {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(guidance, systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                    Text("Atrium code: \(failure.code)")
+                        .font(.system(.caption, design: .monospaced, weight: .semibold))
+                    if let requestID = failure.requestID {
+                        Text("Support ID: \(requestID)")
+                            .font(.system(.caption, design: .monospaced))
+                    }
+                    if model.canRetryPublish {
+                        Button("Retry Atrium publish") {
+                            model.retryPublish()
+                        }
+                        .buttonStyle(AtriumSecondaryButtonStyle())
+                    }
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(AtriumCaptureTheme.inkSoft)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AtriumCaptureTheme.warningSoft)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
 
             if model.atriumConfigured && model.atriumAuthentication == .signedOut {
                 VStack(alignment: .leading, spacing: 8) {

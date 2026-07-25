@@ -142,7 +142,11 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
             .internalPublish,
         ] {
             let repository = MemoryNativePublishRepository(assets: ["assets/publishable.png": Data([1, 2, 3])])
-            let gateway = MockNativeAtriumGateway(failAfterCommitAt: failure)
+            let requestID = failure == .object ? "req_synthetic_object_create" : nil
+            let gateway = MockNativeAtriumGateway(
+                failAfterCommitAt: failure,
+                failureRequestID: requestID
+            )
             let publisher = DurableNativePublisher(repository: repository, gateway: gateway)
             let job = try await publisher.enqueue(
                 session: makeSession(
@@ -158,6 +162,10 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
                 _ = try await publisher.resume(jobID: job.jobID, publishInternal: true)
                 XCTFail("Expected the synthetic committed-response failure.")
             } catch {}
+            if failure == .object {
+                let interrupted = try XCTUnwrap(repository.loadJob(jobID: job.jobID))
+                XCTAssertEqual(interrupted.lastError?.requestID, requestID)
+            }
             let recovered = try await publisher.resume(jobID: job.jobID, publishInternal: true)
             XCTAssertEqual(recovered.phase, .complete)
             let counts = gateway.remoteCounts

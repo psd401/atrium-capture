@@ -43,6 +43,39 @@ final class CaptureAppModel: ObservableObject {
     private var permissionTimer: Timer?
     private var screenshotImageCache: [String: ScreenshotPreviewCacheEntry] = [:]
 
+    var hasUnfinishedPublishJob: Bool {
+        guard let phase = publishJob?.phase else { return false }
+        return phase != .readyAsDraft && phase != .complete
+    }
+
+    var canRetryPublish: Bool {
+        publishJob?.lastError?.retryable == true
+            && publishJob?.phase != .needsAttention
+    }
+
+    var publishFailureGuidance: String? {
+        guard let job = publishJob, let failure = job.lastError else { return nil }
+        guard job.phase != .readyAsDraft, job.phase != .complete else { return nil }
+        let action = switch job.phase {
+        case .queued, .creatingObject:
+            "Atrium did not confirm the private-draft create request. The title may already exist, but no image was uploaded."
+        case .uploadingAssets:
+            "Atrium created the private draft, but did not confirm the reviewed image upload."
+        case .creatingVersion:
+            "Atrium received the reviewed image, but did not confirm the document body."
+        case .publishingInternal:
+            "The private draft is safe, but Atrium did not confirm internal publication."
+        case .needsAttention:
+            "Atrium rejected this publish request. The reviewed local image remains protected."
+        case .readyAsDraft, .complete:
+            ""
+        }
+        let next = failure.retryable
+            ? "Retry reuses the same durable request; do not start the capture over."
+            : "Contact district support with the code below."
+        return "\(action) \(next)"
+    }
+
     init() {
         do {
             let root = try MacApplicationSupport.rootURL()
@@ -100,7 +133,9 @@ final class CaptureAppModel: ObservableObject {
                 case .needsAttention:
                     statusCode = "PUBLISH_NEEDS_ATTENTION"
                 default:
-                    statusCode = "PUBLISH_PENDING"
+                    statusCode = persistedJob.lastError.map {
+                        "PUBLISH_FAILED_\($0.code)"
+                    } ?? "PUBLISH_PENDING"
                 }
             }
             pins = pinBoard.snapshot().pins
@@ -377,7 +412,24 @@ final class CaptureAppModel: ObservableObject {
             } catch NativePublishError.capabilityUnavailable {
                 statusCode = "ATRIUM_API_UNAVAILABLE"
             } catch {
-                statusCode = "PUBLISH_RETRY_REQUIRED"
+                refreshPublishFailure(sessionID: session.sessionID)
+            }
+        }
+    }
+
+    func retryPublish() {
+        guard let job = publishJob, job.lastError?.retryable == true else { return }
+        statusCode = "RETRYING_ATRIUM_PUBLISH"
+        Task { @MainActor in
+            do {
+                let resumed = try await publisher.resume(jobID: job.jobID)
+                publishJob = resumed
+                session = try? repository.loadSession(sessionID: resumed.sessionID)
+                statusCode = resumed.phase == .readyAsDraft
+                    ? "PRIVATE_DRAFT_READY"
+                    : "PUBLISH_PENDING"
+            } catch {
+                refreshPublishFailure(sessionID: job.sessionID)
             }
         }
     }
@@ -397,7 +449,7 @@ final class CaptureAppModel: ObservableObject {
                     ? "INTERNAL_PUBLICATION_COMPLETE"
                     : "PUBLISH_PENDING"
             } catch {
-                statusCode = "PUBLISH_RETRY_REQUIRED"
+                refreshPublishFailure(sessionID: job.sessionID)
             }
         }
     }
@@ -415,7 +467,9 @@ final class CaptureAppModel: ObservableObject {
             case .needsAttention:
                 statusCode = "PUBLISH_NEEDS_ATTENTION"
             default:
-                statusCode = "PUBLISH_RETRY_REQUIRED"
+                statusCode = latest.lastError.map {
+                    "PUBLISH_FAILED_\($0.code)"
+                } ?? "PUBLISH_PENDING"
             }
         }
     }
@@ -755,6 +809,23 @@ final class CaptureAppModel: ObservableObject {
             statusCode = "REVIEW_UPDATED"
         } catch {
             statusCode = "REVIEW_UPDATE_FAILED"
+        }
+    }
+
+    private func refreshPublishFailure(sessionID: String) {
+        guard let jobs = try? repository.listJobs(),
+              let latest = jobs.last(where: { $0.sessionID == sessionID })
+        else {
+            statusCode = "PUBLISH_RETRY_REQUIRED"
+            return
+        }
+        publishJob = latest
+        if let code = latest.lastError?.code {
+            statusCode = latest.phase == .needsAttention
+                ? "PUBLISH_NEEDS_ATTENTION_\(code)"
+                : "PUBLISH_FAILED_\(code)"
+        } else {
+            statusCode = "PUBLISH_RETRY_REQUIRED"
         }
     }
 

@@ -95,6 +95,12 @@ Use synthetic names and empty test documents only:
 
 The committed `capture-session-macos-v1.json` fixture provides the automated language-neutral equivalent and decodes in TypeScript and Swift.
 
+### Publish recovery
+
+If Atrium shows only the new title while Capture reports a publish failure, do not start the capture over and do not attach Application Support files to a ticket. A bodyless private object is the first durable phase; screenshots are uploaded only after Capture receives its object ID. The app shows the bounded Atrium code and support request ID when available. **Retry Atrium publish** reuses the persisted idempotency key and never selects a raw screenshot.
+
+`INTERNAL_ERROR` while the outbox remains at `creating_object` means Atrium did not confirm the object-create response. The title may already exist, while the reviewed image remains local. Retry only after the Atrium service has reconciled the committed create and its idempotency state; a correct replay returns the original private object and continues with one asset and one version.
+
 ## M7 overlay acceptance matrix
 
 Shortcuts are `⌥⌘A` for a region, `⌥⌘E` for the focused element, and `⌥⌘P` to show/hide pins.
