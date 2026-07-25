@@ -69,6 +69,7 @@ test('records a multi-page workflow across a forced service-worker stop', async 
   await expect(panel.getByRole('button', { name: 'Start recording' })).toBeFocused();
   await panel.getByRole('button', { name: 'Start recording' }).click();
   await expect.poll(async () => (await snapshot(panel))?.state).toBe('recording');
+  await expect.poll(async () => ((await snapshot(panel))?.steps.length ?? 0) > 0).toBe(true);
 
   const beforeUntrustedSubmit = (await snapshot(panel))?.steps.length ?? 0;
   await page.locator('form').evaluate((form) => {
