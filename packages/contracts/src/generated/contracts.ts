@@ -27,11 +27,19 @@ export interface AssetElement {
 }
 
 export interface AnnotationElement {
+  arrowDirection?: ArrowDirection;
   color?: string;
   geometry: Geometry;
   id: string;
   kind: Kind;
   text?: string;
+}
+
+export enum ArrowDirection {
+  DownLeft = 'down_left',
+  DownRight = 'down_right',
+  UpLeft = 'up_left',
+  UpRight = 'up_right',
 }
 
 export interface Geometry {
@@ -222,11 +230,13 @@ export interface AtriumCapturePublishJob {
   contentObjectId?: string;
   createdAt: Date;
   createIdempotencyKey: string;
+  createTitle?: string;
   currentVersionId?: string;
   jobId: string;
   lastError?: LastError;
   phase: Phase;
   readerUrl?: string;
+  remoteTitle?: string;
   schemaVersion: SchemaVersion;
   sessionId: string;
   updatedAt: Date;

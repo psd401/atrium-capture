@@ -4,12 +4,29 @@ import Foundation
 public enum NativeReviewError: Error, Equatable {
     case stepNotFound
     case invalidGeometry
+    case invalidTitle
     case rawAssetNotPublishable
     case incompletePrivacyReview
     case sensitiveRegionRequiresRedaction
 }
 
 public enum NativeReviewEditor {
+    public static func setTitle(
+        in session: AtriumCaptureSession,
+        title: String,
+        now: Date = Date()
+    ) throws -> AtriumCaptureSession {
+        let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty, clean.count <= 500 else {
+            throw NativeReviewError.invalidTitle
+        }
+        return session.with(
+            revision: session.revision + 1,
+            title: clean,
+            updatedAt: now
+        )
+    }
+
     public static func setInstruction(
         in session: AtriumCaptureSession,
         stepID: String,
@@ -46,6 +63,7 @@ public enum NativeReviewEditor {
         guard annotations.allSatisfy({
             let geometry = $0.geometry
             return NativeRect(x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height).isValid
+                && ($0.kind == .arrow || $0.arrowDirection == nil)
         }) else { throw NativeReviewError.invalidGeometry }
         return try updateStep(in: session, stepID: stepID, now: now) { step in
             step.with(annotations: annotations, privacyReview: reviewAfterEdit(step))
@@ -266,7 +284,9 @@ public enum NativeReviewEditor {
         }
         let steps = session.steps.map { $0.stepID == stepID ? transform($0) : $0 }
         return session.with(
+            policy: session.policy.with(reviewStatus: .inReview),
             revision: session.revision + 1,
+            state: .review,
             steps: steps,
             updatedAt: now
         )
@@ -294,7 +314,9 @@ public enum NativeReviewEditor {
     ) -> AtriumCaptureSession {
         session.with(
             assets: assets,
+            policy: session.policy.with(reviewStatus: .inReview),
             revision: session.revision + 1,
+            state: .review,
             steps: steps,
             updatedAt: now
         )

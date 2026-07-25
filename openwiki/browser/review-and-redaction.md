@@ -10,6 +10,10 @@ tags: [editor, redaction, privacy-review, screenshots]
 The side panel supports instruction edits, reorder, delete, merge, insert,
 crop, zoom, arrows, rectangles, text, highlights, blur, mosaic, and opaque
 redaction. Automated sensitive-region suggestions require author review.
+The guide title remains editable in every state. The outbox freezes the
+idempotent create title, then reconciles later renames through Atrium's
+documented metadata update. New-guide and saved-guide controls preserve older
+sessions while their outbox jobs recover independently.
 
 Blur and mosaic are annotations, not permanent secret removal. A flagged
 sensitive region is satisfied only by an opaque redaction that covers it.

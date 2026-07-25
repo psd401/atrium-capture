@@ -47,6 +47,7 @@ button,
 input,
 select,
 textarea {
+  min-width: 0;
   font: inherit;
 }
 
@@ -59,6 +60,8 @@ button {
   background: var(--atrium-evergreen);
   box-shadow: 0 0.1rem 0.25rem rgb(13 59 53 / 12%);
   font-weight: 720;
+  overflow-wrap: break-word;
+  text-wrap: balance;
   cursor: pointer;
   transition:
     background 120ms ease,
@@ -156,6 +159,7 @@ main {
 }
 
 header,
+.next-action,
 .steps,
 .review {
   border: 1px solid var(--atrium-border);
@@ -188,6 +192,50 @@ h1 {
   margin-bottom: 0.65rem;
   font-size: 1.35rem;
   line-height: 1.2;
+}
+
+.title-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.title-editor input {
+  min-width: 0;
+  border-color: transparent;
+  padding: 0.25rem 0.35rem;
+  color: var(--atrium-ink);
+  background: transparent;
+  box-shadow: none;
+  font-size: 1.35rem;
+  font-weight: 760;
+  line-height: 1.2;
+}
+
+.title-editor input:not(:disabled):hover {
+  border-color: var(--atrium-border-strong);
+  background: var(--atrium-canvas);
+}
+
+.title-editor input:disabled {
+  opacity: 1;
+}
+
+.title-editor input:not(:focus) {
+  text-overflow: ellipsis;
+}
+
+.title-editor button {
+  min-height: 2rem;
+  padding: 0.3rem 0.55rem;
+  font-size: 0.75rem;
+}
+
+.title-lock {
+  margin: 0.25rem 0 0;
+  color: var(--atrium-muted);
+  font-size: 0.72rem;
 }
 
 .brand-lockup {
@@ -257,8 +305,33 @@ h1 {
   margin: 1rem 0;
 }
 
+.controls select {
+  grid-column: 1 / -1;
+}
+
 .controls button:only-child {
   grid-column: 1 / -1;
+}
+
+.next-action {
+  margin: 0 0 1rem;
+  padding: 0.85rem 1rem;
+  border-color: #c9dfd8;
+  background: var(--atrium-mint);
+}
+
+.next-action h2 {
+  margin: 0 0 0.25rem;
+  color: var(--atrium-evergreen);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.next-action p {
+  margin: 0;
+  color: var(--atrium-ink-soft);
+  font-size: 0.86rem;
 }
 
 .steps {
@@ -333,6 +406,11 @@ h1 {
 .step-select strong,
 .step-select small {
   display: block;
+  overflow-wrap: anywhere;
+}
+
+.step-select > span:last-child {
+  min-width: 0;
 }
 
 .step-select strong {
@@ -500,6 +578,7 @@ footer,
 .error {
   color: var(--atrium-danger);
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .annotations {
@@ -612,6 +691,8 @@ footer,
 .support dd {
   margin: 0;
   font-weight: 750;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .privacy-callout {
@@ -650,5 +731,34 @@ footer {
 @media (prefers-reduced-motion: reduce) {
   button {
     transition: none;
+  }
+}
+
+@media (max-width: 340px) {
+  main {
+    padding: 0.75rem;
+  }
+
+  .controls {
+    grid-template-columns: 1fr;
+  }
+
+  .controls select {
+    grid-column: 1;
+  }
+
+  .status,
+  .privacy-promise {
+    margin-left: 0;
+  }
+
+  .review {
+    padding-right: 0.75rem;
+    padding-left: 0.75rem;
+  }
+
+  .review > .section-heading {
+    margin-right: -0.75rem;
+    margin-left: -0.75rem;
   }
 }

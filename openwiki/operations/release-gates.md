@@ -1,14 +1,17 @@
 ---
 type: Guide
 title: Release Gates and External Dependencies
-description: Locally complete milestones, build artifacts, operational approvals, and remaining Atrium deployment/server gates.
+description: Engineering-complete milestones, fail-closed release artifacts, operational approvals, and remaining signed-distribution gates.
 tags: [release, milestones, browser, macos, blockers]
 ---
 
 # Release Gates and External Dependencies
 
-M0 through M7 are locally complete. The repository builds an unsigned Chrome
-extension ZIP and an ad-hoc-signed macOS application for synthetic evaluation.
+M0-M3 and M6 meet their exit gates. M4, M5, and M7 have complete locally
+automatable engineering work but remain open until the district pilot, signed
+distribution, and physical-device matrices pass. The browser ZIP is explicitly
+a Chrome Web Store upload, not a signed release. The current local Mac pilot is
+Apple Development-signed and installed with a stable identity.
 
 ## Locally verified
 
@@ -21,11 +24,14 @@ extension ZIP and an ad-hoc-signed macOS application for synthetic evaluation.
 
 ## External or operator gates
 
-- Browser/native public OAuth client registration and UUID distribution
-- Idempotent or recoverable Atrium asset initiation
-- District Chrome signing/store or managed distribution
+- Private PSD-only Chrome Web Store signing and managed-ring distribution
 - Apple distribution signing, notarization, MDM packaging, and physical-device acceptance
-- Authenticated synthetic production-Atrium acceptance
+
+Both public OAuth clients, idempotent authored-asset publication, and
+authenticated synthetic production-Atrium acceptance are live verified.
+`pnpm verify:pilot` remains intentionally red until a receipt matches the exact
+signed, published, PSD-only store item. `pnpm verify:distribution` also requires
+a Developer ID Application signature accepted by Gatekeeper.
 
 Unavailable live capabilities fail closed and do not disable local recording or
 review. They must not be replaced with private image hosting or undocumented
@@ -33,4 +39,6 @@ production routes.
 
 See [`docs/milestones.md`](../../docs/milestones.md),
 [`docs/browser-v1-release.md`](../../docs/browser-v1-release.md), and
+[`docs/browser-store-submission.md`](../../docs/browser-store-submission.md),
+and
 [`docs/macos-runbook.md`](../../docs/macos-runbook.md).

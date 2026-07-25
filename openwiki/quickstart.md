@@ -13,10 +13,12 @@ private Atrium draft. It is an independent MIT-licensed implementation.
 
 ## Current status
 
-Milestones M0 through M7 are locally complete. The Chrome extension and native
-macOS app build and pass their shared contract, recovery, privacy, publication,
-and image-golden tests. Live Atrium authentication and publication remain
-capability-gated until the required documented Atrium endpoints exist.
+The Chrome extension and native macOS app build and pass their shared contract,
+recovery, privacy, publication, and image-golden tests. Live production Atrium
+authentication and private-draft publishing are accepted with synthetic data.
+The remaining release gates are private PSD-only Chrome Web Store signing and
+managed-ring acceptance, plus district Developer ID/notarized Mac distribution
+and the documented physical-device matrix.
 
 ## Repository map
 
@@ -49,7 +51,12 @@ pnpm install --frozen-lockfile
 pnpm check
 pnpm security:audit
 pnpm build:mac
+pnpm verify:pilot
 ```
+
+The final command is intentionally fail-closed until the exact browser upload
+has a matching signed PSD-only store receipt and the Mac app has a stable Apple
+signature.
 
 See [operations/development-and-verification.md](operations/development-and-verification.md)
 for individual gates and environment requirements.

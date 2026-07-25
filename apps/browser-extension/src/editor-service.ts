@@ -50,9 +50,13 @@ export class EditorService {
         if (
           !sourceAsset ||
           (sourceAsset.state !== AssetState.RawLocal &&
-            sourceAsset.state !== AssetState.RedactedLocal)
+            sourceAsset.state !== AssetState.RedactedLocal &&
+            sourceAsset.state !== AssetState.PublishableLocal)
         ) {
           throw new Error('raw_asset_unavailable');
+        }
+        if (sourceAsset.state === AssetState.PublishableLocal) {
+          continue;
         }
         const stored = await this.repository.getStoredAsset(sourceAsset.assetId);
         if (!stored) {

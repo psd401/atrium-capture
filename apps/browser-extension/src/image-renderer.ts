@@ -1,4 +1,12 @@
-import { Kind, MIMEType, type AnnotationElement, type Geometry } from '@atrium-capture/contracts';
+import {
+  Kind,
+  MIMEType,
+  type AnnotationElement,
+  type ArrowDirection,
+  type Geometry,
+} from '@atrium-capture/contracts';
+
+import { arrowEndpoints } from './arrow-geometry.js';
 
 export interface FlattenImageOptions {
   annotations?: readonly AnnotationElement[];
@@ -109,7 +117,7 @@ function renderAnnotation(
 ): void {
   switch (annotation.kind) {
     case Kind.Arrow:
-      renderArrow(context, geometry, annotation.color);
+      renderArrow(context, geometry, annotation.arrowDirection, annotation.color);
       return;
     case Kind.Blur:
       renderBlur(canvas, context, geometry);
@@ -164,12 +172,10 @@ function renderRedaction(
 function renderArrow(
   context: OffscreenCanvasRenderingContext2D,
   geometry: Geometry,
+  direction?: ArrowDirection,
   color?: string,
 ): void {
-  const startX = geometry.x;
-  const startY = geometry.y + geometry.height;
-  const endX = geometry.x + geometry.width;
-  const endY = geometry.y;
+  const { endX, endY, startX, startY } = arrowEndpoints(geometry, direction);
   const angle = Math.atan2(endY - startY, endX - startX);
   const head = Math.max(8, Math.min(20, Math.min(geometry.width, geometry.height) / 2));
   context.save();

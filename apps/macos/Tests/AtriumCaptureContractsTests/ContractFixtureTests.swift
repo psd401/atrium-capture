@@ -37,6 +37,7 @@ final class ContractFixtureTests: XCTestCase {
         XCTAssertEqual(session.steps.count, 2)
         XCTAssertEqual(session.steps[1].instruction.generatedText, "Enter the requested value in Synthetic account label.")
         XCTAssertEqual(session.steps[0].target?.macos?.backingScaleFactor, 2)
+        XCTAssertEqual(session.steps[0].annotations?.first?.arrowDirection?.rawValue, ArrowDirection.downRight.rawValue)
     }
 
     func testDecodesSharedPublishJobFixture() throws {

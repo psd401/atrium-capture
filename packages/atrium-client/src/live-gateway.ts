@@ -4,15 +4,19 @@ import type {
   AtriumGateway,
   CreateMarkdownVersionRequest,
   CreatePrivateObjectRequest,
+  UpdateContentTitleRequest,
   UploadImmutableAssetRequest,
 } from './index.js';
 import { GatewayError } from './index.js';
 
 const MAX_JSON_RESPONSE_BYTES = 1_000_000;
+const API_REQUEST_TIMEOUT_MS = 30_000;
+const ASSET_UPLOAD_TIMEOUT_MS = 120_000;
 const API_PATH = '/api/v1';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const ATRIUM_PRODUCTION_ORIGIN = 'https://aistudio.psd401.ai';
+export const ATRIUM_BROWSER_PRODUCTION_OAUTH_CLIENT_ID = 'ae781263-20c0-4b0c-8a34-8be01ab72fb1';
 export const ATRIUM_OAUTH_AUTHORIZATION_ENDPOINT = `${ATRIUM_PRODUCTION_ORIGIN}/api/oauth/auth`;
 export const ATRIUM_OAUTH_TOKEN_ENDPOINT = `${ATRIUM_PRODUCTION_ORIGIN}/api/oauth/token`;
 export const ATRIUM_OAUTH_REVOCATION_ENDPOINT = `${ATRIUM_PRODUCTION_ORIGIN}/api/oauth/revocation`;
@@ -85,13 +89,15 @@ export class ProductionAtriumGateway implements AtriumGateway {
     }
     this.origin = origin.origin;
     this.apiBaseUrl = `${origin.origin}${API_PATH}`;
-    this.request = options.request ?? fetch;
+    const request = options.request ?? fetch;
+    this.request = (input, init) => request(input, init);
   }
 
   async capabilities(): Promise<AtriumCapabilities> {
     if (this.options.configured && !(await this.options.configured())) {
       return {
         collectionDiscovery: false,
+        contentUpdates: false,
         idempotentWrites: false,
         immutableAssets: false,
         internalPublication: false,
@@ -102,6 +108,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
     }
     return {
       collectionDiscovery: true,
+      contentUpdates: true,
       idempotentWrites: true,
       immutableAssets: true,
       internalPublication: true,
@@ -133,9 +140,12 @@ export class ProductionAtriumGateway implements AtriumGateway {
     if (versionId !== currentVersionId) {
       throw new GatewayError('atrium_version_mismatch', false);
     }
-    const slug = requireBoundedString(data, 'slug', 500);
+    requireBoundedString(data, 'slug', 500);
     return {
-      readerUrl: new URL(`/c/${encodeURIComponent(slug)}`, this.origin).toString(),
+      readerUrl: new URL(
+        `/atrium/${encodeURIComponent(request.contentObjectId)}/edit`,
+        this.origin,
+      ).toString(),
       versionId,
     };
   }
@@ -230,39 +240,56 @@ export class ProductionAtriumGateway implements AtriumGateway {
     }
   }
 
+  async updateContentTitle(
+    request: UpdateContentTitleRequest,
+  ): Promise<{ contentObjectId: string; title: string }> {
+    const title = request.title.trim();
+    if (!title || title.length > 500) {
+      throw new GatewayError('invalid_title', false);
+    }
+    const response = await this.sendApiJson(
+      `/content/${encodeURIComponent(request.contentObjectId)}`,
+      { title },
+      {},
+      'PATCH',
+    );
+    const data = requireDataRecord(response);
+    return {
+      contentObjectId: requireUuid(data, 'id'),
+      title: requireBoundedString(data, 'title', 500),
+    };
+  }
+
   async uploadImmutableAsset(
     request: UploadImmutableAssetRequest,
   ): Promise<{ remoteAssetId: string }> {
+    if ((await sha256Hex(request.bytes)) !== request.sha256.toLowerCase()) {
+      throw new GatewayError('asset_sha256_mismatch', false);
+    }
     const sha256 = hexDigestToBase64Url(request.sha256);
     const filename = assetFilename(request.localAssetId, request.mimeType);
     const existing = await this.findExistingAsset(request, filename, sha256);
     if (existing?.state === 'ready') {
       return { remoteAssetId: existing.id };
     }
-    if (existing && (existing.state === 'pending' || existing.state === 'quarantined')) {
-      try {
-        const completed = await this.completeAsset(request.contentObjectId, existing.id, sha256);
-        return { remoteAssetId: completed.id };
-      } catch (error) {
-        if (new Date(existing.uploadExpiresAt).getTime() > Date.now()) {
-          throw error;
-        }
-      }
-    }
 
     const initiated = await this.initiateAsset(request, filename, sha256);
     const uploadUrl = validateUploadUrl(initiated.upload.url);
+    const uploadHeaders = presignedUploadHeaders(uploadUrl, initiated.upload.headers);
     let uploadError: unknown;
     try {
       const uploadResponse = await this.request(uploadUrl, {
         body: await request.bytes.arrayBuffer(),
-        headers: initiated.upload.headers,
+        headers: uploadHeaders,
         method: 'PUT',
+        signal: AbortSignal.timeout(ASSET_UPLOAD_TIMEOUT_MS),
       });
       if (!uploadResponse.ok) {
         uploadError = new GatewayError(
-          'atrium_asset_upload_failed',
+          `atrium_asset_upload_http_${uploadResponse.status}`,
           uploadResponse.status >= 500 || uploadResponse.status === 429,
+          'Atrium asset storage rejected the reviewed image upload.',
+          uploadResponse.headers.get('x-amz-request-id')?.slice(0, 200) || undefined,
         );
       }
     } catch {
@@ -328,13 +355,19 @@ export class ProductionAtriumGateway implements AtriumGateway {
 
   private async getApiJson(path: string): Promise<unknown> {
     const token = await this.requireAccessToken();
-    const response = await this.request(`${this.apiBaseUrl}${path}`, {
-      headers: {
-        accept: 'application/json',
-        authorization: `Bearer ${token}`,
-        'cache-control': 'no-store',
-      },
-    });
+    let response: Response;
+    try {
+      response = await this.request(`${this.apiBaseUrl}${path}`, {
+        headers: {
+          accept: 'application/json',
+          authorization: `Bearer ${token}`,
+          'cache-control': 'no-store',
+        },
+        signal: AbortSignal.timeout(API_REQUEST_TIMEOUT_MS),
+      });
+    } catch {
+      throw new GatewayError('atrium_network_failed', true);
+    }
     return parseApiResponse(response);
   }
 
@@ -354,6 +387,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
         sha256,
         width: request.pixelWidth,
       },
+      { 'idempotency-key': request.idempotencyKey },
     );
     const data = requireDataRecord(response);
     const asset = parseContentAsset(data);
@@ -364,6 +398,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
     if (
       asset.state !== 'pending' ||
       contentType !== request.mimeType ||
+      normalizeBase64Checksum(checksum) !== sha256 ||
       upload.method !== 'PUT' ||
       typeof upload.url !== 'string' ||
       typeof upload.expiresAt !== 'string'
@@ -399,19 +434,26 @@ export class ProductionAtriumGateway implements AtriumGateway {
     path: string,
     body: unknown,
     extraHeaders: Record<string, string> = {},
+    method: 'PATCH' | 'POST' = 'POST',
   ): Promise<unknown> {
     const token = await this.requireAccessToken();
-    const response = await this.request(`${this.apiBaseUrl}${path}`, {
-      body: JSON.stringify(body),
-      headers: {
-        accept: 'application/json',
-        authorization: `Bearer ${token}`,
-        'cache-control': 'no-store',
-        'content-type': 'application/json',
-        ...extraHeaders,
-      },
-      method: 'POST',
-    });
+    let response: Response;
+    try {
+      response = await this.request(`${this.apiBaseUrl}${path}`, {
+        body: JSON.stringify(body),
+        headers: {
+          accept: 'application/json',
+          authorization: `Bearer ${token}`,
+          'cache-control': 'no-store',
+          'content-type': 'application/json',
+          ...extraHeaders,
+        },
+        method,
+        signal: AbortSignal.timeout(API_REQUEST_TIMEOUT_MS),
+      });
+    } catch {
+      throw new GatewayError('atrium_network_failed', true);
+    }
     return parseApiResponse(response);
   }
 }
@@ -475,6 +517,13 @@ function parseContentAsset(value: unknown): ContentAsset {
   };
 }
 
+function normalizeBase64Checksum(value: string): string | undefined {
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(value)) {
+    return undefined;
+  }
+  return value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
 async function parseApiResponse(response: Response): Promise<unknown> {
   const text = await response.text();
   if (text.length > MAX_JSON_RESPONSE_BYTES) {
@@ -484,6 +533,14 @@ async function parseApiResponse(response: Response): Promise<unknown> {
   try {
     body = text ? (JSON.parse(text) as unknown) : undefined;
   } catch {
+    if (!response.ok) {
+      throw new GatewayError(
+        `atrium_http_${response.status}`,
+        isRetryableHttpStatus(response.status),
+        'Atrium returned a non-JSON error response.',
+        response.headers.get('x-request-id')?.slice(0, 200) || undefined,
+      );
+    }
     throw new GatewayError('atrium_response_invalid', false);
   }
   if (!response.ok) {
@@ -504,15 +561,16 @@ async function parseApiResponse(response: Response): Promise<unknown> {
         : response.headers.get('x-request-id')?.slice(0, 200);
     throw new GatewayError(
       code,
-      response.status === 408 ||
-        response.status === 429 ||
-        response.status >= 500 ||
-        code === 'idempotency_in_progress',
+      isRetryableHttpStatus(response.status) || code === 'idempotency_in_progress',
       message,
       requestId || undefined,
     );
   }
   return body;
+}
+
+function isRetryableHttpStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
 }
 
 function requireDataRecord(value: unknown): Record<string, unknown> {
@@ -587,17 +645,66 @@ function requireNullablePositiveInteger(
 
 function validateUploadUrl(value: string): string {
   const url = new URL(value);
-  if (
-    url.protocol !== 'https:' ||
-    url.username ||
-    url.password ||
-    !(
-      url.hostname === 'amazonaws.com' ||
-      url.hostname.endsWith('.amazonaws.com') ||
-      url.hostname.endsWith('.amazonaws.com.cn')
-    )
-  ) {
+  if (url.protocol !== 'https:' || url.username || url.password || !isS3UploadHost(url.hostname)) {
     throw new GatewayError('atrium_asset_upload_url_invalid', false);
   }
   return url.toString();
+}
+
+async function sha256Hex(bytes: Blob): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await bytes.arrayBuffer());
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function isS3UploadHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  const labels = normalized.split('.');
+  const partitionStart = normalized.endsWith('.amazonaws.com.cn')
+    ? labels.length - 3
+    : normalized.endsWith('.amazonaws.com')
+      ? labels.length - 2
+      : -1;
+  if (partitionStart <= 0) {
+    return false;
+  }
+  return labels
+    .slice(0, partitionStart)
+    .some((label) => label === 's3' || /^s3-(?:accelerate|fips|[a-z0-9-]+)$/.test(label));
+}
+
+/**
+ * AWS's S3 presigner may integrity-bind a checksum either as an unhoisted signed
+ * header or as a signed query parameter. Some current Atrium responses include
+ * the checksum in both the URL query and the returned header map. Re-sending a
+ * hoisted x-amz-* value as an unsigned header makes S3 reject an otherwise valid
+ * request with AccessDenied. Omit only that proven duplicate; fail closed if the
+ * two integrity values disagree.
+ */
+function presignedUploadHeaders(
+  uploadUrl: string,
+  returned: InitiatedContentAsset['upload']['headers'],
+): Record<string, string> {
+  const url = new URL(uploadUrl);
+  const checksumQuery = queryValue(url, 'x-amz-checksum-sha256');
+  const signedHeaders = new Set(
+    (queryValue(url, 'x-amz-signedheaders') ?? '').split(';').map((value) => value.toLowerCase()),
+  );
+  if (checksumQuery !== null && checksumQuery !== returned['x-amz-checksum-sha256']) {
+    throw new GatewayError('atrium_asset_checksum_transport_mismatch', false);
+  }
+  return {
+    'content-type': returned['content-type'],
+    ...(checksumQuery === null || signedHeaders.has('x-amz-checksum-sha256')
+      ? { 'x-amz-checksum-sha256': returned['x-amz-checksum-sha256'] }
+      : {}),
+  };
+}
+
+function queryValue(url: URL, target: string): string | null {
+  for (const [name, value] of url.searchParams) {
+    if (name.toLowerCase() === target) {
+      return value;
+    }
+  }
+  return null;
 }

@@ -1,6 +1,6 @@
 # Dependency review
 
-Review date: 2026-07-22. Registry metadata was checked before the initial install. Versions are exact in `package.json` and the lockfile; CI rejects high-severity advisories and licenses outside the reviewed permissive allowlist.
+Review date: 2026-07-24. Registry metadata was checked before the initial install and again for security overrides. Versions are exact in `package.json` and the lockfile; CI rejects high-severity advisories and licenses outside the reviewed permissive allowlist.
 
 | Direct development dependency    |         Version | License    | Maintenance/security posture and purpose                                                 |
 | -------------------------------- | --------------: | ---------- | ---------------------------------------------------------------------------------------- |
@@ -28,4 +28,18 @@ The resolved development graph also includes `minimatch` under the permissive Bl
 
 WXT's development-only packaging graph includes a small number of dual-license expressions. Atrium Capture selects the permissive alternative for JSZip (MIT), node-forge (BSD-3-Clause), `rc` (BSD-2-Clause/MIT/Apache-2.0), and type-fest (MIT/CC0); pako's combined MIT and Zlib terms are both permissive. `winreg@0.0.12` declares the legacy identifier `BSD` rather than a modern SPDX variant and is used only by cross-platform development tooling; that exact package/version is explicitly reviewed. The license checker allows these exact expressions so a new or changed expression still fails closed.
 
-WXT 0.20.27's Firefox runner requested vulnerable historical ranges of `adm-zip`, `shell-quote`, `tmp`, and a notification-only `uuid` dependency. Root pnpm overrides select patched `adm-zip@0.6.0`, `tmp@0.2.7`, and `uuid@11.1.1`. No patched `shell-quote` release exists, so the Chrome-only workspace replaces the unused `fx-runner` package with a dependency-free, fail-closed local module; Firefox development is deliberately unavailable. A root `esbuild@0.28.1` override also closes the development-server advisory inherited through Vite. The Chrome build and extension-loaded test are rerun against these resolutions, and none of the disabled Firefox runner code is present in the production extension bundle.
+WXT 0.20.27's Firefox runner requested vulnerable historical ranges of
+`adm-zip`, `shell-quote`, `tmp`, and a notification-only `uuid` dependency.
+Root pnpm overrides select patched `adm-zip@0.6.0`, `tmp@0.2.7`, and
+`uuid@11.1.1`. No patched `shell-quote` release exists, so the Chrome-only
+workspace replaces the unused `fx-runner` package with a dependency-free,
+fail-closed local module; Firefox development is deliberately unavailable. A
+root `esbuild@0.28.1` override also closes the development-server advisory
+inherited through Vite. On 2026-07-24, registry advisory
+`GHSA-mh99-v99m-4gvg` affected every resolved historical `brace-expansion`
+range through ESLint/minimatch and WXT's development runner. The root override
+now selects MIT-licensed `brace-expansion@5.0.8`, which provides both ESM and
+CommonJS exports and supports the repository's Node 24 baseline. The complete
+lint/build/test/package/license gate and `pnpm security:audit` pass against that
+resolution. None of these build-only packages is present in the production
+extension bundle.

@@ -5,14 +5,32 @@ import AtriumCaptureMacPlatform
 import SwiftUI
 
 struct AtriumCaptureWorkspaceView: View {
+    private enum FocusField: Hashable {
+        case guideTitle
+        case manualInstruction
+        case stepInstruction(String)
+        case annotationText(String)
+    }
+
     @ObservedObject var model: CaptureAppModel
+    @State private var selectedToolByStep: [String: Kind] = [:]
+    @State private var draftRectByStep: [String: CGRect] = [:]
+    @State private var annotationTextByStep: [String: String] = [:]
+    @State private var guideTitleDraft = ""
+    @FocusState private var focusedField: FocusField?
+    private let sidebarControlColumns = [
+        GridItem(.flexible(minimum: 0), spacing: 8),
+        GridItem(.flexible(minimum: 0), spacing: 8),
+    ]
 
     var body: some View {
         NavigationSplitView {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     brandHeader
-                    permissionCard
+                    if !captureAccessReady {
+                        permissionCard
+                    }
                     recordingCard
                     reviewAndPublishCard
                     if !model.pins.isEmpty {
@@ -29,6 +47,18 @@ struct AtriumCaptureWorkspaceView: View {
         .background(AtriumCaptureTheme.canvas)
         .tint(AtriumCaptureTheme.evergreen)
         .frame(minWidth: 920, minHeight: 620)
+        .onAppear {
+            guideTitleDraft = model.session?.title ?? ""
+            DispatchQueue.main.async {
+                focusedField = nil
+            }
+        }
+        .onChange(of: model.session?.sessionID) {
+            guideTitleDraft = model.session?.title ?? ""
+        }
+        .onChange(of: model.session?.title) {
+            guideTitleDraft = model.session?.title ?? ""
+        }
     }
 
     private var brandHeader: some View {
@@ -61,17 +91,49 @@ struct AtriumCaptureWorkspaceView: View {
         sectionCard(title: "Capture access", systemImage: "checkmark.shield") {
             permissionRow("Screen Recording", model.permissions.screenRecording)
             permissionRow("Accessibility", model.permissions.accessibility)
-            Button("Review permissions") { model.requestPermissions() }
-                .buttonStyle(AtriumSecondaryButtonStyle())
+            Text(
+                model.permissions.screenRecording == .granted
+                    ? "Screen Recording is ready. Grant Accessibility next; Atrium Capture will then appear in that privacy list."
+                    : "Grant Screen Recording first. If macOS asks, quit and reopen Atrium Capture before granting Accessibility."
+            )
+            .font(.system(size: 11))
+            .foregroundStyle(AtriumCaptureTheme.inkSoft)
+
+            Button(
+                model.permissions.screenRecording == .granted
+                    ? "Grant Accessibility"
+                    : "Grant Screen Recording"
+            ) {
+                model.requestPermissions()
+            }
+            .buttonStyle(AtriumPrimaryButtonStyle())
+
+            LazyVGrid(columns: sidebarControlColumns, alignment: .leading, spacing: 8) {
+                Button("Screen Recording settings") {
+                    model.openScreenRecordingSettings()
+                }
+                Button("Accessibility settings") {
+                    model.openAccessibilitySettings()
+                }
+            }
+            .buttonStyle(AtriumSecondaryButtonStyle())
         }
+    }
+
+    private var captureAccessReady: Bool {
+        model.permissions.screenRecording == .granted
+            && model.permissions.accessibility == .granted
     }
 
     private var recordingCard: some View {
         sectionCard(title: "Recorder", systemImage: "record.circle") {
-            HStack(spacing: 8) {
-                Button("Start") { model.start() }
+            LazyVGrid(columns: sidebarControlColumns, alignment: .leading, spacing: 8) {
+                Button("Start new recording") { model.start() }
                     .buttonStyle(AtriumPrimaryButtonStyle())
-                    .disabled(model.session?.state == .recording)
+                    .disabled(!model.canStartRecording)
+                Button("New guide") { model.newGuide() }
+                    .buttonStyle(AtriumSecondaryButtonStyle())
+                    .disabled(!model.canStartRecording)
                 Button(model.session?.state == .paused ? "Resume" : "Pause") {
                     model.pauseOrResume()
                 }
@@ -88,16 +150,41 @@ struct AtriumCaptureWorkspaceView: View {
                     )
             }
 
+            if model.guides.count > 1 {
+                Menu {
+                    ForEach(model.guides, id: \.sessionID) { guide in
+                        Button {
+                            model.openGuide(sessionID: guide.sessionID)
+                        } label: {
+                            if guide.sessionID == model.session?.sessionID {
+                                Label(guide.title, systemImage: "checkmark")
+                            } else {
+                                Text(guide.title)
+                            }
+                        }
+                        .disabled(
+                            guide.sessionID == model.session?.sessionID
+                                || model.session?.state == .recording
+                                || model.session?.state == .paused
+                        )
+                    }
+                } label: {
+                    Label("Open saved guide", systemImage: "clock.arrow.circlepath")
+                }
+                .menuStyle(.borderlessButton)
+            }
+
             Divider()
 
             AtriumSectionLabel(title: "Quick capture", systemImage: "viewfinder")
-            HStack(spacing: 8) {
+            LazyVGrid(columns: sidebarControlColumns, alignment: .leading, spacing: 8) {
                 Button {
                     model.captureRegion()
                 } label: {
                     Label("Region", systemImage: "rectangle.dashed")
                 }
                 .buttonStyle(AtriumSecondaryButtonStyle())
+                .disabled(!model.canQuickCapture)
 
                 Button {
                     model.captureElement()
@@ -105,15 +192,27 @@ struct AtriumCaptureWorkspaceView: View {
                     Label("Element", systemImage: "scope")
                 }
                 .buttonStyle(AtriumSecondaryButtonStyle())
+                .disabled(!model.canQuickCapture)
             }
             Text("⌥⌘A region  ·  ⌥⌘E element  ·  ⌥⌘P pins")
                 .font(.system(size: 11))
                 .foregroundStyle(AtriumCaptureTheme.muted)
+            Text("Quick captures append to the current unpublished guide; otherwise they begin a new one.")
+                .font(.system(size: 11))
+                .foregroundStyle(AtriumCaptureTheme.inkSoft)
         }
     }
 
     private var reviewAndPublishCard: some View {
         sectionCard(title: "Review & publish", systemImage: "checkmark.seal") {
+            Label(reviewGuidance, systemImage: "arrow.right.circle.fill")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AtriumCaptureTheme.inkSoft)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AtriumCaptureTheme.mint)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+
             Button {
                 model.flattenAndApprove()
             } label: {
@@ -125,25 +224,75 @@ struct AtriumCaptureWorkspaceView: View {
             HStack(spacing: 8) {
                 TextField("Add a manual step", text: $model.manualInstruction)
                     .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .manualInstruction)
                 Button("Add") { model.insertManualStep() }
                     .buttonStyle(AtriumSecondaryButtonStyle())
+                    .disabled(
+                        !model.canEditGuideContent
+                            || model.manualInstruction
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                                .isEmpty
+                    )
             }
-            .disabled(model.session?.state != .review)
+            .disabled(!model.canEditGuideContent)
 
-            Button {
-                model.publishPrivateDraft()
-            } label: {
-                Label("Create private Atrium draft", systemImage: "arrow.up.doc")
+            if model.session?.state == .publishable && !model.currentGuideContentFrozen {
+                Text("Adding a step reopens privacy review before publishing.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(AtriumCaptureTheme.inkSoft)
+            } else if model.currentGuideContentFrozen {
+                Text("These published steps are preserved for safe retries. Start a new guide for different content; this guide’s title remains editable.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(AtriumCaptureTheme.muted)
             }
-            .buttonStyle(AtriumPrimaryButtonStyle())
-            .disabled(model.session?.state != .publishable || !model.liveAtriumAvailable)
+
+            if !model.hasUnfinishedPublishJob {
+                Button {
+                    model.publishPrivateDraft()
+                } label: {
+                    Label("Create private Atrium draft", systemImage: "arrow.up.doc")
+                }
+                .buttonStyle(AtriumPrimaryButtonStyle())
+                .disabled(
+                    model.session?.state != .publishable
+                        || !model.liveAtriumAvailable
+                        || model.currentGuideContentFrozen
+                )
+            }
+
+            if let guidance = model.publishFailureGuidance,
+               let failure = model.publishJob?.lastError {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(guidance, systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                    Text("Atrium code: \(failure.code)")
+                        .font(.system(.caption, design: .monospaced, weight: .semibold))
+                    if let requestID = failure.requestID {
+                        Text("Support ID: \(requestID)")
+                            .font(.system(.caption, design: .monospaced))
+                    }
+                    if model.canRetryPublish {
+                        Button("Retry Atrium publish") {
+                            model.retryPublish()
+                        }
+                        .buttonStyle(AtriumSecondaryButtonStyle())
+                    }
+                }
+                .font(.system(size: 11))
+                .foregroundStyle(AtriumCaptureTheme.inkSoft)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(AtriumCaptureTheme.warningSoft)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            }
 
             if model.atriumConfigured && model.atriumAuthentication == .signedOut {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Connect to Atrium to create a private draft.")
+                    Text(
+                        "Sign in with your district AI Studio account. You will return here automatically."
+                    )
                         .font(.system(size: 11))
                         .foregroundStyle(AtriumCaptureTheme.inkSoft)
-                    Button("Sign in to Atrium") { model.signInToAtrium() }
+                    Button("Sign in to AI Studio") { model.signInToAtrium() }
                         .buttonStyle(AtriumSecondaryButtonStyle())
                 }
             } else if model.atriumAuthentication == .signedIn {
@@ -159,9 +308,7 @@ struct AtriumCaptureWorkspaceView: View {
 
             if !model.atriumConfigured {
                 Label {
-                    Text(
-                        "Atrium OAuth client registration is not configured. Local capture and privacy review remain available."
-                    )
+                    Text("AI Studio sign-in is temporarily unavailable. Contact district support.")
                 } icon: {
                     Image(systemName: "info.circle.fill")
                 }
@@ -173,6 +320,14 @@ struct AtriumCaptureWorkspaceView: View {
             }
 
             if model.publishJob?.phase == .readyAsDraft {
+                Button {
+                    model.openAtriumDraft()
+                } label: {
+                    Label("Open Atrium draft", systemImage: "arrow.up.right.square")
+                }
+                .buttonStyle(AtriumSecondaryButtonStyle())
+                .disabled(!model.canOpenAtriumDraft)
+
                 Button {
                     model.publishInternally()
                 } label: {
@@ -190,7 +345,7 @@ struct AtriumCaptureWorkspaceView: View {
                 Label("Pin first reviewed image", systemImage: "pin")
             }
             .buttonStyle(AtriumSecondaryButtonStyle())
-            .disabled(model.session?.state != .publishable)
+            .disabled(!model.canPinReviewedImage)
 
             Menu {
                 Button("Do not copy") { model.setClipboardRetention(.doNotCopy) }
@@ -205,6 +360,26 @@ struct AtriumCaptureWorkspaceView: View {
             }
             .menuStyle(.borderlessButton)
             .foregroundStyle(AtriumCaptureTheme.evergreen)
+        }
+    }
+
+    private var reviewGuidance: String {
+        guard let state = model.session?.state else {
+            return "Start a recording or choose a quick capture. Stop the recording to review your steps."
+        }
+        switch state {
+        case .recording, .paused:
+            return "Finish the recording to review captured steps and remove private information."
+        case .review:
+            return "Review every step, add required redactions, then prepare publishable images."
+        case .publishable where model.atriumAuthentication == .signedOut:
+            return "Your reviewed images are ready. Sign in to AI Studio to create a private Atrium draft."
+        case .publishable:
+            return "Your reviewed images are ready to create as a private Atrium draft."
+        case .submitted:
+            return "Your private Atrium draft is ready. Publish it internally only when approved."
+        case .archived:
+            return "This capture is archived. Start a new recording when you are ready."
         }
     }
 
@@ -247,18 +422,51 @@ struct AtriumCaptureWorkspaceView: View {
 
     private var guideWorkspace: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center, spacing: 14) {
                     AtriumSectionLabel(title: "Visual guide", systemImage: "square.stack.3d.up")
-                    Text(model.session?.title ?? "New visual guide")
+                    Spacer(minLength: 8)
+                    AtriumStatusPill(
+                        label: "\(model.session?.steps.count ?? 0) steps",
+                        recording: model.session?.state == .recording
+                    )
+                }
+                HStack(spacing: 8) {
+                    TextField("Guide title", text: $guideTitleDraft)
+                        .textFieldStyle(.plain)
                         .font(.system(size: 26, weight: .bold))
                         .foregroundStyle(AtriumCaptureTheme.ink)
+                        .frame(minWidth: 0, maxWidth: .infinity)
+                        .focused($focusedField, equals: .guideTitle)
+                        .onSubmit {
+                            model.updateTitle(guideTitleDraft)
+                        }
+                        .disabled(!model.canEditGuideTitle)
+                    if model.canEditGuideTitle {
+                        Button("Save title") {
+                            model.updateTitle(guideTitleDraft)
+                        }
+                        .buttonStyle(AtriumSecondaryButtonStyle())
+                        .fixedSize(horizontal: true, vertical: false)
+                        .disabled(
+                            guideTitleDraft
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                                .isEmpty
+                                || guideTitleDraft.count > 500
+                        )
+                    }
                 }
-                Spacer()
-                AtriumStatusPill(
-                    label: "\(model.session?.steps.count ?? 0) steps",
-                    recording: model.session?.state == .recording
-                )
+                if let job = model.publishJob {
+                    Text(
+                        job.remoteTitle == model.session?.title
+                            ? "Title saved in Atrium."
+                            : job.contentObjectID == nil
+                                ? "Title saved locally and will sync when Atrium confirms the draft."
+                                : "Title saved locally; Atrium sync will retry safely."
+                    )
+                        .font(.system(size: 11))
+                        .foregroundStyle(AtriumCaptureTheme.muted)
+                }
             }
             .padding(24)
             .background(AtriumCaptureTheme.panel)
@@ -331,6 +539,8 @@ struct AtriumCaptureWorkspaceView: View {
                     .frame(minHeight: 38)
                     .background(AtriumCaptureTheme.canvas)
                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .focused($focusedField, equals: .stepInstruction(step.stepID))
+                    .disabled(!model.canEditGuideContent)
 
                     HStack(spacing: 7) {
                         metadataPill(step.action.rawValue)
@@ -339,40 +549,55 @@ struct AtriumCaptureWorkspaceView: View {
                 }
             }
 
-            Divider()
-
             HStack(spacing: 7) {
-                Button("Redact") {
-                    model.addAnnotation(stepID: step.stepID, kind: .redaction)
-                }
-                Button("Highlight") {
-                    model.addAnnotation(stepID: step.stepID, kind: .highlight)
-                }
-                Button("Rectangle") {
-                    model.addAnnotation(stepID: step.stepID, kind: .rectangle)
-                }
-                Button("Arrow") {
-                    model.addAnnotation(stepID: step.stepID, kind: .arrow)
-                }
-                Button("Text") {
-                    model.addAnnotation(stepID: step.stepID, kind: .text)
-                }
-                Menu("More") {
-                    Button("Blur") {
-                        model.addAnnotation(stepID: step.stepID, kind: .blur)
+                annotationToolButton("Redact", kind: .redaction, step: step)
+                annotationToolButton("Highlight", kind: .highlight, step: step)
+                annotationToolButton("Rectangle", kind: .rectangle, step: step)
+                annotationToolButton("Arrow", kind: .arrow, step: step)
+                annotationToolButton("Text", kind: .text, step: step)
+                Menu(moreMenuTitle(for: step)) {
+                    Button(toolMenuTitle("Blur", kind: .blur, step: step)) {
+                        selectTool(.blur, for: step)
                     }
-                    Button("Mosaic") {
-                        model.addAnnotation(stepID: step.stepID, kind: .mosaic)
+                    Button(toolMenuTitle("Mosaic", kind: .mosaic, step: step)) {
+                        selectTool(.mosaic, for: step)
                     }
                     Button("Crop center 80%") {
                         model.setCenterCrop(stepID: step.stepID)
                     }
+                    Button("Reset crop") {
+                        model.resetCrop(stepID: step.stepID)
+                    }
+                    .disabled(step.crop == nil)
                 }
                 .menuStyle(.borderlessButton)
                 .foregroundStyle(AtriumCaptureTheme.evergreen)
             }
             .buttonStyle(AtriumSecondaryButtonStyle())
             .disabled(model.session?.state != .review)
+
+            annotationGuidance(for: step)
+            screenshotPreview(for: step)
+
+            HStack(spacing: 7) {
+                Button("Undo annotation") {
+                    model.undoLastAnnotation(stepID: step.stepID)
+                }
+                .disabled((step.annotations ?? []).isEmpty)
+                if step.crop != nil {
+                    Button("Reset crop") {
+                        model.resetCrop(stepID: step.stepID)
+                    }
+                }
+                Spacer()
+                Text("\((step.annotations ?? []).count) annotations")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AtriumCaptureTheme.muted)
+            }
+            .buttonStyle(AtriumSecondaryButtonStyle())
+            .disabled(model.session?.state != .review)
+
+            Divider()
 
             HStack(spacing: 7) {
                 Button("Move up") { model.moveStep(stepID: step.stepID, offset: -1) }
@@ -387,6 +612,146 @@ struct AtriumCaptureWorkspaceView: View {
         }
         .padding(16)
         .atriumPanel()
+    }
+
+    @ViewBuilder
+    private func screenshotPreview(for step: StepElement) -> some View {
+        if let screenshot = model.screenshotImage(for: step) {
+            AtriumScreenshotCanvas(
+                image: screenshot,
+                activeTool: selectedToolByStep[step.stepID],
+                editing: model.session?.state == .review
+                    && model.editableImageBounds(for: step) != nil,
+                draftRect: Binding(
+                    get: { draftRectByStep[step.stepID] },
+                    set: { draftRectByStep[step.stepID] = $0 }
+                )
+            ) { start, end, previewSize in
+                guard
+                    let tool = selectedToolByStep[step.stepID],
+                    let imageBounds = model.editableImageBounds(for: step),
+                    let geometry = NativeAnnotationPlacement.geometry(
+                        from: NativePoint(x: start.x, y: start.y),
+                        to: NativePoint(x: end.x, y: end.y),
+                        previewWidth: previewSize.width,
+                        previewHeight: previewSize.height,
+                        imageBounds: imageBounds
+                    )
+                else {
+                    return
+                }
+                model.addAnnotation(
+                    stepID: step.stepID,
+                    kind: tool,
+                    geometry: geometry,
+                    arrowDirection: tool.rawValue == Kind.arrow.rawValue
+                        ? NativeAnnotationPlacement.arrowDirection(
+                            from: NativePoint(x: start.x, y: start.y),
+                            to: NativePoint(x: end.x, y: end.y)
+                        )
+                        : nil,
+                    text: annotationTextByStep[step.stepID]
+                )
+            }
+                .accessibilityLabel("Screenshot for step \(step.sequence + 1)")
+        } else {
+            Label("Screenshot preview unavailable", systemImage: "photo.badge.exclamationmark")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AtriumCaptureTheme.muted)
+                .frame(maxWidth: .infinity, minHeight: 120)
+                .background(AtriumCaptureTheme.canvas)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    private func annotationToolButton(
+        _ title: String,
+        kind: Kind,
+        step: StepElement
+    ) -> some View {
+        Button(toolMenuTitle(title, kind: kind, step: step)) {
+            selectTool(kind, for: step)
+        }
+    }
+
+    @ViewBuilder
+    private func annotationGuidance(for step: StepElement) -> some View {
+        if let tool = selectedToolByStep[step.stepID] {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label(
+                        "Drag over the screenshot to place \(toolDisplayName(tool)).",
+                        systemImage: "cursorarrow.motionlines"
+                    )
+                    Spacer()
+                    Button("Undo") {
+                        model.undoLastAnnotation(stepID: step.stepID)
+                    }
+                    .buttonStyle(AtriumSecondaryButtonStyle())
+                    .disabled((step.annotations ?? []).isEmpty)
+                    Button("Done") {
+                        selectedToolByStep[step.stepID] = nil
+                        draftRectByStep[step.stepID] = nil
+                    }
+                    .buttonStyle(AtriumSecondaryButtonStyle())
+                }
+                if tool.rawValue == Kind.text.rawValue {
+                    TextField(
+                        "Annotation text",
+                        text: Binding(
+                            get: { annotationTextByStep[step.stepID] ?? "Annotation" },
+                            set: { annotationTextByStep[step.stepID] = $0 }
+                        )
+                    )
+                    .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .annotationText(step.stepID))
+                }
+                if tool.rawValue == Kind.blur.rawValue
+                    || tool.rawValue == Kind.mosaic.rawValue {
+                    Text("Blur and mosaic are visual effects, not privacy redactions.")
+                        .foregroundStyle(AtriumCaptureTheme.warning)
+                } else if tool.rawValue == Kind.redaction.rawValue {
+                    Text("Redaction is flattened last as opaque replacement pixels.")
+                        .foregroundStyle(AtriumCaptureTheme.evergreen)
+                }
+            }
+            .font(.system(size: 11, weight: .medium))
+            .padding(10)
+            .background(AtriumCaptureTheme.mint)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        } else {
+            Text("Choose an edit tool, then drag directly over the screenshot.")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AtriumCaptureTheme.inkSoft)
+        }
+    }
+
+    private func selectTool(_ kind: Kind, for step: StepElement) {
+        if selectedToolByStep[step.stepID]?.rawValue == kind.rawValue {
+            selectedToolByStep[step.stepID] = nil
+            draftRectByStep[step.stepID] = nil
+        } else {
+            selectedToolByStep[step.stepID] = kind
+        }
+    }
+
+    private func toolMenuTitle(_ title: String, kind: Kind, step: StepElement) -> String {
+        selectedToolByStep[step.stepID]?.rawValue == kind.rawValue
+            ? "✓ \(title)"
+            : title
+    }
+
+    private func moreMenuTitle(for step: StepElement) -> String {
+        guard let tool = selectedToolByStep[step.stepID],
+              tool.rawValue == Kind.blur.rawValue || tool.rawValue == Kind.mosaic.rawValue
+        else {
+            return "More"
+        }
+        return "✓ \(toolDisplayName(tool))"
+    }
+
+    private func toolDisplayName(_ kind: Kind) -> String {
+        kind.rawValue.replacingOccurrences(of: "_", with: " ")
     }
 
     private func permissionRow(
@@ -418,9 +783,9 @@ struct AtriumCaptureWorkspaceView: View {
         case .granted:
             "Granted"
         case .denied:
-            "Denied"
+            "Blocked"
         case .notDetermined:
-            "Not determined"
+            "Approval needed"
         }
     }
 
@@ -456,6 +821,155 @@ struct AtriumCaptureWorkspaceView: View {
                 word.prefix(1).uppercased() + word.dropFirst().lowercased()
             }
             .joined(separator: " ")
+    }
+}
+
+private struct AtriumScreenshotCanvas: View {
+    let image: NSImage
+    let activeTool: Kind?
+    let editing: Bool
+    @Binding var draftRect: CGRect?
+    let onCommit: (CGPoint, CGPoint, CGSize) -> Void
+    @State private var draftStart: CGPoint?
+    @State private var draftEnd: CGPoint?
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.medium)
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+
+                if let draftRect {
+                    draftOverlay(draftRect)
+                }
+
+                if editing, activeTool != nil {
+                    Rectangle()
+                        .fill(Color.clear)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                                .onChanged { value in
+                                    draftStart = clamped(value.startLocation, within: proxy.size)
+                                    draftEnd = clamped(value.location, within: proxy.size)
+                                    draftRect = normalizedRect(
+                                        from: value.startLocation,
+                                        to: value.location,
+                                        within: proxy.size
+                                    )
+                                }
+                                .onEnded { value in
+                                    let start = clamped(value.startLocation, within: proxy.size)
+                                    let end = clamped(value.location, within: proxy.size)
+                                    draftRect = nil
+                                    draftStart = nil
+                                    draftEnd = nil
+                                    onCommit(start, end, proxy.size)
+                                }
+                        )
+                        .accessibilityLabel("Editable screenshot canvas")
+                        .accessibilityHint("Drag to place the selected annotation.")
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .aspectRatio(imageAspectRatio, contentMode: .fit)
+        .frame(maxWidth: .infinity)
+        .background(Color.black.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    activeTool == nil
+                        ? AtriumCaptureTheme.border
+                        : AtriumCaptureTheme.evergreen,
+                    lineWidth: activeTool == nil ? 1 : 2
+                )
+        }
+    }
+
+    @ViewBuilder
+    private func draftOverlay(_ rect: CGRect) -> some View {
+        if activeTool?.rawValue == Kind.arrow.rawValue,
+           let draftStart,
+           let draftEnd {
+            arrowPath(from: draftStart, to: draftEnd)
+            .stroke(Color.yellow, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+        } else {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(draftFill)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .stroke(draftStroke, lineWidth: 2)
+                }
+                .frame(width: max(1, rect.width), height: max(1, rect.height))
+                .position(x: rect.midX, y: rect.midY)
+        }
+    }
+
+    private func arrowPath(from start: CGPoint, to end: CGPoint) -> Path {
+        let angle = atan2(end.y - start.y, end.x - start.x)
+        let head = max(8, min(18, hypot(end.x - start.x, end.y - start.y) / 4))
+        var path = Path()
+        path.move(to: start)
+        path.addLine(to: end)
+        path.move(to: end)
+        path.addLine(to: CGPoint(
+            x: end.x - head * cos(angle - .pi / 6),
+            y: end.y - head * sin(angle - .pi / 6)
+        ))
+        path.move(to: end)
+        path.addLine(to: CGPoint(
+            x: end.x - head * cos(angle + .pi / 6),
+            y: end.y - head * sin(angle + .pi / 6)
+        ))
+        return path
+    }
+
+    private var imageAspectRatio: CGFloat {
+        guard image.size.width > 0, image.size.height > 0 else { return 1 }
+        return image.size.width / image.size.height
+    }
+
+    private var draftFill: Color {
+        switch activeTool?.rawValue {
+        case Kind.redaction.rawValue:
+            Color.black.opacity(0.82)
+        case Kind.highlight.rawValue:
+            Color.yellow.opacity(0.28)
+        case Kind.blur.rawValue, Kind.mosaic.rawValue:
+            Color.gray.opacity(0.42)
+        case Kind.text.rawValue:
+            Color.black.opacity(0.68)
+        default:
+            Color.clear
+        }
+    }
+
+    private var draftStroke: Color {
+        activeTool?.rawValue == Kind.redaction.rawValue
+            ? Color.white
+            : Color.yellow
+    }
+
+    private func normalizedRect(from start: CGPoint, to end: CGPoint, within size: CGSize) -> CGRect {
+        let clampedStart = clamped(start, within: size)
+        let clampedEnd = clamped(end, within: size)
+        return CGRect(
+            x: min(clampedStart.x, clampedEnd.x),
+            y: min(clampedStart.y, clampedEnd.y),
+            width: abs(clampedEnd.x - clampedStart.x),
+            height: abs(clampedEnd.y - clampedStart.y)
+        )
+    }
+
+    private func clamped(_ point: CGPoint, within size: CGSize) -> CGPoint {
+        CGPoint(
+            x: min(max(0, point.x), size.width),
+            y: min(max(0, point.y), size.height)
+        )
     }
 }
 #endif

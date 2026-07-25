@@ -13,6 +13,7 @@ import {
 
 export type EditorCommand =
   | { kind: 'begin_review' }
+  | { kind: 'update_title'; title: string }
   | { kind: 'update_instruction'; stepId: string; text: string }
   | { kind: 'move_step'; stepId: string; toIndex: number }
   | { kind: 'delete_step'; stepId: string }
@@ -48,10 +49,27 @@ export function applyEditorCommand(
   command: EditorCommand,
   context: EditorContext = {},
 ): AtriumCaptureSession {
-  assertEditable(session);
   const now = context.now ?? new Date();
   const idFactory = context.idFactory ?? defaultIdFactory;
 
+  if (command.kind === 'update_title') {
+    const title = command.title.trim();
+    if (!title || title.length > 500) {
+      throw new Error('invalid_title');
+    }
+    return {
+      ...session,
+      revision: session.revision + 1,
+      title,
+      updatedAt: now,
+    };
+  }
+
+  if (command.kind === 'insert_step') {
+    assertComposable(session);
+  } else {
+    assertEditable(session);
+  }
   switch (command.kind) {
     case 'begin_review':
       return changed(session, session.steps, now);
@@ -296,6 +314,15 @@ function assertEditable(session: AtriumCaptureSession): void {
   }
 }
 
+function assertComposable(session: AtriumCaptureSession): void {
+  if (
+    session.state !== AtriumCaptureSessionState.Review &&
+    session.state !== AtriumCaptureSessionState.Publishable
+  ) {
+    throw new Error('session_not_editable');
+  }
+}
+
 function requireStepIndex(session: AtriumCaptureSession, stepId: string): number {
   const index = session.steps.findIndex((step) => step.stepId === stepId);
   if (index < 0) {
@@ -356,6 +383,9 @@ function scaleGeometry(geometry: Geometry, factor: number): Geometry {
 
 function assertAnnotation(annotation: AnnotationElement): void {
   assertGeometry(annotation.geometry);
+  if (annotation.kind !== Kind.Arrow && annotation.arrowDirection !== undefined) {
+    throw new Error('arrow_direction_requires_arrow');
+  }
   if (annotation.kind === Kind.Text && !annotation.text?.trim()) {
     throw new Error('text_annotation_requires_text');
   }

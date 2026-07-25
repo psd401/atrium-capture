@@ -16,7 +16,6 @@ public struct FlattenedNativeImage: Equatable, Sendable {
 
 #if os(macOS)
 import AppKit
-import CoreImage
 import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
@@ -85,7 +84,7 @@ public enum CoreGraphicsReviewRenderer {
             ))
         }
         for annotation in annotations where annotation.kind != .redaction {
-            draw(transform(annotation), in: context, imageHeight: CGFloat(height))
+            try draw(transform(annotation), in: context, imageHeight: CGFloat(height))
         }
 
         // Privacy redactions are deliberately last, opaque, and use copy blending.
@@ -115,7 +114,11 @@ public enum CoreGraphicsReviewRenderer {
         )
     }
 
-    private static func draw(_ annotation: AnnotationElement, in context: CGContext, imageHeight: CGFloat) {
+    private static func draw(
+        _ annotation: AnnotationElement,
+        in context: CGContext,
+        imageHeight: CGFloat
+    ) throws {
         let rect = renderRect(annotation.geometry, imageHeight: imageHeight)
         let color = parseColor(annotation.color) ?? NSColor.systemYellow
         context.saveGState()
@@ -128,16 +131,19 @@ public enum CoreGraphicsReviewRenderer {
             context.setLineWidth(3)
             context.stroke(rect)
         case .arrow:
-            let start = CGPoint(x: rect.minX, y: rect.minY)
-            let end = CGPoint(x: rect.maxX, y: rect.maxY)
+            let (start, end) = arrowEndpoints(
+                direction: annotation.arrowDirection ?? .upRight,
+                rect: rect
+            )
             context.setStrokeColor(color.cgColor)
             context.setFillColor(color.cgColor)
             context.setLineWidth(4)
+            context.setLineCap(.round)
             context.move(to: start)
             context.addLine(to: end)
             context.strokePath()
             let angle = atan2(end.y - start.y, end.x - start.x)
-            let head: CGFloat = 13
+            let head = max(8, min(20, min(rect.width, rect.height) / 2))
             context.move(to: end)
             context.addLine(to: CGPoint(
                 x: end.x - head * cos(angle - .pi / 6),
@@ -164,26 +170,87 @@ public enum CoreGraphicsReviewRenderer {
             )
             NSGraphicsContext.restoreGraphicsState()
         case .blur, .mosaic:
-            if let current = context.makeImage() {
-                let input = CIImage(cgImage: current)
-                let output: CIImage
-                if annotation.kind == .blur {
-                    output = input.clampedToExtent().applyingGaussianBlur(sigma: 8).cropped(to: input.extent)
-                } else {
-                    output = input.applyingFilter("CIPixellate", parameters: [
-                        kCIInputScaleKey: 12,
-                        kCIInputCenterKey: CIVector(x: rect.midX, y: rect.midY),
-                    ])
-                }
-                let ciContext = CIContext(options: [.cacheIntermediates: false])
-                if let filtered = ciContext.createCGImage(output, from: rect) {
-                    context.draw(filtered, in: rect)
-                }
+            guard let current = context.makeImage() else {
+                throw NativeRenderError.contextCreationFailed
             }
+            let patch = try resampledPatch(
+                current,
+                rect: rect,
+                sampleSize: annotation.kind == .blur ? 5 : 12
+            )
+            context.saveGState()
+            context.clip(to: rect)
+            context.interpolationQuality = annotation.kind == .blur ? .high : .none
+            context.draw(patch, in: rect)
+            context.restoreGState()
         case .redaction:
             break
         }
         context.restoreGState()
+    }
+
+    private static func resampledPatch(
+        _ image: CGImage,
+        rect: CGRect,
+        sampleSize: CGFloat
+    ) throws -> CGImage {
+        let width = max(1, Int(ceil(rect.width / sampleSize)))
+        let height = max(1, Int(ceil(rect.height / sampleSize)))
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let downsampled = CGContext(
+                  data: nil,
+                  width: width,
+                  height: height,
+                  bitsPerComponent: 8,
+                  bytesPerRow: 0,
+                  space: colorSpace,
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              )
+        else { throw NativeRenderError.contextCreationFailed }
+        let scaleX = CGFloat(width) / rect.width
+        let scaleY = CGFloat(height) / rect.height
+        downsampled.interpolationQuality = .high
+        downsampled.draw(
+            image,
+            in: CGRect(
+                x: -rect.minX * scaleX,
+                y: -rect.minY * scaleY,
+                width: CGFloat(image.width) * scaleX,
+                height: CGFloat(image.height) * scaleY
+            )
+        )
+        guard let patch = downsampled.makeImage() else {
+            throw NativeRenderError.contextCreationFailed
+        }
+        return patch
+    }
+
+    private static func arrowEndpoints(
+        direction: ArrowDirection,
+        rect: CGRect
+    ) -> (CGPoint, CGPoint) {
+        switch direction {
+        case .upRight:
+            (
+                CGPoint(x: rect.minX, y: rect.minY),
+                CGPoint(x: rect.maxX, y: rect.maxY)
+            )
+        case .downRight:
+            (
+                CGPoint(x: rect.minX, y: rect.maxY),
+                CGPoint(x: rect.maxX, y: rect.minY)
+            )
+        case .upLeft:
+            (
+                CGPoint(x: rect.maxX, y: rect.minY),
+                CGPoint(x: rect.minX, y: rect.maxY)
+            )
+        case .downLeft:
+            (
+                CGPoint(x: rect.maxX, y: rect.maxY),
+                CGPoint(x: rect.minX, y: rect.minY)
+            )
+        }
     }
 
     private static func renderRect(_ geometry: Geometry, imageHeight: CGFloat) -> CGRect {

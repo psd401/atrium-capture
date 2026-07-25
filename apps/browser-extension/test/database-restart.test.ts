@@ -81,6 +81,35 @@ describe('IndexedDB restart recovery', () => {
     expect((await second.transition('resume'))?.state).toBe('recording');
   });
 
+  it('starts a new guide without deleting the prior guide and can reopen either after restart', async () => {
+    const first = repository();
+    const original = await first.startSession('Synthetic original guide', '0.1.0');
+    await first.applyEvent({
+      action: Action.Click,
+      eventId: '10000000-0000-4000-8000-000000000101',
+      occurredAt: new Date(1),
+    });
+    await first.transition('stop');
+    const created = await first.startNewSession('Synthetic second guide', '0.1.0', new Date(2));
+    await expect(first.activateSession(original.sessionId)).rejects.toThrow(
+      'active_recording_must_stop',
+    );
+    await expect(
+      first.startNewSession('Synthetic forbidden third guide', '0.1.0', new Date(3)),
+    ).rejects.toThrow('active_recording_must_stop');
+    await first.transition('stop');
+    await first.close();
+
+    const restarted = repository();
+    expect((await restarted.getActiveSession())?.sessionId).toBe(created.sessionId);
+    expect(await restarted.listSessions()).toHaveLength(2);
+
+    const reopened = await restarted.activateSession(original.sessionId);
+    expect(reopened.title).toBe('Synthetic original guide');
+    expect(reopened.steps).toHaveLength(1);
+    expect((await restarted.getActiveSession())?.sessionId).toBe(original.sessionId);
+  });
+
   it('deletes all local capture stores for user-initiated rollback', async () => {
     const current = repository();
     await current.startSession('Synthetic deletion', '0.1.0');

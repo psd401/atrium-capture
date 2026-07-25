@@ -80,6 +80,7 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
         }
 
         let mosaic = AnnotationElement(
+            arrowDirection: nil,
             color: "#000000",
             geometry: Geometry(height: 10, width: 10, x: 0, y: 0),
             id: "50000000-0000-4000-8000-000000000010",
@@ -90,6 +91,7 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
         XCTAssertThrowsError(try NativeReviewEditor.validatePrivacyAnnotations(in: session))
 
         let redaction = AnnotationElement(
+            arrowDirection: nil,
             color: "#000000",
             geometry: Geometry(height: 10, width: 10, x: 0, y: 0),
             id: "50000000-0000-4000-8000-000000000011",
@@ -108,6 +110,11 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
             assetState: .rawLocal,
             stepReview: .notReviewed
         )
+        session = try NativeReviewEditor.setTitle(
+            in: session,
+            title: "  Synthetic renamed guide  "
+        )
+        XCTAssertEqual(session.title, "Synthetic renamed guide")
         session = try NativeReviewEditor.insertManualStep(
             in: session,
             afterStepID: session.steps[0].stepID,
@@ -132,6 +139,33 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
         XCTAssertEqual(session.assets[0].state, .deleted)
     }
 
+    func testManualStepReopensPreparedGuideButTitleRenamePreservesItsState() throws {
+        var session = makeSession(
+            state: .publishable,
+            review: .approved,
+            assetState: .publishableLocal,
+            stepReview: .approved
+        )
+        session = try NativeReviewEditor.setTitle(in: session, title: "Prepared synthetic guide")
+        XCTAssertEqual(session.state, .publishable)
+        XCTAssertEqual(session.policy.reviewStatus, .approved)
+
+        session = try NativeReviewEditor.insertManualStep(
+            in: session,
+            afterStepID: session.steps.last?.stepID,
+            text: "Complete the synthetic manual step."
+        )
+        XCTAssertEqual(session.state, .review)
+        XCTAssertEqual(session.policy.reviewStatus, .inReview)
+        XCTAssertEqual(session.steps.last?.action, .manual)
+
+        XCTAssertThrowsError(
+            try NativeReviewEditor.setTitle(in: session, title: String(repeating: "x", count: 501))
+        ) { error in
+            XCTAssertEqual(error as? NativeReviewError, .invalidTitle)
+        }
+    }
+
     func testPublisherRecoversEveryLostResponseWithoutRemoteDuplicates() async throws {
         for failure in [
             MockNativeFailurePoint.object,
@@ -140,7 +174,11 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
             .internalPublish,
         ] {
             let repository = MemoryNativePublishRepository(assets: ["assets/publishable.png": Data([1, 2, 3])])
-            let gateway = MockNativeAtriumGateway(failAfterCommitAt: failure)
+            let requestID = failure == .object ? "req_synthetic_object_create" : nil
+            let gateway = MockNativeAtriumGateway(
+                failAfterCommitAt: failure,
+                failureRequestID: requestID
+            )
             let publisher = DurableNativePublisher(repository: repository, gateway: gateway)
             let job = try await publisher.enqueue(
                 session: makeSession(
@@ -156,6 +194,10 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
                 _ = try await publisher.resume(jobID: job.jobID, publishInternal: true)
                 XCTFail("Expected the synthetic committed-response failure.")
             } catch {}
+            if failure == .object {
+                let interrupted = try XCTUnwrap(repository.loadJob(jobID: job.jobID))
+                XCTAssertEqual(interrupted.lastError?.requestID, requestID)
+            }
             let recovered = try await publisher.resume(jobID: job.jobID, publishInternal: true)
             XCTAssertEqual(recovered.phase, .complete)
             let counts = gateway.remoteCounts
@@ -164,6 +206,233 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
             XCTAssertEqual(counts.versions, 1)
             XCTAssertEqual(counts.publishes, 1)
         }
+    }
+
+    func testExplicitRetryRepairsNeedsAttentionWithoutRemoteDuplicates() async throws {
+        for failure in [
+            MockNativeFailurePoint.object,
+            .asset,
+            .version,
+            .internalPublish,
+        ] {
+            let repository = MemoryNativePublishRepository(assets: [
+                "assets/publishable.png": Data([1, 2, 3]),
+            ])
+            let gateway = MockNativeAtriumGateway(
+                failAfterCommitAt: failure,
+                failureRetryable: false
+            )
+            let publisher = DurableNativePublisher(repository: repository, gateway: gateway)
+            let job = try await publisher.enqueue(
+                session: makeSession(
+                    state: .publishable,
+                    review: .approved,
+                    assetState: .publishableLocal,
+                    stepReview: .approved
+                ),
+                jobID: "needs-attention-\(failure.rawValue)"
+            )
+
+            do {
+                _ = try await publisher.resume(jobID: job.jobID, publishInternal: true)
+                XCTFail("Expected the synthetic non-retryable response failure.")
+            } catch {}
+            let interrupted = try XCTUnwrap(repository.loadJob(jobID: job.jobID))
+            XCTAssertEqual(interrupted.phase, .needsAttention)
+            XCTAssertFalse(interrupted.lastError?.retryable ?? true)
+
+            let recovered = try await publisher.retry(
+                jobID: job.jobID,
+                publishInternal: true
+            )
+
+            XCTAssertEqual(recovered.phase, .complete)
+            XCTAssertNil(recovered.lastError)
+            let counts = gateway.remoteCounts
+            XCTAssertEqual(counts.objects, 1)
+            XCTAssertEqual(counts.assets, 1)
+            XCTAssertEqual(counts.versions, 1)
+            XCTAssertEqual(counts.publishes, 1)
+        }
+    }
+
+    func testPublisherFreezesAmbiguousCreateTitleThenSynchronizesLatestRename() async throws {
+        let repository = MemoryNativePublishRepository(assets: [
+            "assets/publishable.png": Data([1, 2, 3]),
+        ])
+        let gateway = MockNativeAtriumGateway(failAfterCommitAt: .object)
+        let publisher = DurableNativePublisher(repository: repository, gateway: gateway)
+        let original = makeSession(
+            state: .publishable,
+            review: .approved,
+            assetState: .publishableLocal,
+            stepReview: .approved
+        )
+        let queued = try await publisher.enqueue(
+            session: original,
+            jobID: "synthetic-title-recovery-job"
+        )
+
+        do {
+            _ = try await publisher.resume(jobID: queued.jobID)
+            XCTFail("Expected the synthetic committed-response failure.")
+        } catch {}
+        let renamed = try NativeReviewEditor.setTitle(
+            in: original,
+            title: "Synthetic renamed after ambiguous create"
+        )
+        try repository.saveSession(renamed)
+
+        let ready = try await publisher.resume(jobID: queued.jobID)
+
+        XCTAssertEqual(ready.phase, .readyAsDraft)
+        XCTAssertEqual(ready.createTitle, original.title)
+        XCTAssertEqual(ready.remoteTitle, renamed.title)
+        XCTAssertEqual(
+            gateway.remoteTitle(objectID: try XCTUnwrap(ready.contentObjectID)),
+            renamed.title
+        )
+        XCTAssertEqual(gateway.remoteCounts.objects, 1)
+    }
+
+    func testPublisherPersistsLegacyCreateTitleBeforeFirstRemoteRequest() async throws {
+        let original = makeSession(
+            state: .publishable,
+            review: .approved,
+            assetState: .publishableLocal,
+            stepReview: .approved
+        )
+        let seedRepository = MemoryNativePublishRepository(assets: [
+            "assets/publishable.png": Data([1, 2, 3]),
+        ])
+        let queued = try await DurableNativePublisher(
+            repository: seedRepository,
+            gateway: MockNativeAtriumGateway()
+        ).enqueue(
+            session: original,
+            jobID: "synthetic-legacy-title-job"
+        )
+        let renamed = try NativeReviewEditor.setTitle(
+            in: original,
+            title: "Synthetic legacy title at first attempt"
+        )
+        let repository = MemoryNativePublishRepository(assets: [
+            "assets/publishable.png": Data([1, 2, 3]),
+        ])
+        try repository.saveSession(renamed)
+        try repository.saveJob(queued.with(createTitle: .some(nil)))
+        let gateway = MockNativeAtriumGateway(failAfterCommitAt: .object)
+        let publisher = DurableNativePublisher(repository: repository, gateway: gateway)
+
+        do {
+            _ = try await publisher.resume(jobID: queued.jobID)
+            XCTFail("Expected the synthetic committed-response failure.")
+        } catch {}
+
+        let frozen = try XCTUnwrap(repository.loadJob(jobID: queued.jobID))
+        XCTAssertEqual(frozen.createTitle, renamed.title)
+        try repository.saveJob(frozen.with(createTitle: .some("Synthetic unsafe replacement")))
+        XCTAssertEqual(
+            try repository.loadJob(jobID: queued.jobID)?.createTitle,
+            renamed.title
+        )
+    }
+
+    func testPublisherRetriesInterruptedTitleUpdateWithoutRecreatingDraft() async throws {
+        let repository = MemoryNativePublishRepository(assets: [
+            "assets/publishable.png": Data([1, 2, 3]),
+        ])
+        let gateway = MockNativeAtriumGateway(failAfterCommitAt: .titleUpdate)
+        let publisher = DurableNativePublisher(repository: repository, gateway: gateway)
+        let original = makeSession(
+            state: .publishable,
+            review: .approved,
+            assetState: .publishableLocal,
+            stepReview: .approved
+        )
+        let queued = try await publisher.enqueue(session: original)
+        let ready = try await publisher.resume(jobID: queued.jobID)
+        let renamed = try NativeReviewEditor.setTitle(
+            in: try XCTUnwrap(repository.loadSession(sessionID: ready.sessionID)),
+            title: "Synthetic retryable title update"
+        )
+        try repository.saveSession(renamed)
+
+        let interruptedValue = await publisher.syncTitle(jobID: ready.jobID)
+        let recoveredValue = await publisher.syncTitle(jobID: ready.jobID)
+        let interrupted = try XCTUnwrap(interruptedValue)
+        let recovered = try XCTUnwrap(recoveredValue)
+
+        XCTAssertEqual(interrupted.lastError?.code, "TITLE_UPDATE_FAILED")
+        XCTAssertTrue(interrupted.lastError?.retryable == true)
+        XCTAssertNil(recovered.lastError)
+        XCTAssertEqual(recovered.remoteTitle, renamed.title)
+        XCTAssertEqual(gateway.remoteCounts.objects, 1)
+        XCTAssertEqual(gateway.remoteCounts.versions, 1)
+    }
+
+    func testPublisherReconcilesTitleAfterRecoveringInProgressPhase() async throws {
+        let repository = MemoryNativePublishRepository(assets: [
+            "assets/publishable.png": Data([1, 2, 3]),
+        ])
+        let gateway = MockNativeAtriumGateway(failAfterCommitAt: .titleUpdate)
+        let publisher = DurableNativePublisher(repository: repository, gateway: gateway)
+        let original = makeSession(
+            state: .publishable,
+            review: .approved,
+            assetState: .publishableLocal,
+            stepReview: .approved
+        )
+        let queued = try await publisher.enqueue(session: original)
+        let ready = try await publisher.resume(jobID: queued.jobID)
+        let renamed = try NativeReviewEditor.setTitle(
+            in: try XCTUnwrap(repository.loadSession(sessionID: ready.sessionID)),
+            title: "Synthetic restart-phase title update"
+        )
+        try repository.saveSession(renamed)
+        try repository.saveJob(ready.with(phase: .uploadingAssets))
+
+        let recovered = try await publisher.resume(jobID: queued.jobID)
+
+        XCTAssertEqual(recovered.phase, .readyAsDraft)
+        XCTAssertEqual(recovered.remoteTitle, renamed.title)
+        XCTAssertNil(recovered.lastError)
+        XCTAssertEqual(gateway.remoteCounts.objects, 1)
+        XCTAssertEqual(gateway.remoteCounts.versions, 1)
+    }
+
+    func testSessionReconciliationNeverRegressesSubmittedStateDuringTitleSave() throws {
+        let repository = MemoryNativePublishRepository()
+        let original = makeSession(
+            state: .publishable,
+            review: .approved,
+            assetState: .publishableLocal,
+            stepReview: .approved
+        )
+        try repository.saveSession(original)
+        let submitted = try repository.markSessionSubmitted(
+            sessionID: original.sessionID,
+            now: Date(timeIntervalSince1970: 1_001)
+        )
+        let staleRename = try NativeReviewEditor.setTitle(
+            in: original,
+            title: "Synthetic title saved during submit",
+            now: Date(timeIntervalSince1970: 1_002)
+        )
+
+        let reconciled = try repository.reconcileSession(staleRename)
+        let renamedAgain = try repository.updateSessionTitle(
+            sessionID: original.sessionID,
+            title: "Synthetic final submitted title",
+            now: Date(timeIntervalSince1970: 1_003)
+        )
+
+        XCTAssertEqual(submitted.state, .submitted)
+        XCTAssertEqual(reconciled.state, .submitted)
+        XCTAssertEqual(reconciled.title, staleRename.title)
+        XCTAssertGreaterThan(reconciled.revision, staleRename.revision)
+        XCTAssertEqual(renamedAgain.state, .submitted)
+        XCTAssertEqual(renamedAgain.title, "Synthetic final submitted title")
     }
 
     func testPublisherCannotEnqueueRawOrUnreviewedSession() async throws {

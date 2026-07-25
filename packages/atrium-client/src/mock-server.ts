@@ -67,6 +67,15 @@ async function route(
       });
       return json(response, 201, result);
     }
+    const objectMatch = /^\/objects\/([^/]+)$/.exec(relativePath);
+    if (request.method === 'PATCH' && objectMatch?.[1]) {
+      const body = requireRecord(await readJson(request));
+      const result = await gateway.updateContentTitle({
+        contentObjectId: decodeURIComponent(objectMatch[1]),
+        title: requireString(body, 'title'),
+      });
+      return json(response, 200, result);
+    }
     const assetMatch = /^\/objects\/([^/]+)\/assets\/([^/]+)$/.exec(relativePath);
     if (request.method === 'PUT' && assetMatch?.[1] && assetMatch[2]) {
       const bytes = await readBody(request, MAX_ASSET_BYTES);

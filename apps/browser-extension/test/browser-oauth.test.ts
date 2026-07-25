@@ -4,12 +4,29 @@ import {
   BrowserOAuthBroker,
   BrowserOAuthSession,
   BrowserTrustedTokenStore,
+  classifyInvalidRequestDescription,
+  oauthSupportCode,
   parseTokenResponse,
   type OAuthTokenSet,
   type TrustedTokenStore,
 } from '../src/browser-oauth.js';
 
 describe('trusted browser OAuth broker', () => {
+  it('classifies invalid-request descriptions without reflecting remote text', () => {
+    expect(classifyInvalidRequestDescription('missing code_verifier')).toBe(
+      'oauth_invalid_request_pkce_verifier',
+    );
+    expect(classifyInvalidRequestDescription('redirect_uri does not match')).toBe(
+      'oauth_invalid_request_redirect_uri',
+    );
+    expect(classifyInvalidRequestDescription('origin is not allowed for client')).toBe(
+      'oauth_invalid_request_origin',
+    );
+    expect(classifyInvalidRequestDescription('untrusted token=secret')).toBe(
+      'oauth_invalid_request',
+    );
+  });
+
   it('uses Authorization Code with S256 PKCE and stores tokens only in the trusted store', async () => {
     let authorizationUrl = '';
     let saved: OAuthTokenSet | undefined;
@@ -38,6 +55,7 @@ describe('trusted browser OAuth broker', () => {
       {
         authorizationEndpoint: 'https://login.example.test/authorize',
         clientId: 'synthetic-public-client',
+        resource: 'https://api.example.test',
         scopes: ['openid'],
       },
       async (request) => {
@@ -57,6 +75,7 @@ describe('trusted browser OAuth broker', () => {
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     expect(url.searchParams.has('code_challenge')).toBe(true);
     expect(url.searchParams.has('code_verifier')).toBe(false);
+    expect(url.searchParams.get('resource')).toBe('https://api.example.test');
     expect(exchangedVerifier.length).toBeGreaterThan(40);
     expect(saved).toEqual({
       accessToken: 'synthetic-access-token',
@@ -74,6 +93,21 @@ describe('trusted browser OAuth broker', () => {
     expect(() => parseTokenResponse({ access_token: 'synthetic' })).toThrow(
       'oauth_token_response_invalid',
     );
+    expect(() =>
+      parseTokenResponse({
+        access_token: 'synthetic\r\ninjected',
+        expires_in: 300,
+        token_type: 'Bearer',
+      }),
+    ).toThrow('oauth_token_response_invalid');
+    expect(() =>
+      parseTokenResponse({
+        access_token: 'synthetic',
+        expires_in: 300,
+        refresh_token: 'synthetic\ninjected',
+        token_type: 'Bearer',
+      }),
+    ).toThrow('oauth_token_response_invalid');
   });
 
   it('rejects an authorization response outside the exact Chrome callback', async () => {
@@ -112,6 +146,87 @@ describe('trusted browser OAuth broker', () => {
       ),
     ).rejects.toThrow('oauth_callback_invalid');
     expect(saved).toBeUndefined();
+  });
+
+  it('maps browser identity failures to bounded support codes', async () => {
+    const store: TrustedTokenStore = {
+      async clear() {},
+      async load() {
+        return undefined;
+      },
+      async save() {},
+    };
+    const authorizeWith = async (error: Error) =>
+      new BrowserOAuthBroker(
+        {
+          getRedirectURL: () => 'https://extension.example.test/atrium',
+          async launchWebAuthFlow() {
+            throw error;
+          },
+        },
+        store,
+      ).authorize(
+        {
+          authorizationEndpoint: 'https://login.example.test/authorize',
+          clientId: 'synthetic-public-client',
+          scopes: ['openid'],
+        },
+        async () => {
+          throw new Error('exchange_must_not_run');
+        },
+      );
+
+    await expect(authorizeWith(new Error('The user closed the window.'))).rejects.toThrow(
+      'oauth_authorization_cancelled',
+    );
+    await expect(
+      authorizeWith(new Error('Authorization page could not be loaded.')),
+    ).rejects.toThrow('oauth_authorization_page_unavailable');
+    await expect(authorizeWith(new Error('browser-specific failure'))).rejects.toThrow(
+      'oauth_browser_identity_failed',
+    );
+    expect(oauthSupportCode(new Error('raw browser message'))).toBe('oauth_sign_in_failed');
+  });
+
+  it('maps a rejected extension origin without reflecting the remote description', async () => {
+    const session = new BrowserOAuthSession(
+      {
+        getRedirectURL: () => 'https://extension.example.test/atrium',
+        async launchWebAuthFlow(details) {
+          const state = new URL(details.url).searchParams.get('state');
+          return `https://extension.example.test/atrium?code=synthetic-code&state=${state}`;
+        },
+      },
+      {
+        async clear() {},
+        async load() {
+          return undefined;
+        },
+        async save() {
+          throw new Error('token_must_not_be_saved');
+        },
+      },
+      async () => ({
+        authorizationEndpoint: 'https://aistudio.example.test/api/oauth/auth',
+        clientId: '70000000-0000-4000-8000-000000000001',
+        resource: 'https://aistudio.example.test',
+        revocationEndpoint: 'https://aistudio.example.test/api/oauth/revocation',
+        scopes: ['openid'],
+        tokenEndpoint: 'https://aistudio.example.test/api/oauth/token',
+      }),
+      async () =>
+        new Response(
+          JSON.stringify({
+            error: 'invalid_request',
+            error_description:
+              'origin chrome-extension://synthetic-secret-value not allowed for client',
+          }),
+          { status: 400 },
+        ),
+    );
+
+    await expect(session.signIn()).rejects.toThrow('oauth_invalid_request_origin');
+    await expect(session.status()).resolves.toBe('signed_out');
   });
 
   it('refreshes once across concurrent callers, rotates tokens, and revokes on sign-out', async () => {
@@ -257,5 +372,44 @@ describe('trusted browser OAuth broker', () => {
     expect(Object.keys(values)).toEqual(['atriumOAuthTokens']);
     values.atriumOAuthTokens = { accessToken: 'truncated' };
     await expect(store.load()).rejects.toThrow('oauth_token_store_invalid');
+    values.atriumOAuthTokens = {
+      accessToken: 'synthetic\r\ninjected',
+      clientId: 'synthetic-client',
+      expiresAt: 10_000,
+      tokenType: 'Bearer',
+    };
+    await expect(store.load()).rejects.toThrow('oauth_token_store_invalid');
+  });
+
+  it('fails closed before touching storage when trusted-context isolation is unavailable', async () => {
+    let reads = 0;
+    let writes = 0;
+    const store = new BrowserTrustedTokenStore(
+      {
+        async get() {
+          reads += 1;
+          return {};
+        },
+        async remove() {
+          writes += 1;
+        },
+        async set() {
+          writes += 1;
+        },
+      },
+      Promise.reject(new Error('synthetic access-level failure')),
+    );
+
+    await expect(store.load()).rejects.toThrow('oauth_token_store_unavailable');
+    await expect(
+      store.save({
+        accessToken: 'synthetic-secret-access',
+        clientId: 'synthetic-client',
+        expiresAt: 10_000,
+        tokenType: 'Bearer',
+      }),
+    ).rejects.toThrow('oauth_token_store_unavailable');
+    expect(reads).toBe(0);
+    expect(writes).toBe(0);
   });
 });

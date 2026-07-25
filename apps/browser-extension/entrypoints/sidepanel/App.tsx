@@ -18,6 +18,12 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { browser } from 'wxt/browser';
 
+import { authenticationFailureMessage } from '../../src/authentication-guidance.js';
+import {
+  parsePublicationFailureResponse,
+  publicationFailureMessage,
+} from '../../src/publication-guidance.js';
+import { arrowEndpoints, directionForArrow } from '../../src/arrow-geometry.js';
 import type { PublicationSnapshot } from '../../src/publication-service.js';
 import type { SupportDiagnostics } from '../../src/diagnostics-service.js';
 import type { NativeBridgeSnapshot } from '../../src/native-bridge-service.js';
@@ -36,6 +42,7 @@ type DrawingTool = Kind | 'crop';
 
 export function App() {
   const [session, setSession] = useState<AtriumCaptureSession>();
+  const [guides, setGuides] = useState<AtriumCaptureSession[]>([]);
   const [publication, setPublication] = useState<PublicationSnapshot>();
   const [diagnostics, setDiagnostics] = useState<SupportDiagnostics>();
   const [nativeBridge, setNativeBridge] = useState<NativeBridgeSnapshot>();
@@ -46,6 +53,7 @@ export function App() {
   const [assetDataUrl, setAssetDataUrl] = useState<string>();
   const [tool, setTool] = useState<DrawingTool>();
   const [zoom, setZoom] = useState(1);
+  const [titleDraft, setTitleDraft] = useState('');
   const [instructionDraft, setInstructionDraft] = useState('');
   const [manualDraft, setManualDraft] = useState('');
   const [textDraft, setTextDraft] = useState('Note');
@@ -53,12 +61,14 @@ export function App() {
   const imageRef = useRef<HTMLImageElement>(null);
 
   const refresh = useCallback(async () => {
-    const [next, publicationSnapshot] = await Promise.all([
+    const [next, publicationSnapshot, guideList] = await Promise.all([
       browser.runtime.sendMessage({ kind: 'recorder.snapshot' }),
       browser.runtime.sendMessage({ kind: 'publisher.snapshot' }),
+      browser.runtime.sendMessage({ kind: 'recorder.list-guides' }),
     ]);
     setSession(next as AtriumCaptureSession | undefined);
     setPublication(publicationSnapshot as PublicationSnapshot | undefined);
+    setGuides(guideList as AtriumCaptureSession[]);
   }, []);
 
   useEffect(() => {
@@ -156,6 +166,10 @@ export function App() {
   }, [selectedStep]);
 
   useEffect(() => {
+    setTitleDraft(session?.title ?? '');
+  }, [session?.sessionId, session?.title]);
+
+  useEffect(() => {
     let current = true;
     setAssetDataUrl(undefined);
     if (!selectedAsset || selectedAsset.state === AssetState.Deleted) {
@@ -175,7 +189,7 @@ export function App() {
     };
   }, [selectedAsset]);
 
-  const recorderCommand = async (command: 'start' | 'pause' | 'resume' | 'stop') => {
+  const recorderCommand = async (command: 'new' | 'start' | 'pause' | 'resume' | 'stop') => {
     setPending(true);
     setError(undefined);
     try {
@@ -189,6 +203,29 @@ export function App() {
       setSession(next);
     } catch {
       setError('The recorder could not update. Try again.');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const activateGuide = async (sessionId: string) => {
+    if (sessionId === session?.sessionId) {
+      return;
+    }
+    setPending(true);
+    setError(undefined);
+    try {
+      const next = (await browser.runtime.sendMessage({
+        kind: 'recorder.activate-guide',
+        payload: { sessionId },
+      })) as AtriumCaptureSession | undefined;
+      if (!next) {
+        throw new Error('activate_guide_failed');
+      }
+      setSession(next);
+      await refresh();
+    } catch {
+      setError('That saved guide could not be opened.');
     } finally {
       setPending(false);
     }
@@ -252,8 +289,13 @@ export function App() {
       if (kind !== 'publisher.enqueue' && !payload.jobId) {
         throw new Error('publish_job_missing');
       }
-      const job = await browser.runtime.sendMessage({ kind, payload });
-      if (!job) {
+      const result = await browser.runtime.sendMessage({ kind, payload });
+      const failure = parsePublicationFailureResponse(result);
+      if (failure) {
+        setError(publicationFailureMessage(failure.errorCode, failure.requestId));
+        return;
+      }
+      if (!result) {
         throw new Error('publisher_command_failed');
       }
       await refresh();
@@ -271,6 +313,15 @@ export function App() {
       const result = await browser.runtime.sendMessage({ kind });
       if (!result) {
         throw new Error('authentication_command_failed');
+      }
+      if (
+        kind === 'publisher.sign-in' &&
+        typeof result === 'object' &&
+        'errorCode' in result &&
+        typeof result.errorCode === 'string'
+      ) {
+        setError(authenticationFailureMessage(result.errorCode));
+        return;
       }
       await refresh();
     } catch {
@@ -339,14 +390,36 @@ export function App() {
   const isReview = state === AtriumCaptureSessionState.Review;
   const isPublishable = state === AtriumCaptureSessionState.Publishable;
   const isSubmitted = state === AtriumCaptureSessionState.Submitted;
-  const canStart =
-    (!session || (!isRecording && !isPaused && !isReview && !isPublishable)) &&
-    diagnostics?.managedPolicy.valid !== false;
+  const canEditTitle = Boolean(session);
+  const canStart = !session && diagnostics?.managedPolicy.valid !== false;
+  const canCreateNew =
+    Boolean(session && !isRecording && !isPaused) && diagnostics?.managedPolicy.valid !== false;
   const canCreateDraft = Boolean(
     publication?.capabilities.idempotentWrites &&
     publication.capabilities.immutableAssets &&
     (publication.authentication === 'not_required' || publication.authentication === 'signed_in'),
   );
+  const nextAction = (() => {
+    if (!session) {
+      return 'Start a recording. When you stop, Atrium Capture will walk you through privacy review.';
+    }
+    if (isRecording || isPaused) {
+      return 'Finish the recording to review the captured steps and remove private information.';
+    }
+    if (isReview) {
+      return 'Review each step, add required redactions, and prepare the images for publishing.';
+    }
+    if (isPublishable && publication?.authentication === 'signed_out') {
+      return 'Your reviewed images are ready. Sign in to AI Studio to create a private Atrium draft.';
+    }
+    if (isPublishable) {
+      return 'Your reviewed images are ready to save as a private Atrium draft.';
+    }
+    if (isSubmitted) {
+      return 'Your private Atrium draft is ready. Open it in Atrium or publish it internally when approved.';
+    }
+    return 'Start a new recording when you are ready.';
+  })();
 
   const approveClearSteps = async () => {
     if (!session) {
@@ -430,6 +503,7 @@ export function App() {
     }
     await editorCommand({
       annotation: {
+        ...(tool === Kind.Arrow ? { arrowDirection: directionForArrow(drawingStart, end) } : {}),
         geometry,
         id: crypto.randomUUID(),
         kind: tool,
@@ -441,6 +515,11 @@ export function App() {
     });
   };
 
+  const atriumDraftUrl = safeAtriumDraftUrl(
+    publication?.job?.readerUrl,
+    publication?.capabilities.mode,
+  );
+
   return (
     <main>
       <header>
@@ -450,7 +529,38 @@ export function App() {
           </span>
           <div>
             <p className="eyebrow">Atrium Capture</p>
-            <h1>{session?.title ?? 'New visual guide'}</h1>
+            {session ? (
+              <div className="title-editor">
+                <input
+                  aria-label="Guide title"
+                  disabled={!canEditTitle}
+                  maxLength={500}
+                  onChange={(event) => setTitleDraft(event.target.value)}
+                  value={titleDraft}
+                />
+                {canEditTitle && (
+                  <button
+                    className="secondary"
+                    disabled={pending || !titleDraft.trim() || titleDraft === session.title}
+                    onClick={() => void editorCommand({ kind: 'update_title', title: titleDraft })}
+                    type="button"
+                  >
+                    Save
+                  </button>
+                )}
+              </div>
+            ) : (
+              <h1>New visual guide</h1>
+            )}
+            {session && publication?.job && (
+              <p className="title-lock">
+                {publication.job.remoteTitle === session.title
+                  ? 'Title saved in Atrium.'
+                  : publication.job.contentObjectId
+                    ? 'Title saved locally; Atrium sync will retry automatically.'
+                    : 'Title saved locally and will sync after Atrium confirms the draft.'}
+              </p>
+            )}
           </div>
         </div>
         <p className={`status ${isRecording ? 'recording' : ''}`} role="status">
@@ -461,9 +571,28 @@ export function App() {
       </header>
 
       <section aria-label="Recording controls" className="controls">
+        {guides.length > 1 && (
+          <select
+            aria-label="Saved guides"
+            disabled={pending || isRecording || isPaused}
+            onChange={(event) => void activateGuide(event.target.value)}
+            value={session?.sessionId ?? ''}
+          >
+            {guides.map((guide) => (
+              <option key={guide.sessionId} value={guide.sessionId}>
+                {guide.title} · {stateLabel(guide.state)}
+              </option>
+            ))}
+          </select>
+        )}
         {canStart && (
           <button disabled={pending} onClick={() => void recorderCommand('start')} type="button">
             Start recording
+          </button>
+        )}
+        {canCreateNew && (
+          <button disabled={pending} onClick={() => void recorderCommand('new')} type="button">
+            New guide
           </button>
         )}
         {isRecording && (
@@ -488,7 +617,16 @@ export function App() {
         )}
       </section>
 
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
+
+      <section aria-labelledby="next-action-heading" className="next-action">
+        <h2 id="next-action-heading">Next step</h2>
+        <p>{nextAction}</p>
+      </section>
 
       {diagnostics?.managedPolicy.valid === false && (
         <section className="policy-error" role="alert">
@@ -797,29 +935,57 @@ export function App() {
               : 'Raw source bytes were deleted.'}
           </p>
 
+          {isPublishable && !publication?.job && (
+            <div className="insert-row">
+              <input
+                aria-label="New manual step"
+                maxLength={2000}
+                onChange={(event) => setManualDraft(event.target.value)}
+                placeholder="Add a manual step"
+                value={manualDraft}
+              />
+              <button
+                disabled={pending || !manualDraft.trim()}
+                onClick={() =>
+                  void editorCommand({
+                    ...(session?.steps.at(-1)?.stepId
+                      ? { afterStepId: session.steps.at(-1)!.stepId }
+                      : {}),
+                    kind: 'insert_step',
+                    text: manualDraft,
+                  }).then((next) => next && setManualDraft(''))
+                }
+                type="button"
+              >
+                Add
+              </button>
+              <small>Adding a step reopens privacy review before publishing.</small>
+            </div>
+          )}
+
           {publication?.authentication === 'unconfigured' && !publication.job && (
             <div className="capability-callout">
-              <strong>Live Atrium publishing is not configured</strong>
-              <p>Local recording and privacy review remain available. No capture data was sent.</p>
-              {publication?.capabilities.reasons.map((reason) => (
-                <small key={reason}>{reason}</small>
-              ))}
+              <strong>AI Studio sign-in is temporarily unavailable</strong>
+              <p>
+                Contact district support. Your recording and privacy review remain available, and no
+                capture data was sent.
+              </p>
             </div>
           )}
 
           {publication?.authentication === 'signed_out' && (
             <div className="capability-callout">
-              <strong>Connect to Atrium</strong>
+              <strong>Sign in to AI Studio</strong>
               <p>
-                Sign in with your district account. Tokens stay in the trusted extension context and
-                are never shared with recorded pages.
+                Use your district account. You will return here automatically; tokens stay in the
+                trusted extension context and are never shared with recorded pages.
               </p>
               <button
                 disabled={pending}
                 onClick={() => void authenticationCommand('publisher.sign-in')}
                 type="button"
               >
-                Sign in to Atrium
+                Sign in to AI Studio
               </button>
             </div>
           )}
@@ -889,23 +1055,28 @@ export function App() {
               </p>
               {publication.job.lastError && (
                 <p className="error">
-                  {publication.job.lastError.retryable
-                    ? 'The last request was interrupted and can be retried safely.'
-                    : 'Publishing needs attention before it can continue.'}
+                  {publication.job.lastError.code === 'title_update_failed'
+                    ? publication.job.lastError.retryable
+                      ? 'The new title is saved locally. Retry to update the Atrium title.'
+                      : 'The new title is saved locally, but Atrium rejected the title update.'
+                    : publication.job.lastError.retryable
+                      ? 'The last request was interrupted and can be retried safely.'
+                      : 'Publishing needs attention before it can continue.'}
                 </p>
               )}
-              {publication.job.lastError?.retryable && (
-                <button
-                  disabled={pending}
-                  onClick={() => void publisherCommand('publisher.retry')}
-                  type="button"
-                >
-                  Retry safely
-                </button>
-              )}
-              {publication.job.readerUrl && (
-                <a href={publication.job.readerUrl} rel="noreferrer" target="_blank">
-                  Open Atrium reader
+              {(publication.job.lastError || publication.job.phase === Phase.NeedsAttention) &&
+                publication.authentication === 'signed_in' && (
+                  <button
+                    disabled={pending}
+                    onClick={() => void publisherCommand('publisher.retry')}
+                    type="button"
+                  >
+                    {publication.job.lastError?.retryable ? 'Retry safely' : 'Try again'}
+                  </button>
+                )}
+              {atriumDraftUrl && (
+                <a href={atriumDraftUrl} rel="noreferrer" target="_blank">
+                  Open Atrium draft
                 </a>
               )}
               {publication.job.phase === Phase.ReadyAsDraft &&
@@ -1037,6 +1208,41 @@ function formatBytes(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function safeAtriumDraftUrl(
+  value: string | undefined,
+  mode: PublicationSnapshot['capabilities']['mode'] | undefined,
+): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  try {
+    const url = new URL(value);
+    if (url.username || url.password || url.hash || url.search) {
+      return undefined;
+    }
+    if (
+      mode === 'live' &&
+      url.origin === 'https://aistudio.psd401.ai' &&
+      /^\/atrium\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/edit$/i.test(
+        url.pathname,
+      )
+    ) {
+      return url.toString();
+    }
+    if (
+      mode === 'mock' &&
+      ((url.protocol === 'https:' && url.hostname.endsWith('.example.test')) ||
+        (url.protocol === 'http:' &&
+          (url.hostname === '127.0.0.1' || url.hostname === 'localhost')))
+    ) {
+      return url.toString();
+    }
+  } catch {
+    // A malformed persisted or gateway URL is not exposed as a navigation.
+  }
+  return undefined;
+}
+
 function privacyLabel(step: StepElement, issues: ReviewIssue[]): string {
   if (
     issues.some(
@@ -1061,17 +1267,35 @@ function colorFor(kind: Kind): string {
 function renderAnnotationPreview(annotation: AnnotationElement) {
   const geometry = annotation.geometry;
   if (annotation.kind === Kind.Arrow) {
+    const { endX, endY, startX, startY } = arrowEndpoints(geometry, annotation.arrowDirection);
+    const angle = Math.atan2(endY - startY, endX - startX);
+    const head = Math.max(8, Math.min(20, Math.min(geometry.width, geometry.height) / 2));
+    const headOne = `${endX - head * Math.cos(angle - Math.PI / 6)},${
+      endY - head * Math.sin(angle - Math.PI / 6)
+    }`;
+    const headTwo = `${endX - head * Math.cos(angle + Math.PI / 6)},${
+      endY - head * Math.sin(angle + Math.PI / 6)
+    }`;
     return (
-      <line
-        className="annotation-arrow"
-        key={annotation.id}
-        stroke={annotation.color ?? '#DC2626'}
-        strokeWidth="4"
-        x1={geometry.x}
-        x2={geometry.x + geometry.width}
-        y1={geometry.y + geometry.height}
-        y2={geometry.y}
-      />
+      <g key={annotation.id}>
+        <line
+          className="annotation-arrow"
+          stroke={annotation.color ?? '#DC2626'}
+          strokeWidth="4"
+          x1={startX}
+          x2={endX}
+          y1={startY}
+          y2={endY}
+        />
+        <polyline
+          fill="none"
+          points={`${headOne} ${endX},${endY} ${headTwo}`}
+          stroke={annotation.color ?? '#DC2626'}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="4"
+        />
+      </g>
     );
   }
   if (annotation.kind === Kind.Text) {

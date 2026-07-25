@@ -12,6 +12,7 @@ final class RedactionGoldenTests: XCTestCase {
     func testOpaqueRedactionReplacesPixelsAndStripsMetadata() throws {
         let source = try sourcePNGWithMetadata(width: 10, height: 10)
         let redaction = AnnotationElement(
+            arrowDirection: nil,
             color: "#000000",
             geometry: Geometry(height: 4, width: 4, x: 3, y: 3),
             id: "redaction-golden",
@@ -35,6 +36,97 @@ final class RedactionGoldenTests: XCTestCase {
         XCTAssertFalse(String(decoding: flattened.pngData, as: UTF8.self).contains("Synthetic Author"))
     }
 
+    func testEveryEditorToolChangesRenderedPixelsAndCropChangesDimensions() throws {
+        let source = try checkerPNGWithMetadata(width: 80, height: 60)
+        let baseline = try CoreGraphicsReviewRenderer.flatten(
+            sourcePNG: source,
+            crop: nil,
+            annotations: []
+        )
+        let baselinePixels = try rgbaPixels(baseline.pngData)
+        let kinds: [Kind] = [
+            .redaction,
+            .blur,
+            .mosaic,
+            .highlight,
+            .rectangle,
+            .arrow,
+            .text,
+        ]
+
+        for kind in kinds {
+            let rendered = try CoreGraphicsReviewRenderer.flatten(
+                sourcePNG: source,
+                crop: nil,
+                annotations: [
+                    AnnotationElement(
+                        arrowDirection: kind == .arrow ? .downRight : nil,
+                        color: kind == .redaction ? "#000000" : "#FFD400",
+                        geometry: Geometry(height: 28, width: 36, x: 20, y: 14),
+                        id: "synthetic-\(kind.rawValue)",
+                        kind: kind,
+                        text: kind == .text ? "Synthetic" : nil
+                    ),
+                ]
+            )
+
+            XCTAssertEqual(rendered.pixelWidth, 80, kind.rawValue)
+            XCTAssertEqual(rendered.pixelHeight, 60, kind.rawValue)
+            XCTAssertNotEqual(try rgbaPixels(rendered.pngData), baselinePixels, kind.rawValue)
+            XCTAssertTrue(
+                Set(["tEXt", "iTXt", "zTXt", "eXIf", "tIME"])
+                    .isDisjoint(with: try pngChunkTypes(rendered.pngData)),
+                kind.rawValue
+            )
+        }
+
+        let cropped = try CoreGraphicsReviewRenderer.flatten(
+            sourcePNG: source,
+            crop: Geometry(height: 30, width: 40, x: 10, y: 10),
+            annotations: []
+        )
+        XCTAssertEqual(cropped.pixelWidth, 40)
+        XCTAssertEqual(cropped.pixelHeight, 30)
+    }
+
+    func testArrowRendererPreservesDirectionAndDefaultsLegacyArrowsUpRight() throws {
+        let source = try checkerPNGWithMetadata(width: 80, height: 60)
+        let directions: [ArrowDirection] = [.upRight, .downRight, .upLeft, .downLeft]
+        let rendered = try directions.map { direction in
+            try CoreGraphicsReviewRenderer.flatten(
+                sourcePNG: source,
+                crop: nil,
+                annotations: [
+                    AnnotationElement(
+                        arrowDirection: direction,
+                        color: "#FFD400",
+                        geometry: Geometry(height: 32, width: 48, x: 16, y: 14),
+                        id: "synthetic-\(direction.rawValue)",
+                        kind: .arrow,
+                        text: nil
+                    ),
+                ]
+            ).pngData
+        }
+        XCTAssertEqual(Set(rendered).count, directions.count)
+
+        let legacy = try CoreGraphicsReviewRenderer.flatten(
+            sourcePNG: source,
+            crop: nil,
+            annotations: [
+                AnnotationElement(
+                    arrowDirection: nil,
+                    color: "#FFD400",
+                    geometry: Geometry(height: 32, width: 48, x: 16, y: 14),
+                    id: "synthetic-legacy-arrow",
+                    kind: .arrow,
+                    text: nil
+                ),
+            ]
+        )
+        XCTAssertEqual(legacy.pngData, rendered[0])
+    }
+
     private func sourcePNGWithMetadata(width: Int, height: Int) throws -> Data {
         let bytes = [UInt8](repeating: 255, count: width * height * 4).enumerated().map { index, value -> UInt8 in
             if index % 4 == 1 {
@@ -42,6 +134,25 @@ final class RedactionGoldenTests: XCTestCase {
             }
             return value
         }
+        return try pngWithMetadata(bytes: bytes, width: width, height: height)
+    }
+
+    private func checkerPNGWithMetadata(width: Int, height: Int) throws -> Data {
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                if (x / 2 + y / 2).isMultiple(of: 2) {
+                    bytes.append(contentsOf: [255, 0, 255, 255])
+                } else {
+                    bytes.append(contentsOf: [0, 180, 110, 255])
+                }
+            }
+        }
+        return try pngWithMetadata(bytes: bytes, width: width, height: height)
+    }
+
+    private func pngWithMetadata(bytes: [UInt8], width: Int, height: Int) throws -> Data {
         let provider = try XCTUnwrap(CGDataProvider(data: Data(bytes) as CFData))
         let image = try XCTUnwrap(CGImage(
             width: width,

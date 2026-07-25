@@ -20,6 +20,7 @@ export default defineContentScript({
     let active = false;
     let retention: SourceUrlRetention = 'origin';
     let listenersAttached = false;
+    const replayingSubmissions = new WeakSet<HTMLFormElement>();
 
     const sendWithRetry = async (message: CaptureEventMessage): Promise<void> => {
       for (const delay of [0, 100, 400]) {
@@ -37,9 +38,9 @@ export default defineContentScript({
       }
     };
 
-    const emit = (action: Action, element?: Element, shortcut?: string): void => {
+    const emit = (action: Action, element?: Element, shortcut?: string): Promise<void> => {
       if (!active || (element && isSensitiveElement(element))) {
-        return;
+        return Promise.resolve();
       }
 
       const message: CaptureEventMessage = {
@@ -52,12 +53,15 @@ export default defineContentScript({
           target: describeTarget(element),
         },
       };
-      void sendWithRetry(message);
+      return sendWithRetry(message);
     };
 
     const onClick = (event: Event): void => {
       if (event.target instanceof Element) {
-        emit(Action.Click, event.target);
+        if (isSubmitControl(event.target)) {
+          return;
+        }
+        void emit(Action.Click, event.target);
       }
     };
 
@@ -65,17 +69,52 @@ export default defineContentScript({
       if (!(event.target instanceof Element) || isSensitiveElement(event.target)) {
         return;
       }
-      emit(event.target instanceof HTMLSelectElement ? Action.Select : Action.Input, event.target);
+      void emit(
+        event.target instanceof HTMLSelectElement ? Action.Select : Action.Input,
+        event.target,
+      );
     };
 
     const onSubmit = (event: Event): void => {
-      if (event.target instanceof HTMLFormElement) {
-        emit(Action.Submit, event.target);
+      if (!(event.target instanceof HTMLFormElement) || !event.isTrusted) {
+        return;
       }
+      const form = event.target;
+      if (replayingSubmissions.has(form)) {
+        replayingSubmissions.delete(form);
+        return;
+      }
+
+      // A navigation can destroy this isolated world before runtime.sendMessage
+      // is acknowledged. While recording, allow the page to observe only the
+      // replayed submission after the worker has durably stored the normalized,
+      // value-free event (or the bounded retry window has elapsed).
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const submitter = event instanceof SubmitEvent ? event.submitter : null;
+      void emit(Action.Submit, form).finally(() => {
+        if (!form.isConnected) {
+          return;
+        }
+        replayingSubmissions.add(form);
+        try {
+          form.requestSubmit(
+            submitter instanceof HTMLButtonElement || submitter instanceof HTMLInputElement
+              ? submitter
+              : undefined,
+          );
+        } catch {
+          replayingSubmissions.delete(form);
+          HTMLFormElement.prototype.submit.call(form);
+        }
+      });
     };
 
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!(event.altKey || event.ctrlKey || event.metaKey) || isSensitiveElement(event.target)) {
+        return;
+      }
+      if (['Alt', 'Control', 'Meta', 'Shift'].includes(event.key)) {
         return;
       }
 
@@ -86,7 +125,7 @@ export default defineContentScript({
         event.metaKey ? 'Meta' : undefined,
       ].filter((part): part is string => Boolean(part));
       const key = event.key.length === 1 ? event.key.toUpperCase() : event.key;
-      emit(
+      void emit(
         Action.Shortcut,
         event.target instanceof Element ? event.target : undefined,
         [...modifiers, key].join('+'),
@@ -102,7 +141,7 @@ export default defineContentScript({
       document.addEventListener('submit', onSubmit, true);
       document.addEventListener('keydown', onKeyDown, true);
       listenersAttached = true;
-      emit(Action.Navigate, document.documentElement);
+      void emit(Action.Navigate, document.documentElement);
     };
 
     const detachListeners = (): void => {
@@ -231,20 +270,48 @@ function getAccessibleName(element: Element): string | undefined {
     }
   }
 
-  if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+  if (
+    element instanceof HTMLInputElement ||
+    element instanceof HTMLTextAreaElement ||
+    element instanceof HTMLSelectElement
+  ) {
     const labels = Array.from(element.labels ?? [])
-      .map((label) => label.textContent ?? '')
+      .map(labelText)
       .join(' ');
     if (labels.trim()) {
       return cleanText(labels);
     }
   }
 
+  if (
+    element instanceof HTMLFormElement ||
+    element === document.documentElement ||
+    element === document.body
+  ) {
+    return undefined;
+  }
+
   return cleanText(element.textContent ?? '');
 }
 
+function labelText(label: HTMLLabelElement): string {
+  const copy = label.cloneNode(true) as HTMLLabelElement;
+  for (const control of copy.querySelectorAll('button, input, select, textarea')) {
+    control.remove();
+  }
+  return copy.textContent ?? '';
+}
+
+function isSubmitControl(element: Element): boolean {
+  const control = element.closest('button, input');
+  return (
+    (control instanceof HTMLButtonElement && control.type === 'submit') ||
+    (control instanceof HTMLInputElement && (control.type === 'submit' || control.type === 'image'))
+  );
+}
+
 function cleanText(text: string): string | undefined {
-  const cleaned = text.replace(/\s+/g, ' ').trim().slice(0, 500);
+  const cleaned = text.replace(/\s+/g, ' ').trim().slice(0, 200);
   return cleaned || undefined;
 }
 

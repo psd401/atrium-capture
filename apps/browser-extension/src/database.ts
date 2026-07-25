@@ -225,6 +225,50 @@ export class CaptureRepository {
     return session;
   }
 
+  async startNewSession(
+    title: string,
+    appVersion: string,
+    now = new Date(),
+    policy: SessionPolicyOptions = {
+      policyVersion: 'local-default-v1',
+      rawImageRetention: 'delete_after_flatten',
+      sourceUrlRetention: SourceURLRetention.Origin,
+    },
+  ): Promise<AtriumCaptureSession> {
+    const created = createCaptureSession({
+      appVersion,
+      idFactory: this.idFactory,
+      now,
+      title,
+    });
+    const session: AtriumCaptureSession = {
+      ...created,
+      policy: {
+        ...created.policy,
+        policyVersion: policy.policyVersion,
+        rawImageRetention: policy.rawImageRetention as ContractRawImageRetention,
+        sourceUrlRetention: policy.sourceUrlRetention,
+      },
+    };
+    const database = await this.open();
+    const transaction = database.transaction(['meta', 'sessions'], 'readwrite');
+    const metaStore = transaction.objectStore('meta');
+    const sessionStore = transaction.objectStore('sessions');
+    const active = await metaStore.get(activeSessionKey);
+    const activeSession = active ? await sessionStore.get(active.value) : undefined;
+    if (
+      activeSession?.state === AtriumCaptureSessionState.Recording ||
+      activeSession?.state === AtriumCaptureSessionState.Paused
+    ) {
+      await transaction.done;
+      throw new Error('active_recording_must_stop');
+    }
+    await sessionStore.put(session);
+    await metaStore.put({ key: activeSessionKey, value: session.sessionId });
+    await transaction.done;
+    return session;
+  }
+
   async transition(
     command: RecorderCommand,
     now = new Date(),
@@ -260,6 +304,43 @@ export class CaptureRepository {
 
   async getSession(sessionId: string): Promise<AtriumCaptureSession | undefined> {
     return (await this.open()).get('sessions', sessionId);
+  }
+
+  async listSessions(): Promise<AtriumCaptureSession[]> {
+    const sessions = await (await this.open()).getAll('sessions');
+    return sessions.sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime());
+  }
+
+  async activateSession(sessionId: string): Promise<AtriumCaptureSession> {
+    const database = await this.open();
+    const transaction = database.transaction(['meta', 'sessions'], 'readwrite');
+    const metaStore = transaction.objectStore('meta');
+    const sessionStore = transaction.objectStore('sessions');
+    const active = await metaStore.get(activeSessionKey);
+    const activeSession = active ? await sessionStore.get(active.value) : undefined;
+    if (
+      activeSession?.sessionId !== sessionId &&
+      (activeSession?.state === AtriumCaptureSessionState.Recording ||
+        activeSession?.state === AtriumCaptureSessionState.Paused)
+    ) {
+      await transaction.done;
+      throw new Error('active_recording_must_stop');
+    }
+    const session = await sessionStore.get(sessionId);
+    if (!session) {
+      await transaction.done;
+      throw new Error('session_not_found');
+    }
+    if (
+      session.state === AtriumCaptureSessionState.Recording ||
+      session.state === AtriumCaptureSessionState.Paused
+    ) {
+      await transaction.done;
+      throw new Error('recording_session_cannot_be_reactivated');
+    }
+    await metaStore.put({ key: activeSessionKey, value: sessionId });
+    await transaction.done;
+    return session;
   }
 
   async markSessionSubmitted(sessionId: string, now = new Date()): Promise<void> {
@@ -357,7 +438,19 @@ export class CaptureRepository {
   }
 
   async putPublishJob(job: AtriumCapturePublishJob): Promise<void> {
-    await (await this.open()).put('publishJobs', job);
+    const database = await this.open();
+    const transaction = database.transaction('publishJobs', 'readwrite');
+    const store = transaction.objectStore('publishJobs');
+    const existing = await store.get(job.jobId);
+    await store.put(
+      existing?.createTitle
+        ? {
+            ...job,
+            createTitle: existing.createTitle,
+          }
+        : job,
+    );
+    await transaction.done;
   }
 
   async getStoredAsset(assetId: string): Promise<StoredAsset | undefined> {
@@ -374,7 +467,10 @@ export class CaptureRepository {
     now = new Date(),
   ): Promise<AtriumCaptureSession> {
     const database = await this.open();
-    const transaction = database.transaction(['commands', 'meta', 'sessions'], 'readwrite');
+    const transaction = database.transaction(
+      ['commands', 'meta', 'publishJobs', 'sessions'],
+      'readwrite',
+    );
     const commandStore = transaction.objectStore('commands');
     const existing = await commandStore.get(commandId);
     const active = await transaction.objectStore('meta').get(activeSessionKey);
@@ -386,6 +482,23 @@ export class CaptureRepository {
     if (existing) {
       await transaction.done;
       return session;
+    }
+    const jobs = await transaction
+      .objectStore('publishJobs')
+      .index('by-session')
+      .getAll(session.sessionId);
+    if (command.kind === 'update_title') {
+      for (const job of jobs) {
+        if (!job.createTitle) {
+          await transaction.objectStore('publishJobs').put({
+            ...job,
+            createTitle: session.title,
+            updatedAt: now,
+          });
+        }
+      }
+    } else if (jobs.length > 0) {
+      throw new Error('guide_content_frozen_after_publish');
     }
     const next = reduceEditorCommand(session, command, { idFactory: this.idFactory, now });
     await sessionStore.put(next);

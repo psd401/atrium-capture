@@ -27,6 +27,7 @@ enum AtriumCaptureMacVerifier {
             sourcePNG: source,
             crop: nil,
             annotations: [AnnotationElement(
+                arrowDirection: nil,
                 color: "#000000",
                 geometry: Geometry(height: 4, width: 4, x: 3, y: 3),
                 id: "synthetic-redaction",
@@ -170,7 +171,7 @@ enum AtriumCaptureMacVerifier {
             pngData: verifierAssetData,
             pixelWidth: 1280,
             pixelHeight: 720,
-            sha256: String(repeating: "0", count: 64),
+            sha256: verifierAssetDigestHex,
             idempotencyKey: "asset:synthetic-job"
         )
         let version = try await gateway.createVersion(
@@ -198,15 +199,19 @@ enum AtriumCaptureMacVerifier {
         createBody["body"] == nil,
         (createBody["sourceRef"] as? [String: Any])?["clientSurface"] as? String == "mac",
         create.value(forHTTPHeaderField: "Idempotency-Key") == "object:synthetic-job",
+        let initiate = requests.first(where: {
+            $0.url?.path.hasSuffix("/assets") == true && $0.httpMethod == "POST"
+        }),
+        initiate.value(forHTTPHeaderField: "Idempotency-Key") == "asset:synthetic-job",
         let upload = requests.first(where: { $0.url?.host?.contains("amazonaws.com") == true }),
         upload.value(forHTTPHeaderField: "Authorization") == nil,
         Set(upload.allHTTPHeaderFields?.keys.map { $0.lowercased() } ?? [])
-            == Set(["content-type", "x-amz-checksum-sha256"]),
+            == Set(["content-type"]),
         let versionRequest = requests.first(where: { $0.url?.path.hasSuffix("/versions") == true }),
         versionRequest.value(forHTTPHeaderField: "If-Match") == "\"none\"",
         let publishRequest = requests.first(where: { $0.url?.path.hasSuffix("/publish") == true }),
         publishRequest.value(forHTTPHeaderField: "If-Match") == "\"\(verifierVersionID)\"",
-        version.readerURL == "https://aistudio.psd401.ai/c/synthetic-native-guide"
+        version.readerURL == "https://aistudio.psd401.ai/atrium/\(verifierObjectID)/edit"
         else { throw VerificationFailure.productionGateway }
     }
 }
@@ -237,10 +242,10 @@ private actor VerifierAtriumTransport: NativeHTTPTransport {
                 "data": assetRecord(state: "pending").merging([
                     "upload": [
                         "method": "PUT",
-                        "url": "https://synthetic-bucket.s3.us-west-2.amazonaws.com/upload?signature=fake",
+                        "url": verifierHoistedUploadURL,
                         "headers": [
                             "content-type": "image/png",
-                            "x-amz-checksum-sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                            "x-amz-checksum-sha256": verifierAssetDigestBase64,
                         ],
                         "expiresAt": "2030-07-24T20:15:00.000Z",
                     ],
@@ -293,7 +298,7 @@ private actor VerifierAtriumTransport: NativeHTTPTransport {
             "filename": "atrium-capture-\(verifierLocalAssetID).png",
             "contentType": "image/png",
             "byteLength": verifierAssetData.count,
-            "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "sha256": verifierAssetDigestBase64URL,
             "purpose": "capture_step",
             "state": state,
             "width": 1280,
@@ -309,7 +314,15 @@ private let verifierObjectID = "a1000000-0000-4000-8000-000000000001"
 private let verifierLocalAssetID = "a3000000-0000-4000-8000-000000000001"
 private let verifierAssetID = "a2000000-0000-4000-8000-000000000001"
 private let verifierVersionID = "a4000000-0000-4000-8000-000000000001"
+private let verifierHoistedUploadURL =
+    "https://synthetic-bucket.s3.us-west-2.amazonaws.com/upload"
+        + "?X-Amz-Checksum-Sha256=k3UW6sWEhEdP%2B3ulJIlxs2euQtJYwhvGpFRIDtvMWe8%3D"
+        + "&X-Amz-SignedHeaders=content-length%3Bhost&X-Amz-Signature=fake"
 private let verifierAssetData = Data("synthetic-reviewed-image".utf8)
+private let verifierAssetDigestHex =
+    "937516eac58484474ffb7ba5248971b367ae42d258c21bc6a454480edbcc59ef"
+private let verifierAssetDigestBase64 = "k3UW6sWEhEdP+3ulJIlxs2euQtJYwhvGpFRIDtvMWe8="
+private let verifierAssetDigestBase64URL = "k3UW6sWEhEdP-3ulJIlxs2euQtJYwhvGpFRIDtvMWe8"
 #else
 @main
 enum AtriumCaptureMacVerifier {

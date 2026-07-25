@@ -197,6 +197,7 @@ public extension AssetElement {
 
 // MARK: - AnnotationElement
 public struct AnnotationElement: Codable {
+    public let arrowDirection: ArrowDirection?
     public let color: String?
     public let geometry: Geometry
     public let id: String
@@ -204,6 +205,7 @@ public struct AnnotationElement: Codable {
     public let text: String?
 
     public enum CodingKeys: String, CodingKey {
+        case arrowDirection = "arrowDirection"
         case color = "color"
         case geometry = "geometry"
         case id = "id"
@@ -211,7 +213,8 @@ public struct AnnotationElement: Codable {
         case text = "text"
     }
 
-    public init(color: String?, geometry: Geometry, id: String, kind: Kind, text: String?) {
+    public init(arrowDirection: ArrowDirection?, color: String?, geometry: Geometry, id: String, kind: Kind, text: String?) {
+        self.arrowDirection = arrowDirection
         self.color = color
         self.geometry = geometry
         self.id = id
@@ -239,6 +242,7 @@ public extension AnnotationElement {
     }
 
     func with(
+        arrowDirection: ArrowDirection?? = nil,
         color: String?? = nil,
         geometry: Geometry? = nil,
         id: String? = nil,
@@ -246,6 +250,7 @@ public extension AnnotationElement {
         text: String?? = nil
     ) -> AnnotationElement {
         return AnnotationElement(
+            arrowDirection: arrowDirection ?? self.arrowDirection,
             color: color ?? self.color,
             geometry: geometry ?? self.geometry,
             id: id ?? self.id,
@@ -261,6 +266,13 @@ public extension AnnotationElement {
     func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
         return String(data: try self.jsonData(), encoding: encoding)
     }
+}
+
+public enum ArrowDirection: String, Codable {
+    case downLeft = "down_left"
+    case downRight = "down_right"
+    case upLeft = "up_left"
+    case upRight = "up_right"
 }
 
 // MARK: - Geometry
@@ -1058,11 +1070,13 @@ public struct AtriumCapturePublishJob: Codable {
     public let contentObjectID: String?
     public let createdAt: Date
     public let createIdempotencyKey: String
+    public let createTitle: String?
     public let currentVersionID: String?
     public let jobID: String
     public let lastError: LastError?
     public let phase: Phase
     public let readerURL: String?
+    public let remoteTitle: String?
     public let schemaVersion: SchemaVersion
     public let sessionID: String
     public let updatedAt: Date
@@ -1074,28 +1088,32 @@ public struct AtriumCapturePublishJob: Codable {
         case contentObjectID = "contentObjectId"
         case createdAt = "createdAt"
         case createIdempotencyKey = "createIdempotencyKey"
+        case createTitle = "createTitle"
         case currentVersionID = "currentVersionId"
         case jobID = "jobId"
         case lastError = "lastError"
         case phase = "phase"
         case readerURL = "readerUrl"
+        case remoteTitle = "remoteTitle"
         case schemaVersion = "schemaVersion"
         case sessionID = "sessionId"
         case updatedAt = "updatedAt"
     }
 
-    public init(assetUploads: [AssetUpload]?, attemptCount: Int, collectionID: String?, contentObjectID: String?, createdAt: Date, createIdempotencyKey: String, currentVersionID: String?, jobID: String, lastError: LastError?, phase: Phase, readerURL: String?, schemaVersion: SchemaVersion, sessionID: String, updatedAt: Date) {
+    public init(assetUploads: [AssetUpload]?, attemptCount: Int, collectionID: String?, contentObjectID: String?, createdAt: Date, createIdempotencyKey: String, createTitle: String?, currentVersionID: String?, jobID: String, lastError: LastError?, phase: Phase, readerURL: String?, remoteTitle: String?, schemaVersion: SchemaVersion, sessionID: String, updatedAt: Date) {
         self.assetUploads = assetUploads
         self.attemptCount = attemptCount
         self.collectionID = collectionID
         self.contentObjectID = contentObjectID
         self.createdAt = createdAt
         self.createIdempotencyKey = createIdempotencyKey
+        self.createTitle = createTitle
         self.currentVersionID = currentVersionID
         self.jobID = jobID
         self.lastError = lastError
         self.phase = phase
         self.readerURL = readerURL
+        self.remoteTitle = remoteTitle
         self.schemaVersion = schemaVersion
         self.sessionID = sessionID
         self.updatedAt = updatedAt
@@ -1127,11 +1145,13 @@ public extension AtriumCapturePublishJob {
         contentObjectID: String?? = nil,
         createdAt: Date? = nil,
         createIdempotencyKey: String? = nil,
+        createTitle: String?? = nil,
         currentVersionID: String?? = nil,
         jobID: String? = nil,
         lastError: LastError?? = nil,
         phase: Phase? = nil,
         readerURL: String?? = nil,
+        remoteTitle: String?? = nil,
         schemaVersion: SchemaVersion? = nil,
         sessionID: String? = nil,
         updatedAt: Date? = nil
@@ -1143,11 +1163,13 @@ public extension AtriumCapturePublishJob {
             contentObjectID: contentObjectID ?? self.contentObjectID,
             createdAt: createdAt ?? self.createdAt,
             createIdempotencyKey: createIdempotencyKey ?? self.createIdempotencyKey,
+            createTitle: createTitle ?? self.createTitle,
             currentVersionID: currentVersionID ?? self.currentVersionID,
             jobID: jobID ?? self.jobID,
             lastError: lastError ?? self.lastError,
             phase: phase ?? self.phase,
             readerURL: readerURL ?? self.readerURL,
+            remoteTitle: remoteTitle ?? self.remoteTitle,
             schemaVersion: schemaVersion ?? self.schemaVersion,
             sessionID: sessionID ?? self.sessionID,
             updatedAt: updatedAt ?? self.updatedAt

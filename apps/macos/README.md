@@ -19,4 +19,9 @@ Swift Package products:
 - `AtriumCaptureNativeHost`: Chrome length-prefixed metadata bridge.
 - `AtriumCaptureMacVerifier`: native redaction/metadata/window-policy acceptance executable.
 
-The default application uses the documented production `NativeAtriumGateway` when MDM supplies `AtriumOAuthClientId`; otherwise it fails closed without disabling local capture/review. Set `ATRIUM_CAPTURE_LOCAL_MOCK=1` only for a visibly local private-draft demonstration. See [the Mac runbook](../../docs/macos-runbook.md) for permissions, synthetic acceptance, OAuth configuration, native-host registration, data retention, and external release dependencies.
+The default application bundles the approved public native OAuth client and uses the documented production `NativeAtriumGateway`; employees configure nothing. MDM may override `AtriumOAuthClientId` only for a separately approved test client. Set `ATRIUM_CAPTURE_LOCAL_MOCK=1` only for a visibly local private-draft demonstration. See [the Mac runbook](../../docs/macos-runbook.md) for permissions, synthetic acceptance, OAuth configuration, native-host registration, data retention, and external release dependencies.
+
+The installed app includes a menu-bar launcher for the workspace, region and
+focused-element capture, and recording controls. Quick captures append to the
+current unpublished guide. Start at login is an explicit user preference backed
+by `SMAppService.mainApp`; no login helper or privileged daemon is bundled.

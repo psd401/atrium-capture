@@ -24,6 +24,15 @@ describe('versioned mock Atrium HTTP boundary', () => {
         title: 'Synthetic HTTP guide',
         visibility: 'private',
       });
+      await expect(
+        gateway.updateContentTitle({
+          contentObjectId: object.contentObjectId,
+          title: 'Synthetic renamed HTTP guide',
+        }),
+      ).resolves.toEqual({
+        contentObjectId: object.contentObjectId,
+        title: 'Synthetic renamed HTTP guide',
+      });
       const bytes = new Blob(['synthetic-http-image'], { type: 'image/png' });
       const asset = await gateway.uploadImmutableAsset({
         bytes,
@@ -44,6 +53,7 @@ describe('versioned mock Atrium HTTP boundary', () => {
       expect(capabilities.mode).toBe('mock');
       expect(version.readerUrl).toContain(object.contentObjectId);
       expect(server.gateway.snapshot().objects[0]?.visibility).toBe('private');
+      expect(server.gateway.snapshot().objects[0]?.title).toBe('Synthetic renamed HTTP guide');
 
       await gateway.publishInternal({
         contentObjectId: object.contentObjectId,

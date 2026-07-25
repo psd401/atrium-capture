@@ -39,7 +39,15 @@
         "userEdited": false
       },
       "screenshotAssetId": "30000000-0000-4000-8000-000000000020",
-      "annotations": [],
+      "annotations": [
+        {
+          "id": "50000000-0000-4000-8000-000000000020",
+          "kind": "arrow",
+          "arrowDirection": "down_right",
+          "geometry": { "x": 120, "y": 140, "width": 260, "height": 180 },
+          "color": "#FFD400"
+        }
+      ],
       "privacyReview": "not_reviewed"
     },
     {

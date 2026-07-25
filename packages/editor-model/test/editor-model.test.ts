@@ -1,5 +1,6 @@
 import {
   Action,
+  ArrowDirection,
   AssetState,
   AtriumCaptureSessionState,
   Kind,
@@ -28,6 +29,10 @@ const assetId = '20000000-0000-4000-8000-000000000001';
 describe('editor commands', () => {
   it('reorders, inserts, merges, edits, crops, and deletes with contiguous sequence numbers', () => {
     let session = fixtureSession();
+    session = applyEditorCommand(session, {
+      kind: 'update_title',
+      title: '  Synthetic renamed guide  ',
+    });
     session = applyEditorCommand(session, { kind: 'move_step', stepId: secondStepId, toIndex: 0 });
     session = applyEditorCommand(
       session,
@@ -56,6 +61,29 @@ describe('editor commands', () => {
     expect(session.steps[0]?.crop).toEqual({ height: 60, width: 100, x: 10, y: 10 });
     expect(session.steps[0]?.instruction.editedText).toContain('Confirm the synthetic result.');
     expect(session.policy.reviewStatus).toBe(ReviewStatus.InReview);
+    expect(session.title).toBe('Synthetic renamed guide');
+  });
+
+  it('renames a prepared guide without reopening privacy review and rejects invalid titles', () => {
+    const prepared = {
+      ...fixtureSession(),
+      policy: { ...fixtureSession().policy, reviewStatus: ReviewStatus.Approved },
+      state: AtriumCaptureSessionState.Publishable,
+    };
+    const renamed = applyEditorCommand(prepared, {
+      kind: 'update_title',
+      title: 'Prepared synthetic guide',
+    });
+
+    expect(renamed.title).toBe('Prepared synthetic guide');
+    expect(renamed.state).toBe(AtriumCaptureSessionState.Publishable);
+    expect(renamed.policy.reviewStatus).toBe(ReviewStatus.Approved);
+    expect(() =>
+      applyEditorCommand(prepared, { kind: 'update_title', title: ' '.repeat(10) }),
+    ).toThrow('invalid_title');
+    expect(() =>
+      applyEditorCommand(prepared, { kind: 'update_title', title: 'x'.repeat(501) }),
+    ).toThrow('invalid_title');
   });
 
   it('requires an opaque redaction covering an automated input region before approval', () => {
@@ -105,6 +133,33 @@ describe('editor commands', () => {
       { code: 'sensitive_region_unredacted', stepId: firstStepId },
       { code: 'step_not_approved', stepId: firstStepId },
     ]);
+  });
+
+  it('preserves arrow direction and rejects it on other annotation kinds', () => {
+    const arrow = applyEditorCommand(fixtureSession(), {
+      annotation: {
+        arrowDirection: ArrowDirection.DownRight,
+        geometry: { height: 40, width: 80, x: 20, y: 20 },
+        id: '30000000-0000-4000-8000-000000000003',
+        kind: Kind.Arrow,
+      },
+      kind: 'add_annotation',
+      stepId: secondStepId,
+    });
+    expect(arrow.steps[1]?.annotations?.[0]?.arrowDirection).toBe(ArrowDirection.DownRight);
+
+    expect(() =>
+      applyEditorCommand(fixtureSession(), {
+        annotation: {
+          arrowDirection: ArrowDirection.DownRight,
+          geometry: { height: 40, width: 80, x: 20, y: 20 },
+          id: '30000000-0000-4000-8000-000000000004',
+          kind: Kind.Rectangle,
+        },
+        kind: 'add_annotation',
+        stepId: secondStepId,
+      }),
+    ).toThrow('arrow_direction_requires_arrow');
   });
 });
 

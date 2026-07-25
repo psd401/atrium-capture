@@ -7,6 +7,7 @@ public struct NativeAtriumCapabilities: Equatable, Sendable {
     public let assetUpload: Bool
     public let versionCreation: Bool
     public let internalPublish: Bool
+    public let titleUpdate: Bool
     public let blocker: String?
 
     public init(
@@ -15,6 +16,7 @@ public struct NativeAtriumCapabilities: Equatable, Sendable {
         assetUpload: Bool,
         versionCreation: Bool,
         internalPublish: Bool,
+        titleUpdate: Bool,
         blocker: String?
     ) {
         self.oauth = oauth
@@ -22,6 +24,7 @@ public struct NativeAtriumCapabilities: Equatable, Sendable {
         self.assetUpload = assetUpload
         self.versionCreation = versionCreation
         self.internalPublish = internalPublish
+        self.titleUpdate = titleUpdate
         self.blocker = blocker
     }
 
@@ -31,6 +34,7 @@ public struct NativeAtriumCapabilities: Equatable, Sendable {
         assetUpload: false,
         versionCreation: false,
         internalPublish: false,
+        titleUpdate: false,
         blocker: "ATRIUM_API_UNAVAILABLE"
     )
 }
@@ -61,6 +65,16 @@ public struct NativeVersionResult: Equatable, Sendable {
     }
 }
 
+public struct NativeTitleResult: Equatable, Sendable {
+    public let objectID: String
+    public let title: String
+
+    public init(objectID: String, title: String) {
+        self.objectID = objectID
+        self.title = title
+    }
+}
+
 public struct NativeCaptureSourceRef: Equatable, Sendable {
     public let capturedAt: Date
     public let clientVersion: String
@@ -75,10 +89,12 @@ public struct NativeCaptureSourceRef: Equatable, Sendable {
 
 public struct NativeGatewayFailure: Error, Equatable, Sendable {
     public let code: String
+    public let requestID: String?
     public let retryable: Bool
 
-    public init(code: String, retryable: Bool) {
+    public init(code: String, requestID: String? = nil, retryable: Bool) {
         self.code = code
+        self.requestID = requestID
         self.retryable = retryable
     }
 }
@@ -107,6 +123,7 @@ public protocol NativeAtriumGateway: AnyObject, Sendable {
         idempotencyKey: String
     ) async throws -> NativeVersionResult
     func publishInternal(objectID: String, versionID: String, idempotencyKey: String) async throws
+    func updateTitle(objectID: String, title: String) async throws -> NativeTitleResult
 }
 
 public final class UnavailableNativeAtriumGateway: NativeAtriumGateway {
@@ -154,12 +171,21 @@ public final class UnavailableNativeAtriumGateway: NativeAtriumGateway {
     ) async throws {
         throw NativeGatewayFailure(code: "ATRIUM_API_UNAVAILABLE", retryable: false)
     }
+
+    public func updateTitle(objectID _: String, title _: String) async throws -> NativeTitleResult {
+        throw NativeGatewayFailure(code: "ATRIUM_API_UNAVAILABLE", retryable: false)
+    }
 }
 
 public protocol NativePublishRepository: AnyObject {
     func saveSession(_ session: AtriumCaptureSession) throws
+    func reconcileSession(_ session: AtriumCaptureSession) throws -> AtriumCaptureSession
+    func updateSessionTitle(sessionID: String, title: String, now: Date) throws -> AtriumCaptureSession
+    func markSessionSubmitted(sessionID: String, now: Date) throws -> AtriumCaptureSession
     func loadSession(sessionID: String) throws -> AtriumCaptureSession?
+    func listSessions() throws -> [AtriumCaptureSession]
     func saveJob(_ job: AtriumCapturePublishJob) throws
+    func freezeCreateTitle(jobID: String, title: String, now: Date) throws -> AtriumCapturePublishJob
     func loadJob(jobID: String) throws -> AtriumCapturePublishJob?
     func listJobs() throws -> [AtriumCapturePublishJob]
     func assetData(localKey: String) throws -> Data
@@ -182,17 +208,116 @@ public final class FileNativePublishRepository: NativePublishRepository, @unchec
         )
     }
 
+    public func reconcileSession(_ session: AtriumCaptureSession) throws -> AtriumCaptureSession {
+        lock.lock()
+        defer { lock.unlock() }
+        let stored = try loadUnlocked(directory: "sessions", name: session.sessionID).map {
+            try AtriumContractCodec.makeDecoder().decode(AtriumCaptureSession.self, from: $0)
+        }
+        let canonical = reconcileStoredSession(stored, with: session)
+        try saveUnlocked(
+            AtriumContractCodec.makeEncoder().encode(canonical),
+            directory: "sessions",
+            name: canonical.sessionID
+        )
+        return canonical
+    }
+
+    public func updateSessionTitle(
+        sessionID: String,
+        title: String,
+        now: Date
+    ) throws -> AtriumCaptureSession {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let data = try loadUnlocked(directory: "sessions", name: sessionID) else {
+            throw NativePublishError.sessionNotFound
+        }
+        let session = try AtriumContractCodec.makeDecoder().decode(AtriumCaptureSession.self, from: data)
+        let updated = try NativeReviewEditor.setTitle(in: session, title: title, now: now)
+        try saveUnlocked(
+            AtriumContractCodec.makeEncoder().encode(updated),
+            directory: "sessions",
+            name: sessionID
+        )
+        return updated
+    }
+
+    public func markSessionSubmitted(sessionID: String, now: Date) throws -> AtriumCaptureSession {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let data = try loadUnlocked(directory: "sessions", name: sessionID) else {
+            throw NativePublishError.sessionNotFound
+        }
+        let session = try AtriumContractCodec.makeDecoder().decode(AtriumCaptureSession.self, from: data)
+        guard session.state != .submitted else { return session }
+        guard session.state == .publishable else { throw NativePublishError.reviewRequired }
+        let updated = session.with(
+            revision: session.revision + 1,
+            state: .submitted,
+            updatedAt: now
+        )
+        try saveUnlocked(
+            AtriumContractCodec.makeEncoder().encode(updated),
+            directory: "sessions",
+            name: sessionID
+        )
+        return updated
+    }
+
     public func loadSession(sessionID: String) throws -> AtriumCaptureSession? {
         guard let data = try load(directory: "sessions", name: sessionID) else { return nil }
         return try AtriumContractCodec.makeDecoder().decode(AtriumCaptureSession.self, from: data)
     }
 
+    public func listSessions() throws -> [AtriumCaptureSession] {
+        lock.lock()
+        defer { lock.unlock() }
+        let directory = rootURL.appendingPathComponent("sessions", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
+        return try FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )
+        .filter { $0.pathExtension == "json" }
+        .map { try AtriumContractCodec.makeDecoder().decode(AtriumCaptureSession.self, from: Data(contentsOf: $0)) }
+        .sorted { $0.updatedAt > $1.updatedAt }
+    }
+
     public func saveJob(_ job: AtriumCapturePublishJob) throws {
-        try save(
-            AtriumContractCodec.makeEncoder().encode(job),
+        lock.lock()
+        defer { lock.unlock() }
+        let existing = try loadUnlocked(directory: "outbox", name: job.jobID).map {
+            try AtriumContractCodec.makeDecoder().decode(AtriumCapturePublishJob.self, from: $0)
+        }
+        let durable = preservingFrozenCreateTitle(from: existing, in: job)
+        try saveUnlocked(
+            AtriumContractCodec.makeEncoder().encode(durable),
             directory: "outbox",
             name: job.jobID
         )
+    }
+
+    public func freezeCreateTitle(
+        jobID: String,
+        title: String,
+        now: Date
+    ) throws -> AtriumCapturePublishJob {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let data = try loadUnlocked(directory: "outbox", name: jobID) else {
+            throw NativePublishError.jobNotFound
+        }
+        let job = try AtriumContractCodec.makeDecoder().decode(AtriumCapturePublishJob.self, from: data)
+        guard job.createTitle == nil else { return job }
+        let frozen = job.with(createTitle: .some(title), updatedAt: now)
+        try saveUnlocked(
+            AtriumContractCodec.makeEncoder().encode(frozen),
+            directory: "outbox",
+            name: jobID
+        )
+        return frozen
     }
 
     public func loadJob(jobID: String) throws -> AtriumCapturePublishJob? {
@@ -309,6 +434,47 @@ public final class MemoryNativePublishRepository: NativePublishRepository, @unch
         sessions[session.sessionID] = try AtriumContractCodec.makeEncoder().encode(session)
     }
 
+    public func reconcileSession(_ session: AtriumCaptureSession) throws -> AtriumCaptureSession {
+        lock.lock()
+        defer { lock.unlock() }
+        let stored = try sessions[session.sessionID].map {
+            try AtriumContractCodec.makeDecoder().decode(AtriumCaptureSession.self, from: $0)
+        }
+        let canonical = reconcileStoredSession(stored, with: session)
+        sessions[session.sessionID] = try AtriumContractCodec.makeEncoder().encode(canonical)
+        return canonical
+    }
+
+    public func updateSessionTitle(
+        sessionID: String,
+        title: String,
+        now: Date
+    ) throws -> AtriumCaptureSession {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let data = sessions[sessionID] else { throw NativePublishError.sessionNotFound }
+        let session = try AtriumContractCodec.makeDecoder().decode(AtriumCaptureSession.self, from: data)
+        let updated = try NativeReviewEditor.setTitle(in: session, title: title, now: now)
+        sessions[sessionID] = try AtriumContractCodec.makeEncoder().encode(updated)
+        return updated
+    }
+
+    public func markSessionSubmitted(sessionID: String, now: Date) throws -> AtriumCaptureSession {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let data = sessions[sessionID] else { throw NativePublishError.sessionNotFound }
+        let session = try AtriumContractCodec.makeDecoder().decode(AtriumCaptureSession.self, from: data)
+        guard session.state != .submitted else { return session }
+        guard session.state == .publishable else { throw NativePublishError.reviewRequired }
+        let updated = session.with(
+            revision: session.revision + 1,
+            state: .submitted,
+            updatedAt: now
+        )
+        sessions[sessionID] = try AtriumContractCodec.makeEncoder().encode(updated)
+        return updated
+    }
+
     public func loadSession(sessionID: String) throws -> AtriumCaptureSession? {
         lock.lock()
         defer { lock.unlock() }
@@ -316,10 +482,37 @@ public final class MemoryNativePublishRepository: NativePublishRepository, @unch
         return try AtriumContractCodec.makeDecoder().decode(AtriumCaptureSession.self, from: data)
     }
 
+    public func listSessions() throws -> [AtriumCaptureSession] {
+        lock.lock()
+        defer { lock.unlock() }
+        return try sessions.values
+            .map { try AtriumContractCodec.makeDecoder().decode(AtriumCaptureSession.self, from: $0) }
+            .sorted { $0.updatedAt > $1.updatedAt }
+    }
+
     public func saveJob(_ job: AtriumCapturePublishJob) throws {
         lock.lock()
         defer { lock.unlock() }
-        jobs[job.jobID] = try AtriumContractCodec.makeEncoder().encode(job)
+        let existing = try jobs[job.jobID].map {
+            try AtriumContractCodec.makeDecoder().decode(AtriumCapturePublishJob.self, from: $0)
+        }
+        let durable = preservingFrozenCreateTitle(from: existing, in: job)
+        jobs[job.jobID] = try AtriumContractCodec.makeEncoder().encode(durable)
+    }
+
+    public func freezeCreateTitle(
+        jobID: String,
+        title: String,
+        now: Date
+    ) throws -> AtriumCapturePublishJob {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let data = jobs[jobID] else { throw NativePublishError.jobNotFound }
+        let job = try AtriumContractCodec.makeDecoder().decode(AtriumCapturePublishJob.self, from: data)
+        guard job.createTitle == nil else { return job }
+        let frozen = job.with(createTitle: .some(title), updatedAt: now)
+        jobs[jobID] = try AtriumContractCodec.makeEncoder().encode(frozen)
+        return frozen
     }
 
     public func loadJob(jobID: String) throws -> AtriumCapturePublishJob? {
@@ -360,6 +553,40 @@ public final class MemoryNativePublishRepository: NativePublishRepository, @unch
     }
 }
 
+private func reconcileStoredSession(
+    _ stored: AtriumCaptureSession?,
+    with candidate: AtriumCaptureSession
+) -> AtriumCaptureSession {
+    guard let stored else { return candidate }
+    let storedIsTerminal = stored.state == .submitted || stored.state == .archived
+    let candidateIsTerminal = candidate.state == .submitted || candidate.state == .archived
+    if storedIsTerminal, !candidateIsTerminal {
+        guard candidate.updatedAt > stored.updatedAt, candidate.title != stored.title else {
+            return stored
+        }
+        return stored.with(
+            revision: max(stored.revision, candidate.revision) + 1,
+            title: candidate.title,
+            updatedAt: candidate.updatedAt
+        )
+    }
+    if stored.revision > candidate.revision {
+        return stored
+    }
+    if stored.revision == candidate.revision, stored.updatedAt > candidate.updatedAt {
+        return stored
+    }
+    return candidate
+}
+
+private func preservingFrozenCreateTitle(
+    from existing: AtriumCapturePublishJob?,
+    in candidate: AtriumCapturePublishJob
+) -> AtriumCapturePublishJob {
+    guard let createTitle = existing?.createTitle else { return candidate }
+    return candidate.with(createTitle: .some(createTitle))
+}
+
 public enum NativePublishError: Error, Equatable {
     case capabilityUnavailable
     case alreadyRunning
@@ -389,6 +616,7 @@ public actor DurableNativePublisher {
         jobID: String = UUID().uuidString.lowercased(),
         now: Date = Date()
     ) throws -> AtriumCapturePublishJob {
+        let session = try repository.reconcileSession(session)
         guard gateway.capabilities.privateDrafts,
               gateway.capabilities.assetUpload,
               gateway.capabilities.versionCreation
@@ -435,16 +663,17 @@ public actor DurableNativePublisher {
             contentObjectID: nil,
             createdAt: now,
             createIdempotencyKey: "object:\(jobID)",
+            createTitle: session.title,
             currentVersionID: nil,
             jobID: jobID,
             lastError: nil,
             phase: .queued,
             readerURL: nil,
+            remoteTitle: nil,
             schemaVersion: .the10,
             sessionID: session.sessionID,
             updatedAt: now
         )
-        try repository.saveSession(session)
         try repository.saveJob(job)
         return job
     }
@@ -464,6 +693,29 @@ public actor DurableNativePublisher {
         )
     }
 
+    public func retry(
+        jobID: String,
+        publishInternal: Bool = false,
+        now: Date = Date()
+    ) async throws -> AtriumCapturePublishJob {
+        guard var job = try repository.loadJob(jobID: jobID) else {
+            throw NativePublishError.jobNotFound
+        }
+        if job.phase == .needsAttention {
+            job = job.with(
+                lastError: .some(nil),
+                phase: Self.recoveryPhase(for: job, publishInternal: publishInternal),
+                updatedAt: now
+            )
+            try repository.saveJob(job)
+        }
+        return try await resume(
+            jobID: jobID,
+            publishInternal: publishInternal,
+            now: now
+        )
+    }
+
     private func resumeExclusive(
         jobID: String,
         publishInternal: Bool,
@@ -474,13 +726,20 @@ public actor DurableNativePublisher {
             throw NativePublishError.sessionNotFound
         }
         guard job.phase != .needsAttention else { throw NativePublishError.needsAttention }
+        job = await syncTitleExclusive(job: job, session: session, now: now)
 
         do {
             if job.phase == .queued || job.phase == .creatingObject {
                 job = job.with(lastError: .some(nil), phase: .creatingObject, updatedAt: now)
                 try repository.saveJob(job)
-                let draft = try await gateway.createPrivateDraft(
+                job = try repository.freezeCreateTitle(
+                    jobID: job.jobID,
                     title: session.title,
+                    now: now
+                )
+                let createTitle = job.createTitle ?? session.title
+                let draft = try await gateway.createPrivateDraft(
+                    title: createTitle,
                     sourceRef: NativeCaptureSourceRef(
                         capturedAt: session.createdAt,
                         clientVersion: session.recorder.appVersion,
@@ -489,8 +748,14 @@ public actor DurableNativePublisher {
                     collectionID: job.collectionID,
                     idempotencyKey: job.createIdempotencyKey
                 )
-                job = job.with(contentObjectID: .some(draft.objectID), phase: .uploadingAssets, updatedAt: now)
+                job = job.with(
+                    contentObjectID: .some(draft.objectID),
+                    phase: .uploadingAssets,
+                    remoteTitle: .some(createTitle),
+                    updatedAt: now
+                )
                 try repository.saveJob(job)
+                job = await syncTitleExclusive(job: job, session: session, now: now)
             }
 
             if job.phase == .uploadingAssets {
@@ -544,14 +809,7 @@ public actor DurableNativePublisher {
                 if session.policy.rawImageRetention == .deleteAfterSubmit {
                     try repository.deleteRawAssets(sessionID: session.sessionID)
                 }
-                let latestSession = try repository.loadSession(sessionID: session.sessionID) ?? session
-                try repository.saveSession(
-                    latestSession.with(
-                        revision: latestSession.revision + 1,
-                        state: .submitted,
-                        updatedAt: now
-                    )
-                )
+                _ = try repository.markSessionSubmitted(sessionID: session.sessionID, now: now)
                 try repository.saveJob(readyJob)
                 job = readyJob
             }
@@ -575,7 +833,8 @@ public actor DurableNativePublisher {
                 job = job.with(phase: .complete, updatedAt: now)
                 try repository.saveJob(job)
             }
-            return job
+            let latestSession = try repository.loadSession(sessionID: session.sessionID) ?? session
+            return await syncTitleExclusive(job: job, session: latestSession, now: now)
         } catch let failure as NativeGatewayFailure {
             let failedPhase: Phase = failure.retryable ? job.phase : .needsAttention
             job = job.with(
@@ -583,7 +842,7 @@ public actor DurableNativePublisher {
                 lastError: .some(LastError(
                     code: failure.code,
                     message: failure.code,
-                    requestID: nil,
+                    requestID: failure.requestID,
                     retryable: failure.retryable
                 )),
                 phase: failedPhase,
@@ -598,8 +857,12 @@ public actor DurableNativePublisher {
         guard let jobs = try? repository.listJobs() else { return [] }
         var results: [AtriumCapturePublishJob] = []
         for job in jobs {
-            if job.phase == .complete || job.phase == .readyAsDraft || job.phase == .needsAttention {
-                results.append(job)
+            if job.phase == .complete || job.phase == .readyAsDraft {
+                results.append(await syncTitle(jobID: job.jobID, now: now) ?? job)
+                continue
+            }
+            if job.phase == .needsAttention {
+                results.append(await syncTitle(jobID: job.jobID, now: now) ?? job)
                 continue
             }
             if let recovered = try? await resume(jobID: job.jobID, now: now) {
@@ -609,6 +872,63 @@ public actor DurableNativePublisher {
             }
         }
         return results
+    }
+
+    public func syncTitle(jobID: String, now: Date = Date()) async -> AtriumCapturePublishJob? {
+        guard let job = try? repository.loadJob(jobID: jobID),
+              let session = try? repository.loadSession(sessionID: job.sessionID)
+        else { return nil }
+        return await syncTitleExclusive(job: job, session: session, now: now)
+    }
+
+    private func syncTitleExclusive(
+        job: AtriumCapturePublishJob,
+        session: AtriumCaptureSession,
+        now: Date
+    ) async -> AtriumCapturePublishJob {
+        guard let objectID = job.contentObjectID, job.remoteTitle != session.title else {
+            return job
+        }
+        do {
+            guard gateway.capabilities.titleUpdate else {
+                throw NativeGatewayFailure(code: "ATRIUM_TITLE_UPDATE_UNAVAILABLE", retryable: false)
+            }
+            let result = try await gateway.updateTitle(objectID: objectID, title: session.title)
+            guard result.objectID == objectID, result.title == session.title else {
+                throw NativeGatewayFailure(code: "ATRIUM_TITLE_UPDATE_RESPONSE_INVALID", retryable: false)
+            }
+            let updated = job.with(
+                lastError: job.lastError?.code == "TITLE_UPDATE_FAILED" ? .some(nil) : nil,
+                remoteTitle: .some(result.title),
+                updatedAt: now
+            )
+            try repository.saveJob(updated)
+            return updated
+        } catch let failure as NativeGatewayFailure {
+            let updated = job.with(
+                lastError: .some(LastError(
+                    code: "TITLE_UPDATE_FAILED",
+                    message: failure.code,
+                    requestID: failure.requestID,
+                    retryable: failure.retryable
+                )),
+                updatedAt: now
+            )
+            try? repository.saveJob(updated)
+            return updated
+        } catch {
+            let updated = job.with(
+                lastError: .some(LastError(
+                    code: "TITLE_UPDATE_FAILED",
+                    message: "ATRIUM_TITLE_UPDATE_FAILED",
+                    requestID: nil,
+                    retryable: true
+                )),
+                updatedAt: now
+            )
+            try? repository.saveJob(updated)
+            return updated
+        }
     }
 
     private static func markdown(
@@ -637,7 +957,22 @@ public actor DurableNativePublisher {
             }
             return "1. \(escaped)"
         }
-        return "# \(session.title.replacingOccurrences(of: "\n", with: " "))\n\n" + lines.joined(separator: "\n")
+        return "## Steps\n\n" + lines.joined(separator: "\n")
+    }
+
+    private static func recoveryPhase(
+        for job: AtriumCapturePublishJob,
+        publishInternal: Bool
+    ) -> Phase {
+        guard job.contentObjectID != nil else { return .creatingObject }
+        let uploads = job.assetUploads ?? []
+        guard uploads.allSatisfy({
+            $0.state == .ready && $0.remoteAssetID != nil
+        }) else {
+            return .uploadingAssets
+        }
+        guard job.currentVersionID != nil else { return .creatingVersion }
+        return publishInternal ? .publishingInternal : .readyAsDraft
     }
 }
 
@@ -646,6 +981,7 @@ public enum MockNativeFailurePoint: String, Sendable {
     case asset
     case version
     case internalPublish
+    case titleUpdate
 }
 
 public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Sendable {
@@ -655,6 +991,7 @@ public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Send
         assetUpload: true,
         versionCreation: true,
         internalPublish: true,
+        titleUpdate: true,
         blocker: nil
     )
     private let lock = NSLock()
@@ -662,10 +999,19 @@ public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Send
     private var assets: [String: NativeAssetResult] = [:]
     private var versions: [String: NativeVersionResult] = [:]
     private var publishes: Set<String> = []
+    private var titles: [String: String] = [:]
     private var failurePoint: MockNativeFailurePoint?
+    private let failureRequestID: String?
+    private let failureRetryable: Bool
 
-    public init(failAfterCommitAt failurePoint: MockNativeFailurePoint? = nil) {
+    public init(
+        failAfterCommitAt failurePoint: MockNativeFailurePoint? = nil,
+        failureRequestID: String? = nil,
+        failureRetryable: Bool = true
+    ) {
         self.failurePoint = failurePoint
+        self.failureRequestID = failureRequestID
+        self.failureRetryable = failureRetryable
     }
 
     public var remoteCounts: (objects: Int, assets: Int, versions: Int, publishes: Int) {
@@ -674,8 +1020,12 @@ public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Send
         return (objects.count, assets.count, versions.count, publishes.count)
     }
 
+    public func remoteTitle(objectID: String) -> String? {
+        lock.withLock { titles[objectID] }
+    }
+
     public func createPrivateDraft(
-        title _: String,
+        title: String,
         sourceRef _: NativeCaptureSourceRef,
         collectionID _: String?,
         idempotencyKey: String
@@ -684,6 +1034,7 @@ public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Send
             let result = objects[idempotencyKey]
                 ?? NativeDraftResult(objectID: "mock-object-\(objects.count + 1)")
             objects[idempotencyKey] = result
+            titles[result.objectID] = title
             try failOnce(.object)
             return result
         }
@@ -741,9 +1092,21 @@ public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Send
         }
     }
 
+    public func updateTitle(objectID: String, title: String) async throws -> NativeTitleResult {
+        try lock.withLock {
+            titles[objectID] = title
+            try failOnce(.titleUpdate)
+            return NativeTitleResult(objectID: objectID, title: title)
+        }
+    }
+
     private func failOnce(_ point: MockNativeFailurePoint) throws {
         guard failurePoint == point else { return }
         failurePoint = nil
-        throw NativeGatewayFailure(code: "MOCK_LOST_RESPONSE", retryable: true)
+        throw NativeGatewayFailure(
+            code: "MOCK_LOST_RESPONSE",
+            requestID: failureRequestID,
+            retryable: failureRetryable
+        )
     }
 }

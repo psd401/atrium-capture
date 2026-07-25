@@ -4,6 +4,7 @@ import type {
   AtriumGateway,
   CreateMarkdownVersionRequest,
   CreatePrivateObjectRequest,
+  UpdateContentTitleRequest,
   UploadImmutableAssetRequest,
 } from './index.js';
 import { GatewayError } from './index.js';
@@ -62,6 +63,18 @@ export class HttpMockAtriumGateway implements AtriumGateway {
       { idempotencyKey: request.idempotencyKey, versionId: request.versionId },
       () => undefined,
       true,
+    );
+  }
+
+  async updateContentTitle(
+    request: UpdateContentTitleRequest,
+  ): Promise<{ contentObjectId: string; title: string }> {
+    return this.sendJson(
+      `/objects/${encodeURIComponent(request.contentObjectId)}`,
+      { title: request.title },
+      parseUpdatedObject,
+      false,
+      'PATCH',
     );
   }
 
@@ -128,11 +141,12 @@ export class HttpMockAtriumGateway implements AtriumGateway {
     body: unknown,
     validate: (value: unknown) => T,
     allowEmpty = false,
+    method: 'PATCH' | 'POST' = 'POST',
   ): Promise<T> {
     const response = await this.request(`${this.baseUrl}${path}`, {
       body: JSON.stringify(body),
       headers: { accept: 'application/json', 'content-type': 'application/json' },
-      method: 'POST',
+      method,
     });
     if (allowEmpty && response.ok && response.status === 204) {
       return undefined as T;
@@ -153,12 +167,21 @@ function parseCapabilities(value: unknown): AtriumCapabilities {
   }
   return {
     collectionDiscovery: requireBoolean(record, 'collectionDiscovery'),
+    contentUpdates: requireBoolean(record, 'contentUpdates'),
     idempotentWrites: requireBoolean(record, 'idempotentWrites'),
     immutableAssets: requireBoolean(record, 'immutableAssets'),
     internalPublication: requireBoolean(record, 'internalPublication'),
     mode,
     oauth: requireBoolean(record, 'oauth'),
     reasons,
+  };
+}
+
+function parseUpdatedObject(value: unknown): { contentObjectId: string; title: string } {
+  const record = requireRecord(value);
+  return {
+    contentObjectId: requireString(record, 'contentObjectId'),
+    title: requireBoundedString(record, 'title', 500),
   };
 }
 

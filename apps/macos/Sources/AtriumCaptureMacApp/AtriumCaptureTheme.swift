@@ -24,6 +24,9 @@ struct AtriumPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .allowsTightening(true)
             .foregroundStyle(.white)
             .padding(.horizontal, 14)
             .frame(minHeight: 34)
@@ -45,6 +48,9 @@ struct AtriumSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .allowsTightening(true)
             .foregroundStyle(AtriumCaptureTheme.evergreen)
             .padding(.horizontal, 12)
             .frame(minHeight: 32)
@@ -70,6 +76,9 @@ struct AtriumDestructiveButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .semibold))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .allowsTightening(true)
             .foregroundStyle(AtriumCaptureTheme.danger)
             .padding(.horizontal, 12)
             .frame(minHeight: 32)

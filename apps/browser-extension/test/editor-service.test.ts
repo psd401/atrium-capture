@@ -4,6 +4,8 @@ import {
   AtriumCaptureSessionState,
   Kind,
   MIMEType,
+  Phase,
+  SchemaVersion,
 } from '@atrium-capture/contracts';
 import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -44,6 +46,49 @@ describe('durable review and asset lifecycle', () => {
     await repository.applyEditorCommand(commandId, command);
 
     expect((await repository.getActiveSession())?.steps).toHaveLength(1);
+  });
+
+  it('renames after publishing begins while freezing a legacy create request title', async () => {
+    await repository.startSession('Synthetic original title', '0.1.0');
+    await repository.transition('stop');
+    const session = await repository.getActiveSession();
+    if (!session) {
+      throw new Error('synthetic_session_missing');
+    }
+    await repository.putPublishJob({
+      attemptCount: 0,
+      createdAt: new Date(1),
+      createIdempotencyKey: 'synthetic-create-key',
+      jobId: '40000000-0000-4000-8000-000000000009',
+      phase: Phase.Queued,
+      schemaVersion: SchemaVersion.The10,
+      sessionId: session.sessionId,
+      updatedAt: new Date(1),
+    });
+
+    await repository.applyEditorCommand('40000000-0000-4000-8000-000000000010', {
+      kind: 'update_title',
+      title: 'Synthetic changed title',
+    });
+
+    expect((await repository.getActiveSession())?.title).toBe('Synthetic changed title');
+    expect(
+      (await repository.getPublishJob('40000000-0000-4000-8000-000000000009'))?.createTitle,
+    ).toBe('Synthetic original title');
+    const frozenJob = await repository.getPublishJob('40000000-0000-4000-8000-000000000009');
+    await repository.putPublishJob({
+      ...frozenJob!,
+      createTitle: 'Synthetic unsafe replacement',
+    });
+    expect(
+      (await repository.getPublishJob('40000000-0000-4000-8000-000000000009'))?.createTitle,
+    ).toBe('Synthetic original title');
+    await expect(
+      repository.applyEditorCommand('40000000-0000-4000-8000-000000000011', {
+        kind: 'insert_step',
+        text: 'This content must not change the durable version.',
+      }),
+    ).rejects.toThrow('guide_content_frozen_after_publish');
   });
 
   it('atomically stores publishable derivatives and deletes raw bytes after privacy approval', async () => {
@@ -112,6 +157,28 @@ describe('durable review and asset lifecycle', () => {
     );
     expect(finalized.steps[0]?.screenshotAssetId).toBe(publishable?.assetId);
     expect(flatten).toHaveBeenCalledOnce();
+
+    flatten.mockClear();
+    const reopened = await editor.command('70000000-0000-4000-8000-000000000004', {
+      afterStepId: finalized.steps[0]!.stepId,
+      kind: 'insert_step',
+      text: 'Complete the synthetic follow-up.',
+    });
+    const manual = reopened.steps.at(-1);
+    expect(reopened.state).toBe(AtriumCaptureSessionState.Review);
+    await editor.command('70000000-0000-4000-8000-000000000005', {
+      kind: 'approve_step',
+      stepId: manual!.stepId,
+    });
+    const preparedAgain = await editor.finalize(
+      '70000000-0000-4000-8000-000000000006',
+      'delete_after_flatten',
+    );
+    expect(preparedAgain.state).toBe(AtriumCaptureSessionState.Publishable);
+    expect(
+      preparedAgain.assets.filter((asset) => asset.state === AssetState.PublishableLocal),
+    ).toHaveLength(1);
+    expect(flatten).not.toHaveBeenCalled();
   });
 
   it('may retain raw bytes until submit without making them publishable', async () => {

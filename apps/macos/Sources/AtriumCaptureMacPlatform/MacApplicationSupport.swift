@@ -2,7 +2,49 @@ import AtriumCaptureCore
 import Foundation
 
 public enum MacApplicationSupport {
-    public static func rootURL(fileManager: FileManager = .default) throws -> URL {
+    public static func rootURL(
+        fileManager: FileManager = .default,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) throws -> URL {
+        let localMock = environment["ATRIUM_CAPTURE_LOCAL_MOCK"] == "1"
+        let productionAcceptance =
+            environment["ATRIUM_CAPTURE_PRODUCTION_ACCEPTANCE"] == "1"
+                && environment["ATRIUM_CAPTURE_UI_FIXTURE"] == "review"
+        if (localMock || productionAcceptance),
+           let override = environment["ATRIUM_CAPTURE_DATA_ROOT"] {
+            guard
+                !override.isEmpty,
+                override.utf8.count <= 4_096,
+                !override.contains("\0"),
+                override.hasPrefix("/")
+            else {
+                throw CocoaError(.fileReadInvalidFileName)
+            }
+            let root = URL(fileURLWithPath: override, isDirectory: true).standardizedFileURL
+            if productionAcceptance {
+                let temporaryRoot = fileManager.temporaryDirectory.standardizedFileURL
+                let requiredPrefix = temporaryRoot
+                    .appendingPathComponent(
+                        "atrium-capture-production-acceptance.",
+                        isDirectory: true
+                    )
+                    .path
+                let systemTemporaryPrefix = "/private/tmp/atrium-capture-production-acceptance."
+                // Foundation canonicalizes macOS's /private/tmp symlink to /tmp
+                // for some callers. Both prefixes name the same system-owned
+                // temporary directory and remain scoped by the fixed basename.
+                let normalizedSystemTemporaryPrefix =
+                    "/tmp/atrium-capture-production-acceptance."
+                guard root.path.hasPrefix(requiredPrefix)
+                    || root.path.hasPrefix(systemTemporaryPrefix)
+                    || root.path.hasPrefix(normalizedSystemTemporaryPrefix)
+                else {
+                    throw CocoaError(.fileReadNoPermission)
+                }
+            }
+            try fileManager.createDirectory(at: root, withIntermediateDirectories: true)
+            return root
+        }
         let base = try fileManager.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,

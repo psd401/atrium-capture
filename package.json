@@ -12,6 +12,7 @@
   "pnpm": {
     "overrides": {
       "adm-zip": "0.6.0",
+      "brace-expansion": "5.0.8",
       "esbuild": "0.28.1",
       "fx-runner": "link:packages/fx-runner-disabled",
       "tmp": "0.2.7",
@@ -21,6 +22,7 @@
   "scripts": {
     "build": "pnpm --recursive --if-present build",
     "build:mac": "scripts/build-macos-app.sh",
+    "acceptance:atrium:browser": "node scripts/live-atrium-browser-acceptance.mjs",
     "check": "pnpm format:check && pnpm openwiki:check && pnpm lint && pnpm typecheck && pnpm contracts:check && pnpm messages:check && pnpm test && pnpm build && pnpm test:extension && pnpm package:browser && pnpm swift:test && pnpm licenses:check",
     "contracts:check": "pnpm contracts:generate --check && pnpm contracts:validate",
     "contracts:generate": "node scripts/generate-contracts.mjs",
@@ -36,10 +38,14 @@
     "package:browser": "pnpm --filter @atrium-capture/browser-extension zip && node scripts/verify-browser-package.mjs",
     "security:audit": "pnpm audit --audit-level high",
     "smoke:atrium": "node scripts/verify-atrium-production-boundary.mjs",
+    "smoke:atrium:browser-content": "node scripts/verify-atrium-browser-content-boundary.mjs",
+    "smoke:atrium:browser-token": "node scripts/verify-atrium-browser-token-boundary.mjs",
     "swift:test": "scripts/test-swift.sh",
     "test": "vitest run",
     "test:extension": "pnpm --filter @atrium-capture/browser-extension test:extension",
-    "typecheck": "pnpm --recursive --if-present typecheck"
+    "typecheck": "pnpm --recursive --if-present typecheck",
+    "verify:distribution": "node scripts/verify-pilot-artifacts.mjs --distribution",
+    "verify:pilot": "node scripts/verify-pilot-artifacts.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

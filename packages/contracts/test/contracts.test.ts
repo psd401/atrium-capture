@@ -2,10 +2,11 @@ import { readFile } from 'node:fs/promises';
 
 import { describe, expect, it } from 'vitest';
 
-import type {
-  AtriumCaptureNativeBridgeMessage,
-  AtriumCapturePublishJob,
-  AtriumCaptureSession,
+import {
+  ArrowDirection,
+  type AtriumCaptureNativeBridgeMessage,
+  type AtriumCapturePublishJob,
+  type AtriumCaptureSession,
 } from '../src/index.js';
 
 async function readFixture<T>(name: string): Promise<T> {
@@ -34,6 +35,7 @@ describe('generated contract fixtures', () => {
       'Enter the requested value in Synthetic account label.',
     );
     expect(session.steps[0]?.target?.macos?.backingScaleFactor).toBe(2);
+    expect(session.steps[0]?.annotations?.[0]?.arrowDirection).toBe(ArrowDirection.DownRight);
   });
 
   it('loads a metadata-only native bridge envelope', async () => {

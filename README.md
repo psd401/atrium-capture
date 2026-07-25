@@ -2,7 +2,12 @@
 
 Atrium Capture records a workflow, turns meaningful actions into an editable visual guide, and saves the reviewed result as an Atrium draft. The first application is a Chrome extension; the same capture contract is designed for an immediate Mac companion phase.
 
-Browser v1 and the native Mac companion are locally buildable, tested, and packaged with unsigned/ad-hoc development artifacts. Both contain the documented direct Atrium publisher and remain visibly capability-gated until administrators distribute their public OAuth client IDs.
+Browser v1 and the native Mac companion are locally buildable and tested. The
+browser build produces a verified, explicitly unsigned Chrome Web Store upload
+bundle; the installed local Mac pilot is Apple Development-signed with a stable
+bundle identity. Both contain the documented direct Atrium publisher and bundle
+their approved non-secret production OAuth client IDs, so employees only sign in
+with their district AI Studio account.
 
 ## Product boundary
 
@@ -12,7 +17,21 @@ Browser v1 and the native Mac companion are locally buildable, tested, and packa
 
 ## Status
 
-M0 through M7 are implemented locally. The production Manifest V3 extension and native SwiftUI/AppKit companion record, recover, review, annotate, permanently redact, and package synthetic workflows through the same generated contracts. Durable browser and native publishers pass failure-after-commit tests and production-contract request/response tests. Release signing/deployment and OAuth client registration remain external gates; Atrium's one non-idempotent asset-reservation interval is documented rather than hidden.
+M0 through M7 are implemented locally. The production Manifest V3 extension and
+native SwiftUI/AppKit companion record, recover, review, annotate, permanently
+redact, and package synthetic workflows through the same generated contracts.
+Durable browser and native publishers pass failure-after-commit tests and
+production-contract request/response tests. Production acceptance is complete
+with synthetic data: the extension recorded, reviewed, permanently redacted, and
+published a six-image private draft whose title, instructions, and images were
+verified in Atrium's editor; the Apple Development-signed Mac app resumed a
+durable publish job without duplication and produced a two-image private draft
+with a current version and synchronized title. Final synthetic
+[training walkthroughs](docs/training-walkthroughs.md) were also submitted as
+private Atrium drafts and visually verified: five browser-extension steps and
+ten Mac-app steps, with every reviewed image loaded. The remaining release gates
+are private PSD-only Chrome Web Store signing and managed deployment, plus
+district Developer ID signing, notarization, and Mac MDM deployment.
 
 ## Repository map
 

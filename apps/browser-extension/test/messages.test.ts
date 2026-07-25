@@ -42,12 +42,43 @@ describe('runtime message boundary', () => {
     expect(
       parseIncomingMessage({
         kind: 'recorder.command',
+        payload: { command: 'new', commandId: crypto.randomUUID() },
+      }),
+    ).toBeTruthy();
+    expect(parseIncomingMessage({ kind: 'recorder.list-guides' })).toBeTruthy();
+    expect(
+      parseIncomingMessage({
+        kind: 'recorder.activate-guide',
+        payload: { sessionId: crypto.randomUUID() },
+      }),
+    ).toBeTruthy();
+    expect(
+      parseIncomingMessage({
+        kind: 'recorder.command',
         payload: { command: 'publish', commandId: crypto.randomUUID() },
       }),
     ).toBeUndefined();
   });
 
   it('accepts bounded editor commands and rejects image bytes at the message boundary', () => {
+    expect(
+      parseIncomingMessage({
+        kind: 'editor.command',
+        payload: {
+          command: { kind: 'update_title', title: 'Synthetic renamed guide' },
+          commandId: crypto.randomUUID(),
+        },
+      }),
+    ).toBeTruthy();
+    expect(
+      parseIncomingMessage({
+        kind: 'editor.command',
+        payload: {
+          command: { kind: 'update_title', title: 'x'.repeat(501) },
+          commandId: crypto.randomUUID(),
+        },
+      }),
+    ).toBeUndefined();
     expect(
       parseIncomingMessage({
         kind: 'editor.command',
@@ -72,6 +103,42 @@ describe('runtime message boundary', () => {
         payload: {
           commandId: crypto.randomUUID(),
           rawImageBytes: 'prohibited',
+        },
+      }),
+    ).toBeUndefined();
+    expect(
+      parseIncomingMessage({
+        kind: 'editor.command',
+        payload: {
+          command: {
+            annotation: {
+              arrowDirection: 'down_right',
+              geometry: { height: 20, width: 100, x: 10, y: 10 },
+              id: crypto.randomUUID(),
+              kind: 'arrow',
+            },
+            kind: 'add_annotation',
+            stepId: crypto.randomUUID(),
+          },
+          commandId: crypto.randomUUID(),
+        },
+      }),
+    ).toBeTruthy();
+    expect(
+      parseIncomingMessage({
+        kind: 'editor.command',
+        payload: {
+          command: {
+            annotation: {
+              arrowDirection: 'sideways',
+              geometry: { height: 20, width: 100, x: 10, y: 10 },
+              id: crypto.randomUUID(),
+              kind: 'arrow',
+            },
+            kind: 'add_annotation',
+            stepId: crypto.randomUUID(),
+          },
+          commandId: crypto.randomUUID(),
         },
       }),
     ).toBeUndefined();

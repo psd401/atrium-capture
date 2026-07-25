@@ -30,16 +30,18 @@ Blur is not sufficient for secrets that must be irrecoverable; permanent redacti
 - Chrome: Authorization Code + PKCE through `chrome.identity.launchWebAuthFlow()`.
 - Mac: Authorization Code + PKCE through `ASWebAuthenticationSession`.
 - No permanent `sk-` key and no OAuth client secret in either application.
-- Browser access/refresh tokens live in trusted-only extension session storage; content scripts never receive them and a full browser exit clears them.
+- Browser access/refresh tokens live in trusted-only extension-local storage;
+  content scripts never receive them, and sign-out/revocation clears them.
+  Persistence across managed browser restarts prevents repeated district login.
 - Mac refresh credentials live in Keychain.
 
-Both clients use the fixed production issuer and a deployment-supplied public client UUID. OAuth responses are bounded and validated as Bearer tokens; refresh rotation is serialized. The Mac credential record is stored through SecItem off the main thread. Tokens never enter session JSON, native messages, diagnostics, or console output.
+Both clients use the fixed production issuer and a bundled approved public client UUID. Optional managed preferences may override only that non-secret identifier for an approved test client. OAuth responses are bounded and validated as Bearer tokens; refresh rotation is serialized. The Mac credential record is stored through SecItem off the main thread. Tokens never enter session JSON, native messages, diagnostics, or console output.
 
 ## Permissions
 
 Use the smallest practical browser permission set. Continuous, cross-site recording may require broad optional/managed host access; explain it plainly and activate capture only during a user-started session. Add `nativeMessaging` only with the Mac bridge release, not preemptively.
 
-The production extension displays its permission rationale in-product. `unlimitedStorage` is bounded by a smaller managed image budget, and `identity` is used only from the explicit Atrium sign-in action when managed public-client configuration exists.
+The production extension displays its permission rationale in-product. `unlimitedStorage` is bounded by a smaller managed image budget, and `identity` is used only from the explicit **Sign in to AI Studio** action.
 
 Mac permissions are staged and explained at point of use: Screen Recording for pixels and Accessibility for semantic UI metadata. The app remains usable for screenshot editing when either permission is denied.
 

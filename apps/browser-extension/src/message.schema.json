@@ -47,7 +47,7 @@
           "additionalProperties": false,
           "required": ["command", "commandId"],
           "properties": {
-            "command": { "type": "string", "enum": ["start", "pause", "resume", "stop"] },
+            "command": { "type": "string", "enum": ["new", "start", "pause", "resume", "stop"] },
             "commandId": { "type": "string", "format": "uuid" }
           }
         }
@@ -58,6 +58,28 @@
       "additionalProperties": false,
       "required": ["kind"],
       "properties": { "kind": { "const": "recorder.snapshot" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": { "kind": { "const": "recorder.list-guides" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "payload"],
+      "properties": {
+        "kind": { "const": "recorder.activate-guide" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sessionId"],
+          "properties": {
+            "sessionId": { "type": "string", "format": "uuid" }
+          }
+        }
+      }
     },
     {
       "type": "object",
@@ -238,6 +260,10 @@
           "enum": ["arrow", "rectangle", "text", "highlight", "blur", "mosaic", "redaction"]
         },
         "geometry": { "$ref": "#/$defs/rect" },
+        "arrowDirection": {
+          "type": "string",
+          "enum": ["up_right", "down_right", "up_left", "down_left"]
+        },
         "text": { "type": "string", "maxLength": 1000 },
         "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
       }
@@ -249,6 +275,15 @@
           "additionalProperties": false,
           "required": ["kind"],
           "properties": { "kind": { "const": "begin_review" } }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "title"],
+          "properties": {
+            "kind": { "const": "update_title" },
+            "title": { "type": "string", "minLength": 1, "maxLength": 500 }
+          }
         },
         {
           "type": "object",

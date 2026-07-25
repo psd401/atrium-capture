@@ -1,13 +1,19 @@
 import { browser } from 'wxt/browser';
 import {
+  ATRIUM_BROWSER_PRODUCTION_OAUTH_CLIENT_ID,
   ATRIUM_OAUTH_AUTHORIZATION_ENDPOINT,
   ATRIUM_OAUTH_REVOCATION_ENDPOINT,
   ATRIUM_OAUTH_SCOPES,
   ATRIUM_OAUTH_TOKEN_ENDPOINT,
+  ATRIUM_PRODUCTION_ORIGIN,
   ProductionAtriumGateway,
 } from '@atrium-capture/atrium-client/live';
 
-import { BrowserOAuthSession, BrowserTrustedTokenStore } from '../src/browser-oauth.js';
+import {
+  BrowserOAuthSession,
+  BrowserTrustedTokenStore,
+  oauthSupportCode,
+} from '../src/browser-oauth.js';
 import { CaptureRepository } from '../src/database.js';
 import { DiagnosticsService } from '../src/diagnostics-service.js';
 import { EditorService } from '../src/editor-service.js';
@@ -17,6 +23,7 @@ import {
   createBrowserNativeBridgeAdapter,
   NativeBridgeService,
 } from '../src/native-bridge-service.js';
+import { publicationFailureResponse } from '../src/publication-guidance.js';
 import { BrowserPublicationService } from '../src/publication-service.js';
 import { RecorderService } from '../src/recorder-service.js';
 import { SerializedScreenshotCapture } from '../src/screenshot.js';
@@ -27,20 +34,23 @@ export default defineBackground(() => {
   void browser.storage.managed
     .setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' })
     .catch(() => undefined);
-  void browser.storage.session
-    .setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' })
-    .catch(() => undefined);
+  const tokenStorageReady = browser.storage.local.setAccessLevel({
+    accessLevel: 'TRUSTED_CONTEXTS',
+  });
   const auth = new BrowserOAuthSession(
     browser.identity,
-    new BrowserTrustedTokenStore(browser.storage.session),
+    new BrowserTrustedTokenStore(browser.storage.local, tokenStorageReady),
     async () => {
       const snapshot = await managedPolicy.load();
-      const clientId = snapshot.valid ? snapshot.policy.atriumOAuthClientId : undefined;
+      const clientId = snapshot.valid
+        ? (snapshot.policy.atriumOAuthClientId ?? ATRIUM_BROWSER_PRODUCTION_OAUTH_CLIENT_ID)
+        : undefined;
       return clientId
         ? {
             authorizationEndpoint: ATRIUM_OAUTH_AUTHORIZATION_ENDPOINT,
             clientId,
             revocationEndpoint: ATRIUM_OAUTH_REVOCATION_ENDPOINT,
+            resource: ATRIUM_PRODUCTION_ORIGIN,
             scopes: [...ATRIUM_OAUTH_SCOPES],
             tokenEndpoint: ATRIUM_OAUTH_TOKEN_ENDPOINT,
           }
@@ -51,7 +61,7 @@ export default defineBackground(() => {
     accessToken: () => auth.accessToken(),
     configured: async () => {
       const snapshot = await managedPolicy.load();
-      return Boolean(snapshot.valid && snapshot.policy.atriumOAuthClientId);
+      return snapshot.valid;
     },
   });
   const screenshotCapture = new SerializedScreenshotCapture((windowId) =>
@@ -142,11 +152,30 @@ export default defineBackground(() => {
           throw new Error('content_cannot_read_session');
         }
         return recorder.getSnapshot();
-      case 'editor.command':
+      case 'recorder.list-guides':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_read_session');
+        }
+        return repository.listSessions();
+      case 'recorder.activate-guide':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_control_recorder');
+        }
+        {
+          const activated = await repository.activateSession(message.payload.sessionId);
+          await broadcastChanged();
+          return activated;
+        }
+      case 'editor.command': {
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_edit_session');
         }
-        return editor.command(message.payload.commandId, message.payload.command);
+        const updated = await editor.command(message.payload.commandId, message.payload.command);
+        if (message.payload.command.kind === 'update_title') {
+          await publication.syncTitleForSession(updated.sessionId);
+        }
+        return updated;
+      }
       case 'editor.finalize':
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_finalize_session');
@@ -178,9 +207,17 @@ export default defineBackground(() => {
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_authenticate');
         }
-        await auth.signIn();
-        await broadcastChanged();
-        return { authentication: await auth.status() };
+        try {
+          await auth.signIn();
+          await publication.resumePending();
+          await broadcastChanged();
+          return { authentication: await auth.status() };
+        } catch (error) {
+          return {
+            authentication: 'signed_out',
+            errorCode: oauthSupportCode(error),
+          };
+        }
       case 'publisher.sign-out':
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_authenticate');
@@ -192,17 +229,29 @@ export default defineBackground(() => {
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_publish');
         }
-        return publication.enqueue(message.payload.collectionId);
+        try {
+          return await publication.enqueue(message.payload.collectionId);
+        } catch (error) {
+          return publicationFailureResponse(error);
+        }
       case 'publisher.retry':
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_publish');
         }
-        return publication.resume(message.payload.jobId);
+        try {
+          return await publication.retry(message.payload.jobId);
+        } catch (error) {
+          return publicationFailureResponse(error);
+        }
       case 'publisher.publish-internal':
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_publish');
         }
-        return publication.publishInternal(message.payload.jobId);
+        try {
+          return await publication.publishInternal(message.payload.jobId);
+        } catch (error) {
+          return publicationFailureResponse(error);
+        }
       case 'diagnostics.snapshot':
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_read_diagnostics');
