@@ -63,6 +63,24 @@ final class NativeRecorderTests: XCTestCase {
         if case .merged = merged {} else { XCTFail("Expected input merge") }
     }
 
+    func testTitleUpdatePreservesRecordedStepsAndReceiptDeduplication() throws {
+        let recorder = try NativeRecorder(persistence: MemoryNativeRecorderPersistence())
+        _ = try recorder.start(
+            title: "Synthetic original title",
+            appVersion: "1.0.0",
+            osVersion: nil
+        )
+        let event = makeEvent(id: "title-step", action: .click, timestamp: 1_001)
+        _ = try recorder.record(event)
+
+        let renamed = try recorder.updateTitle("Synthetic renamed guide")
+
+        XCTAssertEqual(renamed.title, "Synthetic renamed guide")
+        XCTAssertEqual(renamed.steps.count, 1)
+        XCTAssertEqual(try recorder.record(event), .duplicate)
+        XCTAssertEqual(recorder.snapshot()?.steps.count, 1)
+    }
+
     func testOrdersOutOfOrderEventsAndResequencesSteps() throws {
         let recorder = try NativeRecorder(persistence: MemoryNativeRecorderPersistence())
         _ = try recorder.start(appVersion: "1.0.0", osVersion: nil)
@@ -108,6 +126,38 @@ final class NativeRecorderTests: XCTestCase {
             .duplicate
         )
         XCTAssertEqual(restarted.snapshot()?.steps.count, 2)
+    }
+
+    func testNewGuidePreservesPriorSessionAndEitherGuideCanBeReopened() throws {
+        let recorder = try NativeRecorder(persistence: MemoryNativeRecorderPersistence())
+        let repository = MemoryNativePublishRepository()
+        _ = try recorder.start(
+            sessionID: "10000000-0000-4000-8000-000000000021",
+            title: "Synthetic original guide",
+            appVersion: "1.0.0",
+            osVersion: "synthetic"
+        )
+        _ = try recorder.record(makeEvent(id: "original-step", action: .click, timestamp: 1_001))
+        let original = try recorder.stop()
+        try repository.saveSession(original)
+
+        _ = try recorder.start(
+            sessionID: "10000000-0000-4000-8000-000000000022",
+            title: "Synthetic second guide",
+            appVersion: "1.0.0",
+            osVersion: "synthetic"
+        )
+        XCTAssertThrowsError(try recorder.activateStoredSession(original))
+        let second = try recorder.stop()
+        try repository.saveSession(second)
+
+        XCTAssertEqual(Set(try repository.listSessions().map(\.sessionID)), [
+            original.sessionID,
+            second.sessionID,
+        ])
+        try recorder.activateStoredSession(original)
+        XCTAssertEqual(recorder.snapshot()?.title, "Synthetic original guide")
+        XCTAssertEqual(recorder.snapshot()?.steps.count, 1)
     }
 
     func testFinderSettingsAndOfficeEventsProduceOneContractModel() throws {

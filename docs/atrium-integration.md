@@ -12,6 +12,7 @@ Atrium Capture uses the documented production origin `https://aistudio.psd401.ai
 | Authorization/token/revocation | `/api/oauth/auth`, `/api/oauth/token`, `/api/oauth/revocation`                                                   |
 | Collection picker              | `GET /api/v1/content/collections?shape=flat`; show only `selectableForCreate`                                    |
 | Private bodyless draft         | `POST /api/v1/content` with `visibility.level: private`, `sourceRef`, and an idempotency key                     |
+| Title update                   | `PATCH /api/v1/content/{id}` with `{ "title": "..." }` and the `content:update` scope                            |
 | Asset recovery/reservation     | `GET/POST /api/v1/content/{id}/assets`                                                                           |
 | Asset bytes                    | Direct `PUT` to the server-issued S3 URL with only its exact content type/checksum headers                       |
 | Asset completion               | `POST /api/v1/content/{id}/assets/{assetId}/complete`                                                            |
@@ -109,6 +110,13 @@ The browser keeps the token set in trusted-only `chrome.storage.session`, which 
 ## Recovery behavior
 
 Object, version, and internal-publication retries reuse durable idempotency keys. Asset filenames are deterministic from the local asset UUID. Before initiating an upload, clients list existing assets and reuse a matching ready row or complete a matching pending row. An ambiguous S3 response is followed by completion, so a committed upload is recoverable without another reservation.
+
+The title captured in an object-create request is frozen in the outbox before
+that request runs. A later rename updates local desired state immediately. After
+the object ID is known, the client reconciles the desired title through the
+documented metadata `PATCH`, including for ready drafts and completed internal
+publications. This prevents an ambiguous create retry from changing its request
+body while still allowing users to correct titles at any time.
 
 Atrium asset initiation currently has no `Idempotency-Key`. If the server commits a reservation but the response containing its presigned URL is lost, the client safely refuses a second reservation until the first expires. After expiry it can continue with a new reservation, but the expired row remains until server cleanup. [ADR 0006](adr/0006-production-atrium-boundary.md) records why strict row-level deduplication for this one interval requires a server contract change.
 

@@ -4,6 +4,7 @@ import type {
   AtriumGateway,
   CreateMarkdownVersionRequest,
   CreatePrivateObjectRequest,
+  UpdateContentTitleRequest,
   UploadImmutableAssetRequest,
 } from './index.js';
 import { GatewayError } from './index.js';
@@ -93,6 +94,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
     if (this.options.configured && !(await this.options.configured())) {
       return {
         collectionDiscovery: false,
+        contentUpdates: false,
         idempotentWrites: false,
         immutableAssets: false,
         internalPublication: false,
@@ -103,6 +105,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
     }
     return {
       collectionDiscovery: true,
+      contentUpdates: true,
       idempotentWrites: true,
       immutableAssets: true,
       internalPublication: true,
@@ -229,6 +232,26 @@ export class ProductionAtriumGateway implements AtriumGateway {
     ) {
       throw new GatewayError('atrium_publication_response_invalid', false);
     }
+  }
+
+  async updateContentTitle(
+    request: UpdateContentTitleRequest,
+  ): Promise<{ contentObjectId: string; title: string }> {
+    const title = request.title.trim();
+    if (!title || title.length > 500) {
+      throw new GatewayError('invalid_title', false);
+    }
+    const response = await this.sendApiJson(
+      `/content/${encodeURIComponent(request.contentObjectId)}`,
+      { title },
+      {},
+      'PATCH',
+    );
+    const data = requireDataRecord(response);
+    return {
+      contentObjectId: requireUuid(data, 'id'),
+      title: requireBoundedString(data, 'title', 500),
+    };
   }
 
   async uploadImmutableAsset(
@@ -400,6 +423,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
     path: string,
     body: unknown,
     extraHeaders: Record<string, string> = {},
+    method: 'PATCH' | 'POST' = 'POST',
   ): Promise<unknown> {
     const token = await this.requireAccessToken();
     const response = await this.request(`${this.apiBaseUrl}${path}`, {
@@ -411,7 +435,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
         'content-type': 'application/json',
         ...extraHeaders,
       },
-      method: 'POST',
+      method,
     });
     return parseApiResponse(response);
   }

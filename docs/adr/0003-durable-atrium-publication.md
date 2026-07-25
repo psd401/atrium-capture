@@ -11,7 +11,7 @@ At the time of this decision, the audited Atrium surface did not provide the com
 
 ## Decision
 
-- `AtriumGateway` is the only remote boundary. Its capabilities independently gate OAuth, collection discovery, immutable assets, idempotent writes, and internal publication.
+- `AtriumGateway` is the only remote boundary. Its capabilities independently gate OAuth, collection discovery, content metadata updates, immutable assets, idempotent writes, and internal publication.
 - A production gateway may use only current documented routes. The HTTP mock remains explicitly synthetic and accepts only the versioned `/_mock/atrium-capture/v1` namespace.
 - Authorization uses public-client Authorization Code with S256 PKCE, the Atrium issuer as the RFC 8707 resource indicator, and Chrome's documented `identity.getRedirectURL`/`launchWebAuthFlow` boundary. No client secret is shipped, and token responses are accepted only in the trusted worker context.
 - The outbox persists `creating_object`, each `uploading` asset state, `creating_version`, and `publishing_internal` before the corresponding remote call. Retries reuse deterministic idempotency keys derived from the durable job ID.
@@ -19,6 +19,7 @@ At the time of this decision, the audited Atrium surface did not provide the com
 - Object creation requires `visibility: private`. A ready private draft and reader link are terminal for the default operation. Internal publication is a separate explicit command with its own idempotency key.
 - Collection discovery supplies the picker. When discovery is unavailable, only a validated administrator-managed collection ID may replace it.
 - `PublishJob.readerUrl` is an optional additive 1.0 contract field so legacy queued jobs continue to decode in TypeScript and Swift.
+- `PublishJob.createTitle` freezes the idempotent create body, while `remoteTitle` records the most recent title confirmed by Atrium. Both are optional additive 1.0 fields; post-create reconciliation follows [ADR 0007](0007-active-guides-and-title-synchronization.md).
 
 ## Consequences
 

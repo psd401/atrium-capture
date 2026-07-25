@@ -151,11 +151,30 @@ export default defineBackground(() => {
           throw new Error('content_cannot_read_session');
         }
         return recorder.getSnapshot();
-      case 'editor.command':
+      case 'recorder.list-guides':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_read_session');
+        }
+        return repository.listSessions();
+      case 'recorder.activate-guide':
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_control_recorder');
+        }
+        {
+          const activated = await repository.activateSession(message.payload.sessionId);
+          await broadcastChanged();
+          return activated;
+        }
+      case 'editor.command': {
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_edit_session');
         }
-        return editor.command(message.payload.commandId, message.payload.command);
+        const updated = await editor.command(message.payload.commandId, message.payload.command);
+        if (message.payload.command.kind === 'update_title') {
+          await publication.syncTitleForSession(updated.sessionId);
+        }
+        return updated;
+      }
       case 'editor.finalize':
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_finalize_session');
@@ -189,6 +208,7 @@ export default defineBackground(() => {
         }
         try {
           await auth.signIn();
+          await publication.resumePending();
           await broadcastChanged();
           return { authentication: await auth.status() };
         } catch (error) {

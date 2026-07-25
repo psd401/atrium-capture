@@ -87,6 +87,18 @@ export class BrowserPublicationService {
     return this.serialize(() => this.drive(jobId));
   }
 
+  async syncTitleForSession(sessionId: string): Promise<AtriumCapturePublishJob | undefined> {
+    return this.serialize(async () => {
+      const job = await this.repository.getLatestPublishJobForSession(sessionId);
+      if (!job) {
+        return undefined;
+      }
+      const synced = await this.publisher.syncTitle(job.jobId);
+      await this.recordHealth(synced);
+      return synced;
+    });
+  }
+
   async resumePending(): Promise<void> {
     return this.serialize(async () => {
       const capabilities = await this.gateway.capabilities();
@@ -96,11 +108,16 @@ export class BrowserPublicationService {
       const jobs = await this.repository.listPublishJobs();
       for (const job of jobs) {
         if (job.phase === Phase.Complete || job.phase === Phase.ReadyAsDraft) {
-          await this.markSubmitted(job);
+          const synced = await this.publisher.syncTitle(job.jobId);
+          await this.markSubmitted(synced);
+          await this.recordHealth(synced);
           continue;
         }
         if (job.phase !== Phase.NeedsAttention) {
           await this.drive(job.jobId);
+        } else {
+          const synced = await this.publisher.syncTitle(job.jobId);
+          await this.recordHealth(synced);
         }
       }
     });

@@ -53,7 +53,6 @@ export function applyEditorCommand(
   const idFactory = context.idFactory ?? defaultIdFactory;
 
   if (command.kind === 'update_title') {
-    assertTitleEditable(session);
     const title = command.title.trim();
     if (!title || title.length > 500) {
       throw new Error('invalid_title');
@@ -66,7 +65,11 @@ export function applyEditorCommand(
     };
   }
 
-  assertEditable(session);
+  if (command.kind === 'insert_step') {
+    assertComposable(session);
+  } else {
+    assertEditable(session);
+  }
   switch (command.kind) {
     case 'begin_review':
       return changed(session, session.steps, now);
@@ -311,7 +314,7 @@ function assertEditable(session: AtriumCaptureSession): void {
   }
 }
 
-function assertTitleEditable(session: AtriumCaptureSession): void {
+function assertComposable(session: AtriumCaptureSession): void {
   if (
     session.state !== AtriumCaptureSessionState.Review &&
     session.state !== AtriumCaptureSessionState.Publishable

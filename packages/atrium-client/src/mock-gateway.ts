@@ -4,12 +4,17 @@ import type {
   AtriumGateway,
   CreateMarkdownVersionRequest,
   CreatePrivateObjectRequest,
+  UpdateContentTitleRequest,
   UploadImmutableAssetRequest,
 } from './index.js';
 import { GatewayError } from './index.js';
 
 export type MockFailurePoint =
-  'create_object' | 'create_version' | 'publish_internal' | `upload_asset:${string}`;
+  | 'create_object'
+  | 'create_version'
+  | 'publish_internal'
+  | 'update_title'
+  | `upload_asset:${string}`;
 
 interface MockObject {
   collectionId?: string;
@@ -74,6 +79,7 @@ export class MockAtriumGateway implements AtriumGateway {
   async capabilities(): Promise<AtriumCapabilities> {
     return {
       collectionDiscovery: true,
+      contentUpdates: true,
       idempotentWrites: true,
       immutableAssets: true,
       internalPublication: true,
@@ -163,6 +169,16 @@ export class MockAtriumGateway implements AtriumGateway {
     object.visibility = 'internal';
     this.objectsByKey.set(request.idempotencyKey, object);
     this.failOnceAfterCommit('publish_internal');
+  }
+
+  async updateContentTitle(
+    request: UpdateContentTitleRequest,
+  ): Promise<{ contentObjectId: string; title: string }> {
+    this.count('update_title');
+    const object = this.requireObject(request.contentObjectId);
+    object.title = request.title;
+    this.failOnceAfterCommit('update_title');
+    return { contentObjectId: object.contentObjectId, title: object.title };
   }
 
   snapshot(): MockAtriumSnapshot {

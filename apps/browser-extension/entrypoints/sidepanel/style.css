@@ -298,6 +298,10 @@ h1 {
   margin: 1rem 0;
 }
 
+.controls select {
+  grid-column: 1 / -1;
+}
+
 .controls button:only-child {
   grid-column: 1 / -1;
 }

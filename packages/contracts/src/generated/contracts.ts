@@ -230,11 +230,13 @@ export interface AtriumCapturePublishJob {
   contentObjectId?: string;
   createdAt: Date;
   createIdempotencyKey: string;
+  createTitle?: string;
   currentVersionId?: string;
   jobId: string;
   lastError?: LastError;
   phase: Phase;
   readerUrl?: string;
+  remoteTitle?: string;
   schemaVersion: SchemaVersion;
   sessionId: string;
   updatedAt: Date;

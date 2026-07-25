@@ -61,6 +61,14 @@ describe('production Atrium v1 gateway', () => {
             201,
           );
         }
+        if (url.endsWith(`/content/${OBJECT_ID}`) && method === 'PATCH') {
+          return json({
+            data: {
+              id: OBJECT_ID,
+              title: 'Synthetic renamed guide',
+            },
+          });
+        }
         if (url.endsWith(`/content/${OBJECT_ID}/assets`) && method === 'GET') {
           return json({ data: [] });
         }
@@ -133,6 +141,15 @@ describe('production Atrium v1 gateway', () => {
       visibility: 'private',
     });
     const image = new Blob(['synthetic-reviewed-image'], { type: 'image/png' });
+    await expect(
+      gateway.updateContentTitle({
+        contentObjectId: created.contentObjectId,
+        title: 'Synthetic renamed guide',
+      }),
+    ).resolves.toEqual({
+      contentObjectId: OBJECT_ID,
+      title: 'Synthetic renamed guide',
+    });
     const uploaded = await gateway.uploadImmutableAsset({
       bytes: image,
       contentObjectId: created.contentObjectId,
@@ -165,6 +182,11 @@ describe('production Atrium v1 gateway', () => {
     expect(createCall?.body).not.toHaveProperty('body');
     expect(createCall?.headers.get('authorization')).toBe('Bearer synthetic-access-token');
     expect(createCall?.headers.get('idempotency-key')).toBe('capture:job:create');
+    const titleCall = calls.find(
+      (call) => call.url.endsWith(`/content/${OBJECT_ID}`) && call.method === 'PATCH',
+    );
+    expect(titleCall?.body).toEqual({ title: 'Synthetic renamed guide' });
+    expect(titleCall?.headers.get('authorization')).toBe('Bearer synthetic-access-token');
 
     const initiateCall = calls.find(
       (call) => call.url.endsWith(`/content/${OBJECT_ID}/assets`) && call.method === 'POST',

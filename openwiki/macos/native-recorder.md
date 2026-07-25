@@ -21,8 +21,12 @@ publishable assets.
 
 Region and focused-element quick captures append to the current unpublished
 guide. The title and manual steps remain editable through preparation; adding
-content reopens privacy review. A durable Atrium outbox job locks the title and
-content so a retry cannot change its idempotent request.
+content reopens privacy review. Once a durable Atrium job exists, step/image
+content stays frozen for that version while titles remain editable and
+reconcile through Atrium metadata updates. New and saved-guide controls keep the
+active editor independent from older background outbox recovery. Storage rejects
+guide switching during recording and serializes title saves with the Submitted
+transition, so a stale recorder snapshot cannot regress the durable session.
 
 Native review uses generated crop and annotation commands. Screenshot-bearing
 input steps require an opaque redaction before flattening and approval. Core

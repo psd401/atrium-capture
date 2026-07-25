@@ -28,6 +28,7 @@ final class CaptureAppModel: ObservableObject {
     @Published private(set) var permissions = MacPermissionCenter.snapshot()
     @Published private(set) var statusCode = "READY"
     @Published private(set) var publishJob: AtriumCapturePublishJob?
+    @Published private(set) var guides: [AtriumCaptureSession] = []
     @Published private(set) var publicationStarting = false
     @Published private(set) var pins: [PinnedCapture] = []
     @Published private(set) var atriumAuthentication: NativeAuthenticationStatus = .unconfigured
@@ -58,7 +59,7 @@ final class CaptureAppModel: ObservableObject {
         return publishJob?.sessionID == session.sessionID
     }
 
-    var currentGuideLockedForPublish: Bool {
+    var currentGuideContentFrozen: Bool {
         publicationStarting || currentSessionHasPublishJob
     }
 
@@ -75,34 +76,25 @@ final class CaptureAppModel: ObservableObject {
     }
 
     var canEditGuideContent: Bool {
-        guard !currentGuideLockedForPublish, let state = session?.state else { return false }
+        guard !currentGuideContentFrozen, let state = session?.state else { return false }
         return state == .review || state == .publishable
     }
 
     var canEditGuideTitle: Bool {
-        canEditGuideContent
+        session != nil
     }
 
     var canStartRecording: Bool {
-        guard let session else { return true }
-        if currentGuideLockedForPublish {
-            return publishJob?.phase == .complete
-        }
-        return session.state == .submitted || session.state == .archived
+        session?.state != .recording && session?.state != .paused
     }
 
     var canQuickCapture: Bool {
         guard let session else { return true }
-        if session.state == .recording || session.state == .paused {
-            return false
-        }
-        if currentGuideLockedForPublish {
-            return publishJob?.phase == .complete
-        }
-        return session.state == .review
-            || session.state == .publishable
-            || session.state == .submitted
-            || session.state == .archived
+        return session.state != .recording && session.state != .paused
+    }
+
+    var canPinReviewedImage: Bool {
+        session?.assets.contains(where: { $0.state == .publishableLocal }) == true
     }
 
     var launchAtLoginEnabled: Bool {
@@ -115,6 +107,11 @@ final class CaptureAppModel: ObservableObject {
 
     var publishFailureGuidance: String? {
         guard let job = publishJob, let failure = job.lastError else { return nil }
+        if failure.code == "TITLE_UPDATE_FAILED" {
+            return failure.retryable
+                ? "The new title is saved locally. Retry to update the Atrium title."
+                : "The new title is saved locally, but Atrium rejected the title update. Sign in again or contact district support."
+        }
         guard job.phase != .readyAsDraft, job.phase != .complete else { return nil }
         let action = switch job.phase {
         case .queued, .creatingObject:
@@ -179,18 +176,21 @@ final class CaptureAppModel: ObservableObject {
             pinBoard = try PinBoard(
                 persistence: FilePinBoardPersistence(url: root.appendingPathComponent("pin-history.json"))
             )
-            let persistedJob = try repository.listJobs().last
             let recorderSession = recorder.snapshot()
-            let shouldRestorePublishedSession = persistedJob.map { job in
-                job.phase != .complete
-                    || recorderSession == nil
-                    || recorderSession?.sessionID == job.sessionID
-            } ?? false
-            if shouldRestorePublishedSession, let persistedJob {
-                publishJob = persistedJob
-                session = try repository.loadSession(sessionID: persistedJob.sessionID)
-                    ?? recorderSession
-                switch persistedJob.phase {
+            if let recorderSession {
+                let canonical = try repository.reconcileSession(recorderSession)
+                try recorder.replaceReviewedSession(canonical)
+                session = canonical
+            } else if let saved = try repository.listSessions().first {
+                try recorder.activateStoredSession(saved)
+                session = saved
+            }
+            guides = try repository.listSessions()
+            publishJob = try repository.listJobs().last(where: {
+                $0.sessionID == session?.sessionID
+            })
+            if let publishJob {
+                switch publishJob.phase {
                 case .readyAsDraft:
                     statusCode = "PRIVATE_DRAFT_READY"
                 case .complete:
@@ -198,13 +198,10 @@ final class CaptureAppModel: ObservableObject {
                 case .needsAttention:
                     statusCode = "PUBLISH_NEEDS_ATTENTION"
                 default:
-                    statusCode = persistedJob.lastError.map {
+                    statusCode = publishJob.lastError.map {
                         "PUBLISH_FAILED_\($0.code)"
                     } ?? "PUBLISH_PENDING"
                 }
-            } else {
-                publishJob = nil
-                session = recorderSession
             }
             refreshLaunchAtLoginState()
             pins = pinBoard.snapshot().pins
@@ -318,22 +315,68 @@ final class CaptureAppModel: ObservableObject {
             return
         }
         guard canStartRecording else {
-            statusCode = currentGuideLockedForPublish
-                ? "FINISH_CURRENT_ATRIUM_DRAFT_FIRST"
-                : "FINISH_CURRENT_GUIDE_FIRST"
+            statusCode = "STOP_CURRENT_RECORDING_FIRST"
             return
         }
         do {
+            try persistCurrentSession()
             screenshotImageCache.removeAll()
             publishJob = nil
             session = try recorder.start(
                 appVersion: "1.0.0",
                 osVersion: ProcessInfo.processInfo.operatingSystemVersionString
             )
+            try persistCurrentSession()
+            refreshGuides()
             monitor.start()
             statusCode = "RECORDING"
         } catch {
             statusCode = "RECORDER_START_FAILED"
+        }
+    }
+
+    func newGuide() {
+        guard canStartRecording else {
+            statusCode = "STOP_CURRENT_RECORDING_FIRST"
+            return
+        }
+        do {
+            try persistCurrentSession()
+            screenshotImageCache.removeAll()
+            publishJob = nil
+            _ = try recorder.start(
+                title: "Untitled guide",
+                appVersion: "1.0.0",
+                osVersion: ProcessInfo.processInfo.operatingSystemVersionString
+            )
+            session = try recorder.stop()
+            try persistCurrentSession()
+            refreshGuides()
+            statusCode = "NEW_GUIDE_READY"
+        } catch {
+            statusCode = "NEW_GUIDE_FAILED"
+        }
+    }
+
+    func openGuide(sessionID: String) {
+        guard session?.sessionID != sessionID else { return }
+        guard canStartRecording else {
+            statusCode = "STOP_CURRENT_RECORDING_FIRST"
+            return
+        }
+        do {
+            try persistCurrentSession()
+            guard let selected = try repository.loadSession(sessionID: sessionID) else {
+                statusCode = "GUIDE_NOT_FOUND"
+                return
+            }
+            try recorder.activateStoredSession(selected)
+            session = selected
+            publishJob = try repository.listJobs().last(where: { $0.sessionID == sessionID })
+            screenshotImageCache.removeAll()
+            statusCode = "GUIDE_OPENED"
+        } catch {
+            statusCode = "GUIDE_OPEN_FAILED"
         }
     }
 
@@ -346,6 +389,8 @@ final class CaptureAppModel: ObservableObject {
                 session = try recorder.resume()
                 statusCode = "RECORDING"
             }
+            try persistCurrentSession()
+            refreshGuides()
         } catch {
             statusCode = "RECORDER_TRANSITION_FAILED"
         }
@@ -355,6 +400,8 @@ final class CaptureAppModel: ObservableObject {
         do {
             monitor.stop()
             session = try recorder.stop()
+            try persistCurrentSession()
+            refreshGuides()
             statusCode = "REVIEW_REQUIRED"
         } catch {
             statusCode = "RECORDER_STOP_FAILED"
@@ -466,6 +513,7 @@ final class CaptureAppModel: ObservableObject {
                 try vault.delete(localKey: asset.localKey)
             }
             session = reviewed
+            refreshGuides()
             statusCode = "PRIVACY_REVIEW_APPROVED"
         } catch {
             statusCode = "PRIVACY_REVIEW_FAILED"
@@ -474,7 +522,7 @@ final class CaptureAppModel: ObservableObject {
 
     func publishPrivateDraft() {
         guard let session else { return }
-        guard !currentGuideLockedForPublish else { return }
+        guard !currentSessionHasPublishJob, !publicationStarting else { return }
         publicationStarting = true
         statusCode = "PUBLISHING_PRIVATE_DRAFT"
         Task { @MainActor in
@@ -484,11 +532,16 @@ final class CaptureAppModel: ObservableObject {
                     session: session,
                     collectionID: defaultCollectionID
                 )
-                publishJob = job
+                if self.session?.sessionID == job.sessionID {
+                    publishJob = job
+                }
                 job = try await publisher.resume(jobID: job.jobID)
-                publishJob = job
-                self.session = try? repository.loadSession(sessionID: job.sessionID)
-                statusCode = job.phase == .readyAsDraft ? "PRIVATE_DRAFT_READY" : "PUBLISH_PENDING"
+                if self.session?.sessionID == job.sessionID {
+                    publishJob = job
+                    reloadActiveSessionFromRepository(sessionID: job.sessionID)
+                    statusCode = job.phase == .readyAsDraft ? "PRIVATE_DRAFT_READY" : "PUBLISH_PENDING"
+                }
+                refreshGuides()
             } catch NativePublishError.capabilityUnavailable {
                 statusCode = "ATRIUM_API_UNAVAILABLE"
             } catch {
@@ -503,11 +556,14 @@ final class CaptureAppModel: ObservableObject {
         Task { @MainActor in
             do {
                 let resumed = try await publisher.resume(jobID: job.jobID)
-                publishJob = resumed
-                session = try? repository.loadSession(sessionID: resumed.sessionID)
-                statusCode = resumed.phase == .readyAsDraft
-                    ? "PRIVATE_DRAFT_READY"
-                    : "PUBLISH_PENDING"
+                if session?.sessionID == resumed.sessionID {
+                    publishJob = resumed
+                    reloadActiveSessionFromRepository(sessionID: resumed.sessionID)
+                    statusCode = resumed.phase == .readyAsDraft
+                        ? "PRIVATE_DRAFT_READY"
+                        : "PUBLISH_PENDING"
+                }
+                refreshGuides()
             } catch {
                 refreshPublishFailure(sessionID: job.sessionID)
             }
@@ -523,11 +579,14 @@ final class CaptureAppModel: ObservableObject {
                     jobID: job.jobID,
                     publishInternal: true
                 )
-                publishJob = complete
-                self.session = try? repository.loadSession(sessionID: complete.sessionID)
-                statusCode = complete.phase == .complete
-                    ? "INTERNAL_PUBLICATION_COMPLETE"
-                    : "PUBLISH_PENDING"
+                if self.session?.sessionID == complete.sessionID {
+                    publishJob = complete
+                    reloadActiveSessionFromRepository(sessionID: complete.sessionID)
+                    statusCode = complete.phase == .complete
+                        ? "INTERNAL_PUBLICATION_COMPLETE"
+                        : "PUBLISH_PENDING"
+                }
+                refreshGuides()
             } catch {
                 refreshPublishFailure(sessionID: job.sessionID)
             }
@@ -535,10 +594,11 @@ final class CaptureAppModel: ObservableObject {
     }
 
     private func resumePendingPublications() async {
-        let recovered = await publisher.resumePending()
-        if let latest = recovered.last {
+        _ = await publisher.resumePending()
+        if let sessionID = session?.sessionID,
+           let latest = try? repository.listJobs().last(where: { $0.sessionID == sessionID }) {
             publishJob = latest
-            session = try? repository.loadSession(sessionID: latest.sessionID)
+            reloadActiveSessionFromRepository(sessionID: sessionID)
             switch latest.phase {
             case .readyAsDraft:
                 statusCode = "PRIVATE_DRAFT_READY"
@@ -552,13 +612,12 @@ final class CaptureAppModel: ObservableObject {
                 } ?? "PUBLISH_PENDING"
             }
         }
+        refreshGuides()
     }
 
     func captureRegion() {
         guard canQuickCapture else {
-            statusCode = currentGuideLockedForPublish
-                ? "CURRENT_GUIDE_LOCKED_AFTER_PUBLISH"
-                : "STOP_RECORDING_BEFORE_QUICK_CAPTURE"
+            statusCode = "STOP_RECORDING_BEFORE_QUICK_CAPTURE"
             return
         }
         refreshPermissions()
@@ -602,9 +661,7 @@ final class CaptureAppModel: ObservableObject {
 
     func captureElement() {
         guard canQuickCapture else {
-            statusCode = currentGuideLockedForPublish
-                ? "CURRENT_GUIDE_LOCKED_AFTER_PUBLISH"
-                : "STOP_RECORDING_BEFORE_QUICK_CAPTURE"
+            statusCode = "STOP_RECORDING_BEFORE_QUICK_CAPTURE"
             return
         }
         refreshPermissions()
@@ -639,6 +696,7 @@ final class CaptureAppModel: ObservableObject {
         arrowDirection: ArrowDirection? = nil,
         text: String? = nil
     ) {
+        guard requireGuideContentEditable() else { return }
         guard var current = recorder.snapshot(),
               let step = current.steps.first(where: { $0.stepID == stepID }),
               let assetID = step.screenshotAssetID,
@@ -664,7 +722,9 @@ final class CaptureAppModel: ObservableObject {
                 annotations: (step.annotations ?? []) + [annotation]
             )
             try recorder.replaceReviewedSession(current)
+            try repository.saveSession(current)
             session = current
+            refreshGuides()
             statusCode = "ANNOTATION_ADDED"
         } catch {
             statusCode = "ANNOTATION_FAILED"
@@ -672,6 +732,7 @@ final class CaptureAppModel: ObservableObject {
     }
 
     func undoLastAnnotation(stepID: String) {
+        guard requireGuideContentEditable() else { return }
         guard let current = recorder.snapshot(),
               let step = current.steps.first(where: { $0.stepID == stepID }),
               var annotations = step.annotations,
@@ -688,21 +749,21 @@ final class CaptureAppModel: ObservableObject {
     }
 
     func updateInstruction(stepID: String, text: String) {
-        guard canEditGuideContent else {
-            statusCode = "CURRENT_GUIDE_LOCKED_AFTER_PUBLISH"
-            return
-        }
+        guard requireGuideContentEditable() else { return }
         guard let current = recorder.snapshot() else { return }
         do {
             let updated = try NativeReviewEditor.setInstruction(in: current, stepID: stepID, text: text)
             try recorder.replaceReviewedSession(updated)
+            try repository.saveSession(updated)
             session = updated
+            refreshGuides()
         } catch {
             statusCode = "INSTRUCTION_EDIT_FAILED"
         }
     }
 
     func setCenterCrop(stepID: String) {
+        guard requireGuideContentEditable() else { return }
         guard let current = recorder.snapshot(),
               let step = current.steps.first(where: { $0.stepID == stepID }),
               let assetID = step.screenshotAssetID,
@@ -717,7 +778,9 @@ final class CaptureAppModel: ObservableObject {
         do {
             let updated = try NativeReviewEditor.setCrop(in: current, stepID: stepID, crop: crop)
             try recorder.replaceReviewedSession(updated)
+            try repository.saveSession(updated)
             session = updated
+            refreshGuides()
             statusCode = "CROP_UPDATED"
         } catch {
             statusCode = "CROP_FAILED"
@@ -725,11 +788,14 @@ final class CaptureAppModel: ObservableObject {
     }
 
     func resetCrop(stepID: String) {
+        guard requireGuideContentEditable() else { return }
         guard let current = recorder.snapshot() else { return }
         do {
             let updated = try NativeReviewEditor.setCrop(in: current, stepID: stepID, crop: nil)
             try recorder.replaceReviewedSession(updated)
+            try repository.saveSession(updated)
             session = updated
+            refreshGuides()
             statusCode = "CROP_RESET"
         } catch {
             statusCode = "CROP_FAILED"
@@ -737,6 +803,7 @@ final class CaptureAppModel: ObservableObject {
     }
 
     func moveStep(stepID: String, offset: Int) {
+        guard requireGuideContentEditable() else { return }
         guard let current = recorder.snapshot(),
               let index = current.steps.firstIndex(where: { $0.stepID == stepID })
         else { return }
@@ -750,20 +817,19 @@ final class CaptureAppModel: ObservableObject {
     }
 
     func deleteStep(stepID: String) {
+        guard requireGuideContentEditable() else { return }
         guard let current = recorder.snapshot() else { return }
         applyReviewMutation { try NativeReviewEditor.deleteStep(in: current, stepID: stepID) }
     }
 
     func mergeStepWithNext(stepID: String) {
+        guard requireGuideContentEditable() else { return }
         guard let current = recorder.snapshot() else { return }
         applyReviewMutation { try NativeReviewEditor.mergeStepWithNext(in: current, stepID: stepID) }
     }
 
     func insertManualStep() {
-        guard canEditGuideContent else {
-            statusCode = "CURRENT_GUIDE_LOCKED_AFTER_PUBLISH"
-            return
-        }
+        guard requireGuideContentEditable() else { return }
         guard let current = recorder.snapshot(),
               !manualInstruction.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         else {
@@ -781,14 +847,56 @@ final class CaptureAppModel: ObservableObject {
 
     func updateTitle(_ title: String) {
         guard canEditGuideTitle, let current = recorder.snapshot() else {
-            statusCode = "CURRENT_GUIDE_LOCKED_AFTER_PUBLISH"
+            statusCode = "GUIDE_TITLE_UNAVAILABLE"
             return
         }
         do {
-            let updated = try NativeReviewEditor.setTitle(in: current, title: title)
+            let now = Date()
+            if let job = try repository.listJobs().last(where: {
+                $0.sessionID == current.sessionID
+            }) {
+                _ = try repository.freezeCreateTitle(
+                    jobID: job.jobID,
+                    title: current.title,
+                    now: now
+                )
+            }
+            let updated = try repository.updateSessionTitle(
+                sessionID: current.sessionID,
+                title: title,
+                now: now
+            )
             try recorder.replaceReviewedSession(updated)
             session = updated
-            statusCode = "GUIDE_TITLE_SAVED"
+            refreshGuides()
+            guard let job = try repository.listJobs().last(where: {
+                $0.sessionID == updated.sessionID
+            }) else {
+                statusCode = "GUIDE_TITLE_SAVED"
+                return
+            }
+            publishJob = job
+            guard job.contentObjectID != nil else {
+                statusCode = "GUIDE_TITLE_SAVED_PENDING_DRAFT"
+                return
+            }
+            guard liveAtriumAvailable else {
+                statusCode = "GUIDE_TITLE_SAVED_PENDING_SIGN_IN"
+                return
+            }
+            statusCode = "SYNCING_GUIDE_TITLE"
+            Task { @MainActor in
+                guard let synced = await publisher.syncTitle(jobID: job.jobID) else {
+                    statusCode = "GUIDE_TITLE_SYNC_PENDING"
+                    return
+                }
+                if session?.sessionID == synced.sessionID {
+                    publishJob = synced
+                    statusCode = synced.remoteTitle == session?.title
+                        ? "GUIDE_TITLE_SYNCED"
+                        : "GUIDE_TITLE_SYNC_PENDING"
+                }
+            }
         } catch {
             statusCode = "GUIDE_TITLE_INVALID"
         }
@@ -907,12 +1015,13 @@ final class CaptureAppModel: ObservableObject {
     ) throws {
         let existing = recorder.snapshot()
         let appending = existing.map {
-            ($0.state == .review || $0.state == .publishable) && !currentGuideLockedForPublish
+            ($0.state == .review || $0.state == .publishable) && !currentGuideContentFrozen
         } ?? false
         let targetSession: AtriumCaptureSession
         if appending, let existing {
             targetSession = existing
         } else {
+            try persistCurrentSession()
             publishJob = nil
             targetSession = try recorder.start(
                 title: title,
@@ -925,10 +1034,14 @@ final class CaptureAppModel: ObservableObject {
             if appending {
                 _ = try recorder.appendCaptureForReview(event, screenshot: asset)
                 session = recorder.snapshot()
+                try persistCurrentSession()
+                refreshGuides()
                 statusCode = "CAPTURE_ADDED_TO_GUIDE"
             } else {
                 _ = try recorder.record(event, screenshot: asset)
                 session = try recorder.stop()
+                try persistCurrentSession()
+                refreshGuides()
                 statusCode = "REVIEW_REQUIRED"
             }
         } catch {
@@ -945,6 +1058,8 @@ final class CaptureAppModel: ObservableObject {
            (next.screenRecording != .granted || next.accessibility != .granted) {
             monitor.stop()
             session = try? recorder.pause()
+            try? persistCurrentSession()
+            refreshGuides()
             statusCode = "PERMISSION_REVOKED_CAPTURE_PAUSED"
         }
     }
@@ -957,6 +1072,8 @@ final class CaptureAppModel: ObservableObject {
                 try? vault.delete(localKey: asset.localKey)
             }
             session = updated
+            try repository.saveSession(updated)
+            refreshGuides()
             statusCode = "REVIEW_UPDATED"
         } catch {
             statusCode = "REVIEW_UPDATE_FAILED"
@@ -967,9 +1084,12 @@ final class CaptureAppModel: ObservableObject {
         guard let jobs = try? repository.listJobs(),
               let latest = jobs.last(where: { $0.sessionID == sessionID })
         else {
-            statusCode = "PUBLISH_RETRY_REQUIRED"
+            if session?.sessionID == sessionID {
+                statusCode = "PUBLISH_RETRY_REQUIRED"
+            }
             return
         }
+        guard session?.sessionID == sessionID else { return }
         publishJob = latest
         if let code = latest.lastError?.code {
             statusCode = latest.phase == .needsAttention
@@ -978,6 +1098,35 @@ final class CaptureAppModel: ObservableObject {
         } else {
             statusCode = "PUBLISH_RETRY_REQUIRED"
         }
+    }
+
+    private func persistCurrentSession() throws {
+        guard let current = recorder.snapshot() else { return }
+        let canonical = try repository.reconcileSession(current)
+        try recorder.replaceReviewedSession(canonical)
+        session = canonical
+    }
+
+    private func reloadActiveSessionFromRepository(sessionID: String) {
+        guard session?.sessionID == sessionID,
+              let stored = try? repository.loadSession(sessionID: sessionID)
+        else { return }
+        try? recorder.replaceReviewedSession(stored)
+        session = stored
+    }
+
+    private func requireGuideContentEditable() -> Bool {
+        guard canEditGuideContent else {
+            statusCode = currentSessionHasPublishJob
+                ? "GUIDE_CONTENT_FROZEN_AFTER_DRAFT"
+                : "GUIDE_CONTENT_REQUIRES_REVIEW"
+            return false
+        }
+        return true
+    }
+
+    private func refreshGuides() {
+        guides = (try? repository.listSessions()) ?? guides
     }
 
     private func refreshLaunchAtLoginState() {
@@ -1062,6 +1211,26 @@ private struct AtriumCaptureMenuBarView: View {
                 showWorkspace()
             }
             .disabled(!model.canStartRecording)
+            Button("New Empty Guide") {
+                model.newGuide()
+                showWorkspace()
+            }
+            .disabled(!model.canStartRecording)
+            if model.guides.count > 1 {
+                Menu("Open Saved Guide") {
+                    ForEach(model.guides, id: \.sessionID) { guide in
+                        Button(guide.title) {
+                            model.openGuide(sessionID: guide.sessionID)
+                            showWorkspace()
+                        }
+                        .disabled(
+                            guide.sessionID == model.session?.sessionID
+                                || model.session?.state == .recording
+                                || model.session?.state == .paused
+                        )
+                    }
+                }
+            }
         }
 
         Divider()

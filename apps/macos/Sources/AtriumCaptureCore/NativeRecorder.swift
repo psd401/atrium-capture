@@ -304,6 +304,34 @@ public final class NativeRecorder: @unchecked Sendable {
         try persist(NativeRecorderEnvelope(session: session, eventReceipts: current.eventReceipts))
     }
 
+    @discardableResult
+    public func updateTitle(_ title: String, now: Date = Date()) throws -> AtriumCaptureSession {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let current = envelope else { throw NativeRecorderError.noSession }
+        let updated = try NativeReviewEditor.setTitle(
+            in: current.session,
+            title: title,
+            now: now
+        )
+        try persist(NativeRecorderEnvelope(session: updated, eventReceipts: current.eventReceipts))
+        return updated
+    }
+
+    public func activateStoredSession(_ session: AtriumCaptureSession) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        if let current = envelope?.session,
+           current.sessionID != session.sessionID,
+           current.state == .recording || current.state == .paused {
+            throw NativeRecorderError.invalidState
+        }
+        guard session.state != .recording, session.state != .paused else {
+            throw NativeRecorderError.invalidState
+        }
+        try persist(NativeRecorderEnvelope(session: session, eventReceipts: []))
+    }
+
     private func transition(
         to state: AtriumCaptureSessionState,
         allowed: [AtriumCaptureSessionState],

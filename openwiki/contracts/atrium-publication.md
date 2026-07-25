@@ -17,6 +17,7 @@ unavailable.
 - Immutable authored screenshot assets
 - Permission-filtered collection discovery or a managed default
 - Idempotent object/version/publication writes
+- Documented content-title metadata updates
 - ETag concurrency
 - Browser-extension and RFC 8252-style native redirects
 
@@ -39,5 +40,12 @@ later failures, while an initiation response lost before its presigned URL is
 received remains the external limitation in ADR 0006. No private screenshot
 host or undocumented production route exists.
 
+Each job freezes `createTitle` before object creation and records
+`remoteTitle` after Atrium confirms a create or metadata update. This lets an
+ambiguous create retry keep exactly the same request body while a user's latest
+title is safely reconciled after the object ID is recovered.
+
 See [`docs/atrium-integration.md`](../../docs/atrium-integration.md) and
 [`docs/adr/0006-production-atrium-boundary.md`](../../docs/adr/0006-production-atrium-boundary.md).
+The active-guide separation and title algorithm are recorded in
+[`docs/adr/0007-active-guides-and-title-synchronization.md`](../../docs/adr/0007-active-guides-and-title-synchronization.md).

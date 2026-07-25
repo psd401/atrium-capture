@@ -42,6 +42,19 @@ describe('runtime message boundary', () => {
     expect(
       parseIncomingMessage({
         kind: 'recorder.command',
+        payload: { command: 'new', commandId: crypto.randomUUID() },
+      }),
+    ).toBeTruthy();
+    expect(parseIncomingMessage({ kind: 'recorder.list-guides' })).toBeTruthy();
+    expect(
+      parseIncomingMessage({
+        kind: 'recorder.activate-guide',
+        payload: { sessionId: crypto.randomUUID() },
+      }),
+    ).toBeTruthy();
+    expect(
+      parseIncomingMessage({
+        kind: 'recorder.command',
         payload: { command: 'publish', commandId: crypto.randomUUID() },
       }),
     ).toBeUndefined();

@@ -36,6 +36,10 @@ final class ProductionNativeGatewayTests: XCTestCase {
             collectionID: collectionID,
             idempotencyKey: "object:synthetic-job"
         )
+        let renamed = try await gateway.updateTitle(
+            objectID: draft.objectID,
+            title: "Synthetic renamed native guide"
+        )
         let asset = try await gateway.uploadPublishableAsset(
             objectID: draft.objectID,
             localAssetID: localAssetID,
@@ -72,6 +76,15 @@ final class ProductionNativeGatewayTests: XCTestCase {
             "mac"
         )
         XCTAssertEqual(create.value(forHTTPHeaderField: "Idempotency-Key"), "object:synthetic-job")
+        let titleUpdate = try XCTUnwrap(requests.first {
+            $0.url?.path == "/api/v1/content/\(objectID)" && $0.httpMethod == "PATCH"
+        })
+        let titleBody = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: try XCTUnwrap(titleUpdate.httpBody)) as? [String: Any]
+        )
+        XCTAssertEqual(titleBody["title"] as? String, "Synthetic renamed native guide")
+        XCTAssertEqual(renamed.objectID, objectID)
+        XCTAssertEqual(renamed.title, "Synthetic renamed native guide")
 
         let upload = try XCTUnwrap(requests.first { $0.url?.host?.contains("amazonaws.com") == true })
         XCTAssertNil(upload.value(forHTTPHeaderField: "Authorization"))
@@ -232,6 +245,13 @@ private actor SyntheticAtriumTransport: NativeHTTPTransport {
                     "currentVersionId": versionID,
                     "slug": "synthetic-native-guide",
                     "version": ["id": versionID],
+                ],
+            ])
+        case ("PATCH", "/api/v1/content/\(objectID)"):
+            return response(url: url, status: 200, body: [
+                "data": [
+                    "id": objectID,
+                    "title": "Synthetic renamed native guide",
                 ],
             ])
         case ("POST", "/api/v1/content/\(objectID)/publish"):

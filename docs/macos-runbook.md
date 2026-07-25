@@ -62,10 +62,17 @@ after publishable images have been prepared. Adding a region, element, or
 manual step to a prepared guide returns it to privacy review so the new content
 cannot bypass flattening and approval.
 
-Title and content controls lock after **Create private Atrium draft** creates a
-durable outbox job. This preserves the exact request body used by safe retries.
-Finish or recover that Atrium job before starting another guide; do not mutate a
-failed create request under its existing idempotency key.
+The guide title remains editable before and after Atrium draft creation. The
+outbox freezes the original create title for safe idempotent recovery, then
+reconciles later title edits through Atrium's documented metadata update route.
+Step and image content stays frozen once a draft job begins because it belongs to
+that durable version snapshot.
+
+Choose **New guide** for an empty review workspace or **Start new recording** to
+record immediately. Both preserve the current guide and its outbox; background
+recovery cannot replace the active workspace. Use **Open saved guide** to return
+to an earlier local guide. A quick capture appends to the current unpublished
+guide, or begins a new guide when the current one already has an Atrium job.
 
 Atrium Capture also remains available from its menu-bar item when the workspace
 window is closed. The menu can show the workspace, capture a region or focused
@@ -108,14 +115,14 @@ Use synthetic names and empty test documents only:
 1. Launch the signed app, choose **Grant Screen Recording**, approve it in System Settings, and reopen if prompted. Then choose **Grant Accessibility** and reopen if macOS does not apply it live.
 2. Choose **Region** twice using two synthetic areas. Confirm the second region appears as step 2 in the same guide, rename the guide, quit and reopen, and verify both steps and the edited title recover.
 3. Add a synthetic manual step. Prepare publishable images, add one more manual step, and confirm the guide returns to review before it can publish.
-4. Start a new recording only after the current synthetic guide is finished.
+4. Choose **New guide**, confirm the prior guide remains under **Open saved guide**, then return to it. Start a new recording while an older synthetic outbox job exists and confirm background recovery does not replace the active guide.
 5. In Finder, select a folder named `Atrium Synthetic Fixture`.
 6. In System Settings, select a non-sensitive navigation item; do not open accounts, passwords, profiles, or production configuration.
 7. In an Office application, use an empty document named `Synthetic Guide`; click a ribbon control and type only `SYNTHETIC-NONPERSONAL` into an ordinary field.
 8. Stop. Confirm each step card visibly renders its local screenshot preview, three app identities, ordered generic actions, no typed literal, and no secure-field step.
 9. Select each edit tool and drag directly over the screenshot. Confirm redaction, blur, mosaic, highlight, rectangle, arrow, and text render immediately; drag arrows in all four directions; verify **Undo** beside **Done** removes the latest annotation; apply and reset the center crop. Blur and mosaic must remain labeled as visual effects rather than privacy redactions.
 10. Add an opaque redaction to every flagged input screenshot, prepare publishable images, and verify the session becomes `publishable` with only deleted or `publishable_local` assets.
-11. With `ATRIUM_CAPTURE_LOCAL_MOCK=1`, create a private draft, terminate after any injected phase in tests, retry, and confirm one object/asset/version. Confirm title/content controls are now locked. Do not use real district content.
+11. With `ATRIUM_CAPTURE_LOCAL_MOCK=1`, create a private draft, terminate after any injected phase in tests, retry, and confirm one object/asset/version. Rename before and after draft readiness; confirm one object has the latest title, title editing remains available, and step/image controls are frozen for that version. Do not use real district content.
 12. For authenticated acceptance, use the bundled public native client, sign in to AI Studio, create one synthetic private draft, and exercise the separate internal-publication button. Use the `AtriumOAuthClientId` MDM preference only to target a separately approved test client.
 
 The committed `capture-session-macos-v1.json` fixture provides the automated language-neutral equivalent and decodes in TypeScript and Swift.

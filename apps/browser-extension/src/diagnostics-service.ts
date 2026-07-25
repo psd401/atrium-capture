@@ -45,6 +45,7 @@ export interface SupportDiagnostics {
     attemptCount?: number;
     capabilities: {
       collectionDiscovery: boolean;
+      contentUpdates: boolean;
       idempotentWrites: boolean;
       immutableAssets: boolean;
       internalPublication: boolean;
@@ -128,6 +129,7 @@ export class DiagnosticsService {
       publication: {
         capabilities: {
           collectionDiscovery: publication.capabilities.collectionDiscovery,
+          contentUpdates: publication.capabilities.contentUpdates,
           idempotentWrites: publication.capabilities.idempotentWrites,
           immutableAssets: publication.capabilities.immutableAssets,
           internalPublication: publication.capabilities.internalPublication,

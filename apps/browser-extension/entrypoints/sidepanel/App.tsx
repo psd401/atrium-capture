@@ -38,6 +38,7 @@ type DrawingTool = Kind | 'crop';
 
 export function App() {
   const [session, setSession] = useState<AtriumCaptureSession>();
+  const [guides, setGuides] = useState<AtriumCaptureSession[]>([]);
   const [publication, setPublication] = useState<PublicationSnapshot>();
   const [diagnostics, setDiagnostics] = useState<SupportDiagnostics>();
   const [nativeBridge, setNativeBridge] = useState<NativeBridgeSnapshot>();
@@ -56,12 +57,14 @@ export function App() {
   const imageRef = useRef<HTMLImageElement>(null);
 
   const refresh = useCallback(async () => {
-    const [next, publicationSnapshot] = await Promise.all([
+    const [next, publicationSnapshot, guideList] = await Promise.all([
       browser.runtime.sendMessage({ kind: 'recorder.snapshot' }),
       browser.runtime.sendMessage({ kind: 'publisher.snapshot' }),
+      browser.runtime.sendMessage({ kind: 'recorder.list-guides' }),
     ]);
     setSession(next as AtriumCaptureSession | undefined);
     setPublication(publicationSnapshot as PublicationSnapshot | undefined);
+    setGuides(guideList as AtriumCaptureSession[]);
   }, []);
 
   useEffect(() => {
@@ -182,7 +185,7 @@ export function App() {
     };
   }, [selectedAsset]);
 
-  const recorderCommand = async (command: 'start' | 'pause' | 'resume' | 'stop') => {
+  const recorderCommand = async (command: 'new' | 'start' | 'pause' | 'resume' | 'stop') => {
     setPending(true);
     setError(undefined);
     try {
@@ -196,6 +199,29 @@ export function App() {
       setSession(next);
     } catch {
       setError('The recorder could not update. Try again.');
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const activateGuide = async (sessionId: string) => {
+    if (sessionId === session?.sessionId) {
+      return;
+    }
+    setPending(true);
+    setError(undefined);
+    try {
+      const next = (await browser.runtime.sendMessage({
+        kind: 'recorder.activate-guide',
+        payload: { sessionId },
+      })) as AtriumCaptureSession | undefined;
+      if (!next) {
+        throw new Error('activate_guide_failed');
+      }
+      setSession(next);
+      await refresh();
+    } catch {
+      setError('That saved guide could not be opened.');
     } finally {
       setPending(false);
     }
@@ -355,10 +381,10 @@ export function App() {
   const isReview = state === AtriumCaptureSessionState.Review;
   const isPublishable = state === AtriumCaptureSessionState.Publishable;
   const isSubmitted = state === AtriumCaptureSessionState.Submitted;
-  const canEditTitle = Boolean((isReview || isPublishable) && !publication?.job);
-  const canStart =
-    (!session || (!isRecording && !isPaused && !isReview && !isPublishable)) &&
-    diagnostics?.managedPolicy.valid !== false;
+  const canEditTitle = Boolean(session);
+  const canStart = !session && diagnostics?.managedPolicy.valid !== false;
+  const canCreateNew =
+    Boolean(session && !isRecording && !isPaused) && diagnostics?.managedPolicy.valid !== false;
   const canCreateDraft = Boolean(
     publication?.capabilities.idempotentWrites &&
     publication.capabilities.immutableAssets &&
@@ -513,7 +539,13 @@ export function App() {
               <h1>New visual guide</h1>
             )}
             {session && publication?.job && (
-              <p className="title-lock">Title locked after Atrium draft creation began.</p>
+              <p className="title-lock">
+                {publication.job.remoteTitle === session.title
+                  ? 'Title saved in Atrium.'
+                  : publication.job.contentObjectId
+                    ? 'Title saved locally; Atrium sync will retry automatically.'
+                    : 'Title saved locally and will sync after Atrium confirms the draft.'}
+              </p>
             )}
           </div>
         </div>
@@ -525,9 +557,28 @@ export function App() {
       </header>
 
       <section aria-label="Recording controls" className="controls">
+        {guides.length > 1 && (
+          <select
+            aria-label="Saved guides"
+            disabled={pending || isRecording || isPaused}
+            onChange={(event) => void activateGuide(event.target.value)}
+            value={session?.sessionId ?? ''}
+          >
+            {guides.map((guide) => (
+              <option key={guide.sessionId} value={guide.sessionId}>
+                {guide.title} · {stateLabel(guide.state)}
+              </option>
+            ))}
+          </select>
+        )}
         {canStart && (
           <button disabled={pending} onClick={() => void recorderCommand('start')} type="button">
             Start recording
+          </button>
+        )}
+        {canCreateNew && (
+          <button disabled={pending} onClick={() => void recorderCommand('new')} type="button">
+            New guide
           </button>
         )}
         {isRecording && (
@@ -870,6 +921,34 @@ export function App() {
               : 'Raw source bytes were deleted.'}
           </p>
 
+          {isPublishable && !publication?.job && (
+            <div className="insert-row">
+              <input
+                aria-label="New manual step"
+                maxLength={2000}
+                onChange={(event) => setManualDraft(event.target.value)}
+                placeholder="Add a manual step"
+                value={manualDraft}
+              />
+              <button
+                disabled={pending || !manualDraft.trim()}
+                onClick={() =>
+                  void editorCommand({
+                    ...(session?.steps.at(-1)?.stepId
+                      ? { afterStepId: session.steps.at(-1)!.stepId }
+                      : {}),
+                    kind: 'insert_step',
+                    text: manualDraft,
+                  }).then((next) => next && setManualDraft(''))
+                }
+                type="button"
+              >
+                Add
+              </button>
+              <small>Adding a step reopens privacy review before publishing.</small>
+            </div>
+          )}
+
           {publication?.authentication === 'unconfigured' && !publication.job && (
             <div className="capability-callout">
               <strong>AI Studio sign-in is temporarily unavailable</strong>
@@ -962,9 +1041,13 @@ export function App() {
               </p>
               {publication.job.lastError && (
                 <p className="error">
-                  {publication.job.lastError.retryable
-                    ? 'The last request was interrupted and can be retried safely.'
-                    : 'Publishing needs attention before it can continue.'}
+                  {publication.job.lastError.code === 'title_update_failed'
+                    ? publication.job.lastError.retryable
+                      ? 'The new title is saved locally. Retry to update the Atrium title.'
+                      : 'The new title is saved locally, but Atrium rejected the title update.'
+                    : publication.job.lastError.retryable
+                      ? 'The last request was interrupted and can be retried safely.'
+                      : 'Publishing needs attention before it can continue.'}
                 </p>
               )}
               {publication.job.lastError?.retryable && (

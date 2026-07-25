@@ -71,6 +71,7 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
         assetUpload: true,
         versionCreation: true,
         internalPublish: true,
+        titleUpdate: true,
         blocker: nil
     )
 
@@ -278,6 +279,27 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
               try Self.uuid(data["publishedVersionId"]) == versionID,
               Self.string(data["destination"], maximum: 32) == "intranet"
         else { throw Self.invalidResponse() }
+    }
+
+    public func updateTitle(objectID: String, title: String) async throws -> NativeTitleResult {
+        let objectID = try Self.uuid(objectID)
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, title.count <= 500 else {
+            throw NativeGatewayFailure(code: "INVALID_TITLE", retryable: false)
+        }
+        let response = try await apiJSON(
+            path: "content/\(objectID)",
+            method: "PATCH",
+            body: ["title": title]
+        )
+        let data = try Self.dataRecord(response)
+        guard let confirmedTitle = Self.string(data["title"], maximum: 500) else {
+            throw Self.invalidResponse()
+        }
+        return NativeTitleResult(
+            objectID: try Self.uuid(data["id"]),
+            title: confirmedTitle
+        )
     }
 
     private func initiateAsset(

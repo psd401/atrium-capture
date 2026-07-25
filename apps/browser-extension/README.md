@@ -7,7 +7,7 @@ Responsibilities:
 - Content script: observe permitted page events and extract bounded semantic context.
 - Service worker: owns the capture state machine, screenshots, durable storage/outbox, OAuth, and Atrium gateway.
 - Side panel/review: edits, reorders, merges, inserts, crops, annotates, reviews, and flattens steps into publishable PNG derivatives.
-- Guide identity: edits the persisted title through review/preparation and locks it after durable publication begins.
+- Guide lifecycle: keeps titles editable in every state, safely synchronizes post-create renames to Atrium, preserves older guides/outbox jobs when starting another, and offers a saved-guide picker.
 - Managed policy: validates site access, URL/raw retention, the public Atrium client ID, collection fallback, and local byte/step budgets in the trusted worker.
 - Support: exports content-free local diagnostics, explains permissions, and can delete all extension-owned capture data after confirmation.
 - Mac enrichment: optionally requests Chrome's `nativeMessaging` permission and forwards only validated semantic metadata from the worker to the installed Atrium Capture host.

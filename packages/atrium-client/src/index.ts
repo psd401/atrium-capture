@@ -13,6 +13,7 @@ import {
 
 export interface AtriumCapabilities {
   collectionDiscovery: boolean;
+  contentUpdates: boolean;
   idempotentWrites: boolean;
   immutableAssets: boolean;
   internalPublication: boolean;
@@ -66,6 +67,11 @@ export interface CreateMarkdownVersionRequest {
   markdown: string;
 }
 
+export interface UpdateContentTitleRequest {
+  contentObjectId: string;
+  title: string;
+}
+
 export interface AtriumGateway {
   capabilities(): Promise<AtriumCapabilities>;
   createMarkdownVersion(
@@ -79,6 +85,9 @@ export interface AtriumGateway {
     idempotencyKey: string;
     versionId: string;
   }): Promise<void>;
+  updateContentTitle(
+    request: UpdateContentTitleRequest,
+  ): Promise<{ contentObjectId: string; title: string }>;
   uploadImmutableAsset(request: UploadImmutableAssetRequest): Promise<{ remoteAssetId: string }>;
 }
 
@@ -114,6 +123,7 @@ export class UnavailableAtriumGateway implements AtriumGateway {
   async capabilities(): Promise<AtriumCapabilities> {
     return {
       collectionDiscovery: false,
+      contentUpdates: false,
       idempotentWrites: false,
       immutableAssets: false,
       internalPublication: false,
@@ -146,6 +156,10 @@ export class UnavailableAtriumGateway implements AtriumGateway {
   }
 
   async uploadImmutableAsset(): Promise<never> {
+    return unavailable();
+  }
+
+  async updateContentTitle(): Promise<never> {
     return unavailable();
   }
 }
@@ -184,6 +198,7 @@ export function createPublishJob(
     })),
     attemptCount: 0,
     createIdempotencyKey: idempotencyKey(jobId, 'create'),
+    createTitle: session.title,
     createdAt: now,
     jobId,
     phase: Phase.Queued,
@@ -212,7 +227,7 @@ export class DurablePublisher {
   }
 
   async resume(jobId: string): Promise<AtriumCapturePublishJob> {
-    let job = await this.requireJob(jobId);
+    let job = await this.syncTitle(jobId);
     if (job.phase === Phase.Complete || job.phase === Phase.ReadyAsDraft) {
       return job;
     }
@@ -230,6 +245,7 @@ export class DurablePublisher {
             break;
           case Phase.CreatingObject:
             job = await this.createObject(job);
+            job = await this.syncTitle(job.jobId);
             break;
           case Phase.UploadingAssets:
             job = await this.uploadAssets(job);
@@ -243,7 +259,7 @@ export class DurablePublisher {
           case Phase.ReadyAsDraft:
           case Phase.Complete:
           case Phase.NeedsAttention:
-            return job;
+            return this.syncTitle(job.jobId);
         }
       }
     } catch (error) {
@@ -272,16 +288,57 @@ export class DurablePublisher {
     return this.resume(job.jobId);
   }
 
+  async syncTitle(jobId: string): Promise<AtriumCapturePublishJob> {
+    const job = await this.requireJob(jobId);
+    if (!job.contentObjectId) {
+      return job;
+    }
+    const session = await this.requireStoredSession(job.sessionId);
+    if (job.remoteTitle === session.title) {
+      return job;
+    }
+    try {
+      await this.requireCapability('contentUpdates');
+      const response = await this.gateway.updateContentTitle({
+        contentObjectId: job.contentObjectId,
+        title: session.title,
+      });
+      if (response.contentObjectId !== job.contentObjectId || response.title !== session.title) {
+        throw new GatewayError('atrium_title_update_response_invalid', false);
+      }
+      const next = { ...job, remoteTitle: response.title };
+      if (next.lastError?.code === 'title_update_failed') {
+        delete next.lastError;
+      }
+      return this.save(next);
+    } catch (error) {
+      const normalized = normalizeError(error);
+      return this.save({
+        ...job,
+        lastError: {
+          ...normalized,
+          code: 'title_update_failed',
+          message: normalized.code,
+        },
+      });
+    }
+  }
+
   private async createObject(job: AtriumCapturePublishJob): Promise<AtriumCapturePublishJob> {
     if (job.contentObjectId) {
       return this.save({ ...job, phase: Phase.UploadingAssets });
     }
     await this.requireCapability('idempotentWrites');
     const session = await this.requireSession(job.sessionId);
+    if (!job.createTitle) {
+      await this.save({ ...job, createTitle: session.title });
+      job = await this.requireJob(job.jobId);
+    }
+    const createTitle = job.createTitle ?? session.title;
     const response = await this.gateway.createPrivateObject({
       idempotencyKey: job.createIdempotencyKey,
       sourceRef: captureSourceRef(session),
-      title: session.title,
+      title: createTitle,
       visibility: 'private',
       ...(job.collectionId ? { collectionId: job.collectionId } : {}),
     });
@@ -289,6 +346,7 @@ export class DurablePublisher {
       ...job,
       contentObjectId: response.contentObjectId,
       phase: Phase.UploadingAssets,
+      remoteTitle: createTitle,
     });
   }
 
@@ -378,11 +436,16 @@ export class DurablePublisher {
   }
 
   private async requireSession(sessionId: string): Promise<AtriumCaptureSession> {
+    const session = await this.requireStoredSession(sessionId);
+    assertPublishableSession(session);
+    return session;
+  }
+
+  private async requireStoredSession(sessionId: string): Promise<AtriumCaptureSession> {
     const session = await this.source.loadSession(sessionId);
     if (!session) {
       throw new GatewayError('publish_session_missing', false);
     }
-    assertPublishableSession(session);
     return session;
   }
 
@@ -393,7 +456,7 @@ export class DurablePublisher {
   }
 
   private async requireCapability(
-    capability: 'idempotentWrites' | 'immutableAssets' | 'internalPublication',
+    capability: 'contentUpdates' | 'idempotentWrites' | 'immutableAssets' | 'internalPublication',
   ): Promise<void> {
     if (!(await this.gateway.capabilities())[capability]) {
       throw new GatewayError(`atrium_${capability}_unavailable`, false);
@@ -467,7 +530,7 @@ export function generateMarkdown(
       .filter((upload) => upload.remoteAssetId)
       .map((upload) => [upload.localAssetId, upload.remoteAssetId as string]),
   );
-  const lines = [`# ${escapeMarkdown(session.title)}`, ''];
+  const lines = ['## Steps', ''];
   for (const step of session.steps) {
     lines.push(
       `## Step ${step.sequence + 1}`,

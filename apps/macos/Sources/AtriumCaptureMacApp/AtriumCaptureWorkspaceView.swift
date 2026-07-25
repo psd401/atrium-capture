@@ -113,8 +113,11 @@ struct AtriumCaptureWorkspaceView: View {
     private var recordingCard: some View {
         sectionCard(title: "Recorder", systemImage: "record.circle") {
             HStack(spacing: 8) {
-                Button("Start") { model.start() }
+                Button("Start new recording") { model.start() }
                     .buttonStyle(AtriumPrimaryButtonStyle())
+                    .disabled(!model.canStartRecording)
+                Button("New guide") { model.newGuide() }
+                    .buttonStyle(AtriumSecondaryButtonStyle())
                     .disabled(!model.canStartRecording)
                 Button(model.session?.state == .paused ? "Resume" : "Pause") {
                     model.pauseOrResume()
@@ -130,6 +133,30 @@ struct AtriumCaptureWorkspaceView: View {
                         model.session?.state != .recording
                             && model.session?.state != .paused
                     )
+            }
+
+            if model.guides.count > 1 {
+                Menu {
+                    ForEach(model.guides, id: \.sessionID) { guide in
+                        Button {
+                            model.openGuide(sessionID: guide.sessionID)
+                        } label: {
+                            if guide.sessionID == model.session?.sessionID {
+                                Label(guide.title, systemImage: "checkmark")
+                            } else {
+                                Text(guide.title)
+                            }
+                        }
+                        .disabled(
+                            guide.sessionID == model.session?.sessionID
+                                || model.session?.state == .recording
+                                || model.session?.state == .paused
+                        )
+                    }
+                } label: {
+                    Label("Open saved guide", systemImage: "clock.arrow.circlepath")
+                }
+                .menuStyle(.borderlessButton)
             }
 
             Divider()
@@ -155,7 +182,7 @@ struct AtriumCaptureWorkspaceView: View {
             Text("⌥⌘A region  ·  ⌥⌘E element  ·  ⌥⌘P pins")
                 .font(.system(size: 11))
                 .foregroundStyle(AtriumCaptureTheme.muted)
-            Text("Quick captures append to the current unpublished guide.")
+            Text("Quick captures append to the current unpublished guide; otherwise they begin a new one.")
                 .font(.system(size: 11))
                 .foregroundStyle(AtriumCaptureTheme.inkSoft)
         }
@@ -193,12 +220,12 @@ struct AtriumCaptureWorkspaceView: View {
             }
             .disabled(!model.canEditGuideContent)
 
-            if model.session?.state == .publishable && !model.currentGuideLockedForPublish {
+            if model.session?.state == .publishable && !model.currentGuideContentFrozen {
                 Text("Adding a step reopens privacy review before publishing.")
                     .font(.system(size: 11))
                     .foregroundStyle(AtriumCaptureTheme.inkSoft)
-            } else if model.currentGuideLockedForPublish {
-                Text("Guide content is locked after Atrium draft creation begins so safe retries stay identical.")
+            } else if model.currentGuideContentFrozen {
+                Text("These published steps are preserved for safe retries. Start a new guide for different content; this guide’s title remains editable.")
                     .font(.system(size: 11))
                     .foregroundStyle(AtriumCaptureTheme.muted)
             }
@@ -213,7 +240,7 @@ struct AtriumCaptureWorkspaceView: View {
                 .disabled(
                     model.session?.state != .publishable
                         || !model.liveAtriumAvailable
-                        || model.currentGuideLockedForPublish
+                        || model.currentGuideContentFrozen
                 )
             }
 
@@ -294,7 +321,7 @@ struct AtriumCaptureWorkspaceView: View {
                 Label("Pin first reviewed image", systemImage: "pin")
             }
             .buttonStyle(AtriumSecondaryButtonStyle())
-            .disabled(model.session?.state != .publishable)
+            .disabled(!model.canPinReviewedImage)
 
             Menu {
                 Button("Do not copy") { model.setClipboardRetention(.doNotCopy) }
@@ -396,8 +423,14 @@ struct AtriumCaptureWorkspaceView: View {
                             )
                         }
                     }
-                    if model.currentGuideLockedForPublish {
-                        Text("Title locked after Atrium draft creation began.")
+                    if let job = model.publishJob {
+                        Text(
+                            job.remoteTitle == model.session?.title
+                                ? "Title saved in Atrium."
+                                : job.contentObjectID == nil
+                                    ? "Title saved locally and will sync when Atrium confirms the draft."
+                                    : "Title saved locally; Atrium sync will retry safely."
+                        )
                             .font(.system(size: 11))
                             .foregroundStyle(AtriumCaptureTheme.muted)
                     }
@@ -479,6 +512,7 @@ struct AtriumCaptureWorkspaceView: View {
                     .frame(minHeight: 38)
                     .background(AtriumCaptureTheme.canvas)
                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .disabled(!model.canEditGuideContent)
 
                     HStack(spacing: 7) {
                         metadataPill(step.action.rawValue)

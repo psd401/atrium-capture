@@ -130,6 +130,130 @@ describe('durable publishing outbox', () => {
     expect(gateway.snapshot().objects[0]?.visibility).toBe('internal');
   });
 
+  it('freezes the create title across an ambiguous response, then syncs the latest title', async () => {
+    const fixture = await makeFixture();
+    const originalTitle = fixture.session.title;
+    const gateway = new MockAtriumGateway({ failAfterCommit: ['create_object'] });
+    const jobs = new MemoryJobStore();
+    const publisher = new DurablePublisher(
+      gateway,
+      jobs,
+      new MemorySource(fixture.session, fixture.assets),
+      tickingClock(),
+    );
+    const queued = await publisher.enqueue(fixture.session, { idFactory: () => JOB_ID });
+
+    const interrupted = await publisher.resume(queued.jobId);
+    expect(interrupted.contentObjectId).toBeUndefined();
+    fixture.session.title = 'Synthetic renamed after ambiguous create';
+
+    const ready = await publisher.resume(queued.jobId);
+
+    expect(ready.phase).toBe(Phase.ReadyAsDraft);
+    expect(ready.createTitle).toBe(originalTitle);
+    expect(ready.remoteTitle).toBe(fixture.session.title);
+    expect(gateway.snapshot().objects).toEqual([
+      expect.objectContaining({ title: fixture.session.title }),
+    ]);
+    expect(gateway.snapshot().requestCounts.create_object).toBe(2);
+    expect(gateway.snapshot().requestCounts.update_title).toBe(1);
+  });
+
+  it('persists a legacy create title before the first remote request', async () => {
+    const fixture = await makeFixture();
+    const gateway = new MockAtriumGateway({ failAfterCommit: ['create_object'] });
+    const jobs = new MemoryJobStore();
+    const publisher = new DurablePublisher(
+      gateway,
+      jobs,
+      new MemorySource(fixture.session, fixture.assets),
+      tickingClock(),
+    );
+    const queued = await publisher.enqueue(fixture.session, { idFactory: () => JOB_ID });
+    const legacy = { ...queued };
+    delete legacy.createTitle;
+    await jobs.save(legacy);
+    fixture.session.title = 'Synthetic legacy title at first attempt';
+
+    const interrupted = await publisher.resume(queued.jobId);
+
+    expect(interrupted.createTitle).toBe(fixture.session.title);
+    expect((await jobs.load(queued.jobId))?.createTitle).toBe(fixture.session.title);
+    expect(gateway.snapshot().requestCounts.create_object).toBe(1);
+  });
+
+  it('updates the Atrium title after a draft is already ready', async () => {
+    const fixture = await makeFixture();
+    const gateway = new MockAtriumGateway();
+    const publisher = new DurablePublisher(
+      gateway,
+      new MemoryJobStore(),
+      new MemorySource(fixture.session, fixture.assets),
+      tickingClock(),
+    );
+    const queued = await publisher.enqueue(fixture.session, { idFactory: () => JOB_ID });
+    const ready = await publisher.resume(queued.jobId);
+    fixture.session.title = 'Synthetic post-draft rename';
+
+    const renamed = await publisher.syncTitle(ready.jobId);
+
+    expect(renamed.phase).toBe(Phase.ReadyAsDraft);
+    expect(renamed.remoteTitle).toBe(fixture.session.title);
+    expect(gateway.snapshot().objects[0]?.title).toBe(fixture.session.title);
+  });
+
+  it('retries an interrupted title update without recreating the draft or version', async () => {
+    const fixture = await makeFixture();
+    const gateway = new MockAtriumGateway({ failAfterCommit: ['update_title'] });
+    const publisher = new DurablePublisher(
+      gateway,
+      new MemoryJobStore(),
+      new MemorySource(fixture.session, fixture.assets),
+      tickingClock(),
+    );
+    const queued = await publisher.enqueue(fixture.session, { idFactory: () => JOB_ID });
+    const ready = await publisher.resume(queued.jobId);
+    fixture.session.title = 'Synthetic retryable title update';
+
+    const interrupted = await publisher.syncTitle(ready.jobId);
+    const recovered = await publisher.syncTitle(ready.jobId);
+
+    expect(interrupted.lastError).toMatchObject({
+      code: 'title_update_failed',
+      retryable: true,
+    });
+    expect(recovered.remoteTitle).toBe(fixture.session.title);
+    expect(recovered.lastError).toBeUndefined();
+    expect(gateway.snapshot().objects).toHaveLength(1);
+    expect(gateway.snapshot().versions).toHaveLength(1);
+    expect(gateway.snapshot().requestCounts.update_title).toBe(2);
+  });
+
+  it('reconciles a title again after recovering an in-progress publication phase', async () => {
+    const fixture = await makeFixture();
+    const gateway = new MockAtriumGateway({ failAfterCommit: ['update_title'] });
+    const jobs = new MemoryJobStore();
+    const publisher = new DurablePublisher(
+      gateway,
+      jobs,
+      new MemorySource(fixture.session, fixture.assets),
+      tickingClock(),
+    );
+    const queued = await publisher.enqueue(fixture.session, { idFactory: () => JOB_ID });
+    const ready = await publisher.resume(queued.jobId);
+    fixture.session.title = 'Synthetic restart-phase title update';
+    await jobs.save({ ...ready, phase: Phase.UploadingAssets });
+
+    const recovered = await publisher.resume(queued.jobId);
+
+    expect(recovered.phase).toBe(Phase.ReadyAsDraft);
+    expect(recovered.remoteTitle).toBe(fixture.session.title);
+    expect(recovered.lastError).toBeUndefined();
+    expect(gateway.snapshot().objects).toHaveLength(1);
+    expect(gateway.snapshot().versions).toHaveLength(1);
+    expect(gateway.snapshot().requestCounts.update_title).toBe(2);
+  });
+
   it('rejects review sessions and never puts raw assets into the upload plan', async () => {
     const fixture = await makeFixture();
     const reviewSession = {
@@ -165,6 +289,7 @@ describe('durable publishing outbox', () => {
 
     expect(ready.phase).toBe(Phase.ReadyAsDraft);
     expect(markdown).toContain('mock-atrium-asset:');
+    expect(markdown).not.toContain('untrusted.example');
     expect(markdown).not.toContain('[link](https://bad.example)');
     expect(generateMarkdown(fixture.session, ready, gateway)).toBe(markdown);
   });

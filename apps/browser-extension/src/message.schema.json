@@ -47,7 +47,7 @@
           "additionalProperties": false,
           "required": ["command", "commandId"],
           "properties": {
-            "command": { "type": "string", "enum": ["start", "pause", "resume", "stop"] },
+            "command": { "type": "string", "enum": ["new", "start", "pause", "resume", "stop"] },
             "commandId": { "type": "string", "format": "uuid" }
           }
         }
@@ -58,6 +58,28 @@
       "additionalProperties": false,
       "required": ["kind"],
       "properties": { "kind": { "const": "recorder.snapshot" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": { "kind": { "const": "recorder.list-guides" } }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "payload"],
+      "properties": {
+        "kind": { "const": "recorder.activate-guide" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sessionId"],
+          "properties": {
+            "sessionId": { "type": "string", "format": "uuid" }
+          }
+        }
+      }
     },
     {
       "type": "object",

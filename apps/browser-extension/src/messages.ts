@@ -29,13 +29,22 @@ export interface CaptureEventMessage {
 export interface RecorderCommandMessage {
   kind: 'recorder.command';
   payload: {
-    command: 'start' | 'pause' | 'resume' | 'stop';
+    command: 'new' | 'start' | 'pause' | 'resume' | 'stop';
     commandId: string;
   };
 }
 
 export interface RecorderSnapshotMessage {
   kind: 'recorder.snapshot';
+}
+
+export interface RecorderListGuidesMessage {
+  kind: 'recorder.list-guides';
+}
+
+export interface RecorderActivateGuideMessage {
+  kind: 'recorder.activate-guide';
+  payload: { sessionId: string };
 }
 
 export interface ContentStateMessage {
@@ -109,6 +118,8 @@ export type IncomingMessage =
   | CaptureEventMessage
   | RecorderCommandMessage
   | RecorderSnapshotMessage
+  | RecorderListGuidesMessage
+  | RecorderActivateGuideMessage
   | ContentStateMessage
   | EditorCommandMessage
   | EditorFinalizeMessage

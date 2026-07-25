@@ -53,24 +53,30 @@ export class RecorderService {
     return this.repository.getActiveSession();
   }
 
-  command(command: 'start' | 'pause' | 'resume' | 'stop', title = 'Untitled capture') {
+  command(command: 'new' | 'start' | 'pause' | 'resume' | 'stop', title = 'Untitled capture') {
     return this.queue.enqueue(async () => {
       let session;
-      if (command === 'start') {
+      if (command === 'start' || command === 'new') {
         const managed = await this.loadPolicy();
         if (!managed.valid) {
           await this.recordHealth('managed_policy_invalid', 'error');
           throw new Error('managed_policy_invalid');
         }
-        session = await this.repository.startSession(title, this.appVersion, new Date(), {
+        const options = {
           policyVersion: managed.policy.policyVersion,
           rawImageRetention: managed.policy.rawImageRetention,
           sourceUrlRetention: managed.policy.sourceUrlRetention as SourceURLRetention,
-        });
+        };
+        session =
+          command === 'new'
+            ? await this.repository.startNewSession(title, this.appVersion, new Date(), options)
+            : await this.repository.startSession(title, this.appVersion, new Date(), options);
       } else {
         session = await this.repository.transition(command);
       }
-      await this.recordHealth(command === 'start' ? 'capture_started' : 'capture_state_changed');
+      await this.recordHealth(
+        command === 'start' || command === 'new' ? 'capture_started' : 'capture_state_changed',
+      );
       await this.onChanged();
       return session;
     });
