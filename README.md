@@ -19,10 +19,10 @@ M0 through M7 are implemented locally. The production Manifest V3 extension and
 native SwiftUI/AppKit companion record, recover, review, annotate, permanently
 redact, and package synthetic workflows through the same generated contracts.
 Durable browser and native publishers pass failure-after-commit tests and
-production-contract request/response tests. Release signing/deployment and the
-production Atrium authorization redirect/first-party login behavior remain
-external gates; Atrium's one non-idempotent asset-reservation interval is
-documented rather than hidden.
+production-contract request/response tests. Native district sign-in is live
+verified. Release signing/deployment and production Atrium's browser-extension
+token CORS allowlist remain external gates; Atrium's one non-idempotent
+asset-reservation interval is documented rather than hidden.
 
 ## Repository map
 

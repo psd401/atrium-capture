@@ -17,7 +17,7 @@ Checklist:
 - [x] Local deletion removes sessions, images, receipts, commands, and outbox jobs after explicit confirmation.
 - [x] Extension-loaded Chromium verifies keyboard focus, recording/restart recovery, review, redaction golden, capability gate, diagnostics download, and permission rationale.
 - [x] Rollback and staged update procedures are documented below.
-- [ ] Authenticated production-Atrium test with synthetic content. The API contract is implemented; this operator check requires an Atrium-registered public client UUID and test account.
+- [ ] Authenticated production-Atrium private draft with synthetic content. Authorization and district login succeed, but production currently rejects the exact extension origin at token exchange; `pnpm smoke:atrium:browser-token` reproduces the external blocker without credentials.
 
 ## Pilot installation
 
@@ -25,7 +25,12 @@ Checklist:
 2. For engineering evaluation, load `apps/browser-extension/.output/chrome-mv3` unpacked into a dedicated synthetic Chrome profile.
 3. For a managed ring, use a district-signed/store-hosted artifact and Chrome `ExtensionSettings`; do not distribute the unpacked directory.
 4. Apply a versioned policy from `browser-managed-policy.md`, refresh `chrome://policy`, and export Support diagnostics.
-5. Use the bundled production client. Sign in to AI Studio, create one synthetic private draft, verify the reader and explicit internal-publication action, and retain no production screenshots. Set `atriumOAuthClientId` only when deliberately testing a separately approved client.
+5. Use the bundled production client. Sign in to AI Studio, create one synthetic private draft, verify the reader and explicit internal-publication action, and retain no production screenshots. Set `atriumOAuthClientId` only when deliberately testing a separately approved client. `pnpm acceptance:atrium:browser` performs this operator-attended flow in a disposable visible Playwright Chromium profile using only the committed synthetic fixture; add `ATRIUM_CAPTURE_ACCEPTANCE_PUBLISH_INTERNAL=1` only with explicit approval for the synthetic internal publication.
+
+Before asking an operator to sign in, run `pnpm smoke:atrium` and
+`pnpm smoke:atrium:browser-token`. Do not repeat operator login while the second
+command reports `invalid_request_origin`; Atrium must permit the exact stable
+extension origin for the exact browser client first.
 
 ## Permission rationale
 
@@ -44,7 +49,7 @@ No permission reads cookies, browsing history, page storage, network traffic, pa
 3. Check policy validity, extension version/ID, local image bytes, capture state, outbox phase, retryability code, and capability flags.
 4. If policy is invalid, compare only key names/types with the managed policy document; never request screenshots or a user's recorded guide.
 5. For a retryable outbox interruption, use Retry safely. Stable idempotency keys prevent duplicate remote state.
-6. If live sign-in is unavailable, verify the bundled public client remains active and that the production authorization endpoint returns an actual HTTP redirect. Do not ask the employee for a client UUID or add a substitute host/route.
+6. If live sign-in is unavailable, verify the bundled public client remains active and that the production authorization endpoint returns an actual HTTP redirect. Run the synthetic token-boundary probe; `invalid_request_origin` requires an Atrium server fix, not another employee login, a client UUID, or a substitute host/route.
 7. If an asset retry remains blocked behind an expired reservation, record only the fixed error/request ID and follow the limitation in ADR 0006; never collect the image or upload it elsewhere.
 
 ## Rollback

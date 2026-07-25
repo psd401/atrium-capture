@@ -21,4 +21,4 @@ The committed Chrome value is only the public key. No extension signing private 
 
 ## Consequences
 
-The extension ID and OAuth redirects must not change after client registration. macOS 13 and older are outside the initial native support matrix. Atrium documents both application profiles and callbacks, and the registered non-secret UUIDs are bundled. Live OAuth remains capability-gated on Atrium returning the actual authorization redirect and applying the reviewed first-party login behavior.
+The extension ID and OAuth redirects must not change after client registration. macOS 13 and older are outside the initial native support matrix. Atrium documents both application profiles and callbacks, and the registered non-secret UUIDs are bundled. Browser OAuth remains capability-gated until Atrium permits the exact stable `chrome-extension://jldnpmcpimhabiphcglkbgmbffpoocpo` token-request origin for that exact client.

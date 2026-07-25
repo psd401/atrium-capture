@@ -1,6 +1,6 @@
 # Atrium integration
 
-Audit baseline: `psd401/aistudio` `dev` commit `0dd5cbc` (2026-07-24), its current `docs/API/v1/openapi.yaml`, `docs/API/v1/context-graph.md`, and `docs/features/oauth-provider.md`. The content/OAuth contract is unchanged from the initially audited `264f718`. The client never imports or copies AI Studio source.
+Audit baseline: `psd401/aistudio` `dev` commit `d4d6fb87` (2026-07-24), its current `docs/API/v1/openapi.yaml`, `docs/API/v1/context-graph.md`, and `docs/features/oauth-provider.md`. The content/OAuth contract is unchanged from the initially audited `264f718`. The client never imports or copies AI Studio source.
 
 ## Production contract
 
@@ -67,27 +67,39 @@ settings, or an additional consent decision. Atrium must still validate the exac
 registered redirect, S256 PKCE challenge, and pre-approved scope allowlist. Login
 may be skipped only when a valid AI Studio session already exists.
 
-### Current production acceptance blockers
+### Current production acceptance blocker
 
-As of 2026-07-24, both registered profiles accept the exact redirect and seven
-required scopes, but the authorization route returns HTTP 200 with a `Location`
-header and a textual “Redirecting…” body. Browsers correctly render that body
-instead of following it. The Atrium Next/Node response adapter must forward the
-actual provider status (including 303); an initialized fallback 200 must not
-override `ServerResponse.statusCode`.
+As of 2026-07-24, production accepts both exact redirects and all seven scopes,
+returns real authorization redirects, performs district login, and skips consent
+only for the two explicitly trusted first-party records. Browser authorization
+therefore reaches the registered `chromiumapp.org` callback and yields a code.
 
-After that redirect is fixed, Atrium must distinguish the two administrator-owned
-first-party clients from third-party OAuth clients. It should create/reuse a
-grant containing only the intersection of requested scopes and the client's
-registered allowlist after the district user is authenticated. This should
-satisfy the consent checks for those exact client records while leaving the
-provider's login checks intact. Do not globally remove consent, trust a client by
-display name/redirect pattern, or grant a scope absent from its registration.
+The browser's subsequent token POST originates from
+`chrome-extension://jldnpmcpimhabiphcglkbgmbffpoocpo`. Atrium's current
+client-based CORS rule compares that origin with the HTTPS callback origin,
+rejects it as `invalid_request`, and omits `Access-Control-Allow-Origin`. The
+extension correctly stores no token and uploads nothing.
 
-Server acceptance must cover:
+Atrium must permit only that exact stable extension origin for only the exact
+registered browser-extension client at the token endpoint. It must not add a
+wildcard, infer trust from a name or redirect shape, relax PKCE, or proxy token
+exchange through another host. Native `URLSession` token exchange does not
+depend on this browser CORS allowance.
+
+The production native flow has completed district login, returned through the
+registered callback, exchanged the code, stored the token set in Keychain, and
+reported `Connected to Atrium` in the app. A regression test invokes the
+AuthenticationServices completion from a background queue so the callback
+bridge cannot accidentally inherit `@MainActor` and crash on Safari's XPC
+queue.
+
+Server acceptance must continue to cover:
 
 - signed-out first-party user → normal district login → app callback, no consent;
 - signed-in first-party user → app callback, no consent;
+- exact browser client plus exact `chrome-extension://` origin → token request
+  reaches code validation;
+- another origin or client/origin mismatch → fail-closed rejection;
 - unknown/untrusted client → normal consent or fail-closed rejection;
 - callback mismatch, missing S256, or unregistered scope → fail-closed error; and
 - authorization start → actual HTTP 3xx response, never a 200 redirect body.
@@ -110,21 +122,33 @@ pnpm smoke:atrium
 
 It verifies the exact issuer/endpoints, S256, required scopes, and the structured unauthenticated `401` from collection discovery. It does not send capture content or credentials.
 
-After the two public clients are registered, verify that Atrium accepted every
-required OIDC and content scope without signing in or storing either public ID:
+The production public IDs are bundled. To verify that Atrium accepts every
+required OIDC and content scope without signing in:
 
 ```sh
-ATRIUM_CAPTURE_BROWSER_OAUTH_CLIENT_ID=<public-browser-uuid> \
-ATRIUM_CAPTURE_MAC_OAUTH_CLIENT_ID=<public-native-uuid> \
 pnpm smoke:atrium
 ```
 
-This optional mode starts each authorization request with a synthetic PKCE
+This check starts each authorization request with a synthetic PKCE
 challenge and requires a real HTTP 3xx response with a `Location` header. It
 fails on non-redirect responses and registration errors such as `invalid_client`,
 `invalid_redirect_uri`, or `invalid_scope`. It does not follow the request into
-sign-in, exchange a code, receive a token, or print either client ID.
+sign-in, exchange a code, receive a token, or print either client ID. Both
+documented environment variables may override the bundled IDs together for a
+separately approved test-client pair.
+
+Probe the browser-specific token boundary without credentials:
+
+```sh
+pnpm smoke:atrium:browser-token
+```
+
+It submits a deliberately invalid synthetic code with the exact extension
+origin. A correct boundary reaches code validation and returns `invalid_grant`;
+the current production result is the bounded
+`invalid_request_origin` blocker. The script never requests authorization,
+receives a token, or prints the server's raw description.
 
 Unit/contract tests inject synthetic production-shaped responses and assert private/bodyless creation, source provenance, direct-upload headers, no S3 authorization header, canonical asset Markdown, ETag preconditions, refresh rotation, and deterministic asset recovery. The versioned `/_mock/atrium-capture/v1` server remains available for offline end-to-end outbox tests and never claims to be a production route.
 
-Authenticated acceptance requires the two registered public client UUIDs and a district test account. Use only the repository's synthetic fixture and delete the resulting private draft after review according to district policy.
+Authenticated acceptance requires the two registered public client UUIDs and a district test account. Native sign-in is verified; extension sign-in remains blocked at the separately probed token CORS boundary. Use only the repository's synthetic fixture and delete the resulting private draft after review according to district policy.

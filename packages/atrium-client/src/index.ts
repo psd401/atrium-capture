@@ -405,6 +405,7 @@ export interface PkceAuthorizationConfig {
   authorizationEndpoint: string;
   clientId: string;
   redirectUri: string;
+  resource?: string;
   scopes: readonly string[];
 }
 
@@ -431,6 +432,9 @@ export async function createPkceRequest(
   url.searchParams.set('client_id', config.clientId);
   url.searchParams.set('redirect_uri', config.redirectUri);
   url.searchParams.set('scope', config.scopes.join(' '));
+  if (config.resource) {
+    url.searchParams.set('resource', config.resource);
+  }
   url.searchParams.set('state', state);
   url.searchParams.set('code_challenge', codeChallenge);
   url.searchParams.set('code_challenge_method', 'S256');

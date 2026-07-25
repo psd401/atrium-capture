@@ -13,7 +13,7 @@ At the time of this decision, the audited Atrium surface did not provide the com
 
 - `AtriumGateway` is the only remote boundary. Its capabilities independently gate OAuth, collection discovery, immutable assets, idempotent writes, and internal publication.
 - A production gateway may use only current documented routes. The HTTP mock remains explicitly synthetic and accepts only the versioned `/_mock/atrium-capture/v1` namespace.
-- Authorization uses public-client Authorization Code with S256 PKCE and Chrome's documented `identity.getRedirectURL`/`launchWebAuthFlow` boundary. No client secret is shipped, and token responses are accepted only in the trusted worker context.
+- Authorization uses public-client Authorization Code with S256 PKCE, the Atrium issuer as the RFC 8707 resource indicator, and Chrome's documented `identity.getRedirectURL`/`launchWebAuthFlow` boundary. No client secret is shipped, and token responses are accepted only in the trusted worker context.
 - The outbox persists `creating_object`, each `uploading` asset state, `creating_version`, and `publishing_internal` before the corresponding remote call. Retries reuse deterministic idempotency keys derived from the durable job ID.
 - The gateway accepts only `publishable_local` derivatives. Raw or merely redacted local assets cannot enter an upload plan, even when a managed retention policy keeps their bytes temporarily.
 - Object creation requires `visibility: private`. A ready private draft and reader link are terminal for the default operation. Internal publication is a separate explicit command with its own idempotency key.
@@ -22,4 +22,4 @@ At the time of this decision, the audited Atrium surface did not provide the com
 
 ## Consequences
 
-The same durable phase model backs IndexedDB and the native filesystem store. Failure-after-commit injection proves duplicate prevention without production credentials. Production integration details and the remaining asset-reservation limitation are recorded in ADR 0006 rather than weakening this outbox.
+The same durable phase model backs IndexedDB and the native filesystem store. Failure-after-commit injection proves duplicate prevention without production credentials. Production integration details, the exact browser-origin CORS dependency, and the remaining asset-reservation limitation are recorded in ADR 0006 rather than weakening this outbox.

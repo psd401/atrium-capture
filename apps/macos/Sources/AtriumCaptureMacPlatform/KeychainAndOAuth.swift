@@ -72,6 +72,7 @@ public struct NativeOAuthConfiguration: Sendable {
     public let revocationEndpoint: URL
     public let clientID: String
     public let redirectScheme: String
+    public let resourceServer: URL
     public let scopes: [String]
 
     public init(
@@ -80,11 +81,15 @@ public struct NativeOAuthConfiguration: Sendable {
         revocationEndpoint: URL,
         clientID: String,
         redirectScheme: String,
+        resourceServer: URL,
         scopes: [String]
     ) throws {
         guard authorizationEndpoint.scheme == "https",
               tokenEndpoint.scheme == "https",
               revocationEndpoint.scheme == "https",
+              resourceServer.scheme == "https",
+              resourceServer.user == nil,
+              resourceServer.password == nil,
               !clientID.isEmpty,
               !redirectScheme.isEmpty
         else { throw URLError(.badURL) }
@@ -93,6 +98,7 @@ public struct NativeOAuthConfiguration: Sendable {
         self.revocationEndpoint = revocationEndpoint
         self.clientID = clientID
         self.redirectScheme = redirectScheme
+        self.resourceServer = resourceServer
         self.scopes = scopes
     }
 }
@@ -427,28 +433,19 @@ public final class NativeOAuthSession: NSObject, ASWebAuthenticationPresentation
         let challenge = Self.base64URL(Data(SHA256.hash(data: Data(verifier.utf8))))
         let state = try Self.randomURLSafe(bytes: 24)
         let redirectURI = "\(configuration.redirectScheme):/oauth/callback"
-        var components = URLComponents(url: configuration.authorizationEndpoint, resolvingAgainstBaseURL: false)
-        components?.queryItems = [
-            URLQueryItem(name: "response_type", value: "code"),
-            URLQueryItem(name: "client_id", value: configuration.clientID),
-            URLQueryItem(name: "redirect_uri", value: redirectURI),
-            URLQueryItem(name: "scope", value: configuration.scopes.joined(separator: " ")),
-            URLQueryItem(name: "state", value: state),
-            URLQueryItem(name: "code_challenge", value: challenge),
-            URLQueryItem(name: "code_challenge_method", value: "S256"),
-        ]
-        guard let url = components?.url else { throw URLError(.badURL) }
+        let url = try Self.authorizationURL(
+            configuration: configuration,
+            codeChallenge: challenge,
+            state: state
+        )
 
         let callbackURL = try await withCheckedThrowingContinuation {
             (continuation: CheckedContinuation<URL, any Error>) in
             let webSession = ASWebAuthenticationSession(
                 url: url,
-                callbackURLScheme: configuration.redirectScheme
-            ) { callback, error in
-                if let error { continuation.resume(throwing: error) }
-                else if let callback { continuation.resume(returning: callback) }
-                else { continuation.resume(throwing: URLError(.badServerResponse)) }
-            }
+                callbackURLScheme: configuration.redirectScheme,
+                completionHandler: Self.authorizationCallback(continuation: continuation)
+            )
             webSession.presentationContextProvider = self
             webSession.prefersEphemeralWebBrowserSession = true
             session = webSession
@@ -469,6 +466,41 @@ public final class NativeOAuthSession: NSObject, ASWebAuthenticationPresentation
               code.count <= 16_384
         else { throw URLError(.userAuthenticationRequired) }
         return NativeOAuthAuthorization(code: code, verifier: verifier, redirectURI: redirectURI)
+    }
+
+    nonisolated static func authorizationCallback(
+        continuation: CheckedContinuation<URL, any Error>
+    ) -> @Sendable (URL?, (any Error)?) -> Void {
+        { callback, error in
+            if let error {
+                continuation.resume(throwing: error)
+            } else if let callback {
+                continuation.resume(returning: callback)
+            } else {
+                continuation.resume(throwing: URLError(.badServerResponse))
+            }
+        }
+    }
+
+    nonisolated static func authorizationURL(
+        configuration: NativeOAuthConfiguration,
+        codeChallenge: String,
+        state: String
+    ) throws -> URL {
+        let redirectURI = "\(configuration.redirectScheme):/oauth/callback"
+        var components = URLComponents(url: configuration.authorizationEndpoint, resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "response_type", value: "code"),
+            URLQueryItem(name: "client_id", value: configuration.clientID),
+            URLQueryItem(name: "redirect_uri", value: redirectURI),
+            URLQueryItem(name: "scope", value: configuration.scopes.joined(separator: " ")),
+            URLQueryItem(name: "resource", value: configuration.resourceServer.absoluteString),
+            URLQueryItem(name: "state", value: state),
+            URLQueryItem(name: "code_challenge", value: codeChallenge),
+            URLQueryItem(name: "code_challenge_method", value: "S256"),
+        ]
+        guard let url = components?.url else { throw URLError(.badURL) }
+        return url
     }
 
     public func presentationAnchor(for _: ASWebAuthenticationSession) -> ASPresentationAnchor {

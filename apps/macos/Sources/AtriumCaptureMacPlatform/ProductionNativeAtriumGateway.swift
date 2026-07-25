@@ -51,6 +51,7 @@ public struct NativeAtriumProductionSettings: Sendable {
             revocationEndpoint: atriumProductionOrigin.appending(path: "api/oauth/revocation"),
             clientID: clientID,
             redirectScheme: atriumMacOAuthRedirectScheme,
+            resourceServer: atriumProductionOrigin,
             scopes: atriumOAuthScopes
         ) else { return nil }
         return NativeAtriumProductionSettings(oauth: oauth, defaultCollectionID: collectionID)

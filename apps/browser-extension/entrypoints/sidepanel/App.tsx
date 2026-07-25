@@ -18,6 +18,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } from 'react';
 import { browser } from 'wxt/browser';
 
+import { authenticationFailureMessage } from '../../src/authentication-guidance.js';
 import type { PublicationSnapshot } from '../../src/publication-service.js';
 import type { SupportDiagnostics } from '../../src/diagnostics-service.js';
 import type { NativeBridgeSnapshot } from '../../src/native-bridge-service.js';
@@ -272,6 +273,15 @@ export function App() {
       if (!result) {
         throw new Error('authentication_command_failed');
       }
+      if (
+        kind === 'publisher.sign-in' &&
+        typeof result === 'object' &&
+        'errorCode' in result &&
+        typeof result.errorCode === 'string'
+      ) {
+        setError(authenticationFailureMessage(result.errorCode));
+        return;
+      }
       await refresh();
     } catch {
       setError(
@@ -509,7 +519,11 @@ export function App() {
         )}
       </section>
 
-      {error && <p className="error">{error}</p>}
+      {error && (
+        <p className="error" role="alert">
+          {error}
+        </p>
+      )}
 
       <section aria-labelledby="next-action-heading" className="next-action">
         <h2 id="next-action-heading">Next step</h2>

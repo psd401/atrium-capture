@@ -50,10 +50,15 @@ export class BrowserOAuthBroker {
   async authorize(config: BrowserOAuthConfig, exchange: AuthorizationCodeExchange): Promise<void> {
     const redirectUri = this.identity.getRedirectURL('atrium');
     const request = await createPkceRequest({ ...config, redirectUri });
-    const callbackUrl = await this.identity.launchWebAuthFlow({
-      interactive: true,
-      url: request.authorizationUrl,
-    });
+    let callbackUrl: string | undefined;
+    try {
+      callbackUrl = await this.identity.launchWebAuthFlow({
+        interactive: true,
+        url: request.authorizationUrl,
+      });
+    } catch (error) {
+      throw new GatewayError(classifyBrowserIdentityError(error), false);
+    }
     if (!callbackUrl) {
       throw new GatewayError('oauth_authorization_cancelled', false);
     }
@@ -77,6 +82,23 @@ export class BrowserOAuthBroker {
     );
     await this.tokens.save({ ...response, clientId: config.clientId });
   }
+}
+
+export function oauthSupportCode(error: unknown): string {
+  return error instanceof GatewayError && /^oauth_[a-z0-9_]{1,100}$/.test(error.code)
+    ? error.code
+    : 'oauth_sign_in_failed';
+}
+
+function classifyBrowserIdentityError(error: unknown): string {
+  const message = error instanceof Error ? error.message.toLowerCase() : '';
+  if (/(cancel|closed|denied|did not approve)/.test(message)) {
+    return 'oauth_authorization_cancelled';
+  }
+  if (/(could not be loaded|failed to load|network|page unavailable)/.test(message)) {
+    return 'oauth_authorization_page_unavailable';
+  }
+  return 'oauth_browser_identity_failed';
 }
 
 export interface BrowserAtriumOAuthConfig extends BrowserOAuthConfig {
@@ -366,9 +388,12 @@ async function postForm(
   if (!response.ok) {
     let code = 'oauth_request_failed';
     try {
-      const parsed = JSON.parse(text) as { error?: unknown };
+      const parsed = JSON.parse(text) as { error?: unknown; error_description?: unknown };
       if (typeof parsed.error === 'string' && /^[a-z0-9_]{1,100}$/i.test(parsed.error)) {
         code = `oauth_${parsed.error.toLowerCase()}`;
+        if (parsed.error.toLowerCase() === 'invalid_request') {
+          code = classifyInvalidRequestDescription(parsed.error_description);
+        }
       }
     } catch {
       // Keep the bounded generic error. Response bodies never enter logs.
@@ -386,4 +411,23 @@ async function postForm(
   } catch {
     throw new GatewayError('oauth_token_response_invalid', false);
   }
+}
+
+export function classifyInvalidRequestDescription(description: unknown): string {
+  if (typeof description !== 'string') {
+    return 'oauth_invalid_request';
+  }
+  const normalized = description.toLowerCase();
+  const categories: ReadonlyArray<[RegExp, string]> = [
+    [/\borigin\b|\bcors\b/, 'origin'],
+    [/\bclient[_ -]?id\b|\bclient authentication\b/, 'client_id'],
+    [/\bredirect[_ -]?uri\b/, 'redirect_uri'],
+    [/\bcode[_ -]?verifier\b|\bpkce\b/, 'pkce_verifier'],
+    [/\bauthorization code\b|\bcode parameter\b/, 'authorization_code'],
+    [/\bgrant[_ -]?type\b/, 'grant_type'],
+    [/\bresource\b|\baudience\b/, 'resource'],
+    [/\bform\b|\brequest body\b|\bcontent[_ -]?type\b/, 'request_body'],
+  ];
+  const category = categories.find(([pattern]) => pattern.test(normalized))?.[1];
+  return category ? `oauth_invalid_request_${category}` : 'oauth_invalid_request';
 }

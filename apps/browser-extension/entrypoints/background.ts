@@ -5,10 +5,15 @@ import {
   ATRIUM_OAUTH_REVOCATION_ENDPOINT,
   ATRIUM_OAUTH_SCOPES,
   ATRIUM_OAUTH_TOKEN_ENDPOINT,
+  ATRIUM_PRODUCTION_ORIGIN,
   ProductionAtriumGateway,
 } from '@atrium-capture/atrium-client/live';
 
-import { BrowserOAuthSession, BrowserTrustedTokenStore } from '../src/browser-oauth.js';
+import {
+  BrowserOAuthSession,
+  BrowserTrustedTokenStore,
+  oauthSupportCode,
+} from '../src/browser-oauth.js';
 import { CaptureRepository } from '../src/database.js';
 import { DiagnosticsService } from '../src/diagnostics-service.js';
 import { EditorService } from '../src/editor-service.js';
@@ -44,6 +49,7 @@ export default defineBackground(() => {
             authorizationEndpoint: ATRIUM_OAUTH_AUTHORIZATION_ENDPOINT,
             clientId,
             revocationEndpoint: ATRIUM_OAUTH_REVOCATION_ENDPOINT,
+            resource: ATRIUM_PRODUCTION_ORIGIN,
             scopes: [...ATRIUM_OAUTH_SCOPES],
             tokenEndpoint: ATRIUM_OAUTH_TOKEN_ENDPOINT,
           }
@@ -181,9 +187,16 @@ export default defineBackground(() => {
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_authenticate');
         }
-        await auth.signIn();
-        await broadcastChanged();
-        return { authentication: await auth.status() };
+        try {
+          await auth.signIn();
+          await broadcastChanged();
+          return { authentication: await auth.status() };
+        } catch (error) {
+          return {
+            authentication: 'signed_out',
+            errorCode: oauthSupportCode(error),
+          };
+        }
       case 'publisher.sign-out':
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_authenticate');

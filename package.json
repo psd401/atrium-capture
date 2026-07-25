@@ -22,6 +22,7 @@
   "scripts": {
     "build": "pnpm --recursive --if-present build",
     "build:mac": "scripts/build-macos-app.sh",
+    "acceptance:atrium:browser": "node scripts/live-atrium-browser-acceptance.mjs",
     "check": "pnpm format:check && pnpm openwiki:check && pnpm lint && pnpm typecheck && pnpm contracts:check && pnpm messages:check && pnpm test && pnpm build && pnpm test:extension && pnpm package:browser && pnpm swift:test && pnpm licenses:check",
     "contracts:check": "pnpm contracts:generate --check && pnpm contracts:validate",
     "contracts:generate": "node scripts/generate-contracts.mjs",
@@ -37,6 +38,7 @@
     "package:browser": "pnpm --filter @atrium-capture/browser-extension zip && node scripts/verify-browser-package.mjs",
     "security:audit": "pnpm audit --audit-level high",
     "smoke:atrium": "node scripts/verify-atrium-production-boundary.mjs",
+    "smoke:atrium:browser-token": "node scripts/verify-atrium-browser-token-boundary.mjs",
     "swift:test": "scripts/test-swift.sh",
     "test": "vitest run",
     "test:extension": "pnpm --filter @atrium-capture/browser-extension test:extension",

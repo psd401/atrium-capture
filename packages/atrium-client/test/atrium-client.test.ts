@@ -178,6 +178,7 @@ describe('OAuth PKCE primitives', () => {
         authorizationEndpoint: 'https://login.example.test/authorize',
         clientId: 'synthetic-client',
         redirectUri: 'https://extension.example.test/callback',
+        resource: 'https://api.example.test',
         scopes: ['openid', 'atrium.publish'],
       },
       (length) => Uint8Array.from({ length }, () => (seed++ * 17) % 256),
@@ -186,6 +187,7 @@ describe('OAuth PKCE primitives', () => {
 
     expect(url.searchParams.get('code_challenge_method')).toBe('S256');
     expect(url.searchParams.get('code_challenge')).toBe(request.codeChallenge);
+    expect(url.searchParams.get('resource')).toBe('https://api.example.test');
     expect(url.searchParams.get('scope')).toBe('openid atrium.publish');
     expect(
       parseAuthorizationCallback(

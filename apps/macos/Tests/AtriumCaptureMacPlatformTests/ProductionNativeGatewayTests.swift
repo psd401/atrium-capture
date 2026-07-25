@@ -5,6 +5,21 @@ import XCTest
 @testable import AtriumCaptureMacPlatform
 
 final class ProductionNativeGatewayTests: XCTestCase {
+    func testOAuthCallbackCanResumeFromAuthenticationServicesQueue() async throws {
+        let callbackURL = try XCTUnwrap(
+            URL(string: "org.psd401.atrium-capture:/oauth/callback?code=synthetic&state=state")
+        )
+        let returnedURL = try await withCheckedThrowingContinuation {
+            (continuation: CheckedContinuation<URL, any Error>) in
+            let callback = NativeOAuthSession.authorizationCallback(continuation: continuation)
+            DispatchQueue.global(qos: .userInitiated).async {
+                callback(callbackURL, nil)
+            }
+        }
+
+        XCTAssertEqual(returnedURL, callbackURL)
+    }
+
     func testDocumentedProductionContractKeepsAuthOffDirectUpload() async throws {
         let transport = SyntheticAtriumTransport()
         let gateway = try ProductionNativeAtriumGateway(transport: transport) {
@@ -92,8 +107,21 @@ final class ProductionNativeGatewayTests: XCTestCase {
 
         XCTAssertEqual(settings.oauth.clientID, clientID)
         XCTAssertEqual(settings.oauth.redirectScheme, "org.psd401.atrium-capture")
+        XCTAssertEqual(settings.oauth.resourceServer, atriumProductionOrigin)
         XCTAssertEqual(settings.defaultCollectionID, collectionID)
         XCTAssertEqual(settings.oauth.tokenEndpoint.absoluteString, "https://aistudio.psd401.ai/api/oauth/token")
+        let authorizationURL = try NativeOAuthSession.authorizationURL(
+            configuration: settings.oauth,
+            codeChallenge: String(repeating: "a", count: 43),
+            state: "synthetic-state"
+        )
+        let queryItems = try XCTUnwrap(
+            URLComponents(url: authorizationURL, resolvingAgainstBaseURL: false)?.queryItems
+        )
+        XCTAssertEqual(
+            queryItems.first(where: { $0.name == "resource" })?.value,
+            atriumProductionOrigin.absoluteString
+        )
     }
 
     func testProductionSettingsUseBundledPublicClientWithoutUserConfiguration() throws {

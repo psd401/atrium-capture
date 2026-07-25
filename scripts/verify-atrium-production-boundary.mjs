@@ -14,14 +14,25 @@ const requiredScopes = [
   'content:update',
   'content:publish_internal',
 ];
+const productionClientIds = {
+  browser_extension: 'ae781263-20c0-4b0c-8a34-8be01ab72fb1',
+  native: 'fbdaa815-1b0f-435b-805f-1732805720c1',
+};
+const browserClientOverride = process.env.ATRIUM_CAPTURE_BROWSER_OAUTH_CLIENT_ID;
+const macClientOverride = process.env.ATRIUM_CAPTURE_MAC_OAUTH_CLIENT_ID;
+if ((browserClientOverride === undefined) !== (macClientOverride === undefined)) {
+  throw new Error(
+    'Override both ATRIUM_CAPTURE_BROWSER_OAUTH_CLIENT_ID and ATRIUM_CAPTURE_MAC_OAUTH_CLIENT_ID together.',
+  );
+}
 const registeredClients = [
   {
-    clientId: process.env.ATRIUM_CAPTURE_BROWSER_OAUTH_CLIENT_ID,
+    clientId: browserClientOverride ?? productionClientIds.browser_extension,
     profile: 'browser_extension',
     redirectUri: 'https://jldnpmcpimhabiphcglkbgmbffpoocpo.chromiumapp.org/atrium',
   },
   {
-    clientId: process.env.ATRIUM_CAPTURE_MAC_OAUTH_CLIENT_ID,
+    clientId: macClientOverride ?? productionClientIds.native,
     profile: 'native',
     redirectUri: 'org.psd401.atrium-capture:/oauth/callback',
   },
@@ -62,14 +73,8 @@ if (
   throw new Error('Atrium content boundary did not fail closed with its documented 401 shape.');
 }
 
-const suppliedClients = registeredClients.filter(({ clientId }) => clientId !== undefined);
-if (suppliedClients.length !== 0 && suppliedClients.length !== registeredClients.length) {
-  throw new Error(
-    'Supply both ATRIUM_CAPTURE_BROWSER_OAUTH_CLIENT_ID and ATRIUM_CAPTURE_MAC_OAUTH_CLIENT_ID.',
-  );
-}
 const registrationResults = await Promise.allSettled(
-  suppliedClients.map((registration) => verifyOAuthRegistration(registration)),
+  registeredClients.map((registration) => verifyOAuthRegistration(registration)),
 );
 const registrationFailures = registrationResults.flatMap((result) =>
   result.status === 'rejected'
@@ -85,7 +90,7 @@ console.log(
     contentBoundary: 'documented_unauthenticated_401',
     issuer: discovery.issuer,
     oauth: 'authorization_code_s256_refresh',
-    registeredClients: suppliedClients.map(({ profile }) => profile),
+    registeredClients: registeredClients.map(({ profile }) => profile),
     status: 'pass',
   }),
 );
@@ -99,6 +104,7 @@ async function verifyOAuthRegistration({ clientId, profile, redirectUri }) {
   authorizationUrl.searchParams.set('client_id', clientId);
   authorizationUrl.searchParams.set('redirect_uri', redirectUri);
   authorizationUrl.searchParams.set('scope', requiredScopes.join(' '));
+  authorizationUrl.searchParams.set('resource', origin);
   authorizationUrl.searchParams.set('state', 'synthetic-registration-check');
   authorizationUrl.searchParams.set(
     'code_challenge',

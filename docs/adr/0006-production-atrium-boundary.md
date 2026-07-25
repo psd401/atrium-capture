@@ -22,6 +22,8 @@ The authored-asset initiation route does not accept an idempotency key and does 
   - `browser_extension` → `https://jldnpmcpimhabiphcglkbgmbffpoocpo.chromiumapp.org/atrium`
   - `native` → `org.psd401.atrium-capture:/oauth/callback`
 - Requested scopes are `openid profile offline_access content:read content:create content:update content:publish_internal`.
+- Browser and native authorization requests include the Atrium issuer as the RFC
+  8707 `resource` indicator, matching Atrium's resource-server token profile.
 - Production builds bundle the approved browser and Mac public client UUIDs. No
   user configures OAuth. Strict Chrome managed policy, MDM preferences, and local
   environment variables may override the public UUIDs for an approved test
@@ -39,5 +41,17 @@ clients are registered. Employees only choose **Sign in to AI Studio** and
 complete the district login; client registration and UUID distribution are not
 part of their workflow. Production OIDC discovery and the unauthenticated content
 boundary are covered by a credential-free smoke command.
+
+The browser's token POST is a cross-origin request from the stable extension
+origin `chrome-extension://jldnpmcpimhabiphcglkbgmbffpoocpo`; it cannot use the
+HTTPS `chromiumapp.org` callback as its request origin and cannot suppress
+Chrome's `Origin` header. Atrium must therefore allow that exact origin only for
+the exact browser client. Wildcard CORS, a client-side proxy, a confidential
+secret, or an alternate screenshot host would weaken the reviewed boundary and
+are rejected. `pnpm smoke:atrium:browser-token` proves the current external
+failure without authorization or credentials: production returns
+`invalid_request_origin` instead of reaching synthetic code validation and
+returning `invalid_grant`. The Mac `URLSession` exchange is not a browser CORS
+request.
 
 One server-side durability gap remains: if the process dies after Atrium commits asset initiation but before the client receives and durably records the one-time presigned URL, the client cannot upload to that reservation. While it is unexpired, a deterministic retry fails safely rather than creating another row; after expiry, a retry may create a replacement reservation and leave the expired row for server lifecycle cleanup. Strict no-duplicate-asset-row recovery for that exact interval requires Atrium to make initiation idempotent or return a replacement upload request for a deterministic reservation. The client does not work around this with a private host, guessed route, or unredacted upload.
