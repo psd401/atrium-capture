@@ -80,6 +80,7 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
         }
 
         let mosaic = AnnotationElement(
+            arrowDirection: nil,
             color: "#000000",
             geometry: Geometry(height: 10, width: 10, x: 0, y: 0),
             id: "50000000-0000-4000-8000-000000000010",
@@ -90,6 +91,7 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
         XCTAssertThrowsError(try NativeReviewEditor.validatePrivacyAnnotations(in: session))
 
         let redaction = AnnotationElement(
+            arrowDirection: nil,
             color: "#000000",
             geometry: Geometry(height: 10, width: 10, x: 0, y: 0),
             id: "50000000-0000-4000-8000-000000000011",

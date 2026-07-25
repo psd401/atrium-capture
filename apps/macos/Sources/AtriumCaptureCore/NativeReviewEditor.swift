@@ -46,6 +46,7 @@ public enum NativeReviewEditor {
         guard annotations.allSatisfy({
             let geometry = $0.geometry
             return NativeRect(x: geometry.x, y: geometry.y, width: geometry.width, height: geometry.height).isValid
+                && ($0.kind == .arrow || $0.arrowDirection == nil)
         }) else { throw NativeReviewError.invalidGeometry }
         return try updateStep(in: session, stepID: stepID, now: now) { step in
             step.with(annotations: annotations, privacyReview: reviewAfterEdit(step))

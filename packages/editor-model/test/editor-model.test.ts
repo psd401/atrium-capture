@@ -1,5 +1,6 @@
 import {
   Action,
+  ArrowDirection,
   AssetState,
   AtriumCaptureSessionState,
   Kind,
@@ -105,6 +106,33 @@ describe('editor commands', () => {
       { code: 'sensitive_region_unredacted', stepId: firstStepId },
       { code: 'step_not_approved', stepId: firstStepId },
     ]);
+  });
+
+  it('preserves arrow direction and rejects it on other annotation kinds', () => {
+    const arrow = applyEditorCommand(fixtureSession(), {
+      annotation: {
+        arrowDirection: ArrowDirection.DownRight,
+        geometry: { height: 40, width: 80, x: 20, y: 20 },
+        id: '30000000-0000-4000-8000-000000000003',
+        kind: Kind.Arrow,
+      },
+      kind: 'add_annotation',
+      stepId: secondStepId,
+    });
+    expect(arrow.steps[1]?.annotations?.[0]?.arrowDirection).toBe(ArrowDirection.DownRight);
+
+    expect(() =>
+      applyEditorCommand(fixtureSession(), {
+        annotation: {
+          arrowDirection: ArrowDirection.DownRight,
+          geometry: { height: 40, width: 80, x: 20, y: 20 },
+          id: '30000000-0000-4000-8000-000000000004',
+          kind: Kind.Rectangle,
+        },
+        kind: 'add_annotation',
+        stepId: secondStepId,
+      }),
+    ).toThrow('arrow_direction_requires_arrow');
   });
 });
 

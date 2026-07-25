@@ -88,9 +88,10 @@ Use synthetic names and empty test documents only:
 4. In System Settings, select a non-sensitive navigation item; do not open accounts, passwords, profiles, or production configuration.
 5. In an Office application, use an empty document named `Synthetic Guide`; click a ribbon control and type only `SYNTHETIC-NONPERSONAL` into an ordinary field.
 6. Stop. Confirm each step card visibly renders its local screenshot preview, three app identities, ordered generic actions, no typed literal, and no secure-field step.
-7. Edit an instruction, add a redaction/annotation, flatten, approve, and verify the session becomes `publishable` with only deleted or `publishable_local` assets.
-8. With `ATRIUM_CAPTURE_LOCAL_MOCK=1`, create a private draft, terminate after any injected phase in tests, retry, and confirm one object/asset/version. Do not use real district content.
-9. For authenticated acceptance, use the bundled public native client, sign in to AI Studio, create one synthetic private draft, and exercise the separate internal-publication button. Use the `AtriumOAuthClientId` MDM preference only to target a separately approved test client.
+7. Select each edit tool and drag directly over the screenshot. Confirm redaction, blur, mosaic, highlight, rectangle, arrow, and text render immediately; drag arrows in all four directions; verify **Undo** beside **Done** removes the latest annotation; apply and reset the center crop. Blur and mosaic must remain labeled as visual effects rather than privacy redactions.
+8. Add an opaque redaction to every flagged input screenshot, prepare publishable images, and verify the session becomes `publishable` with only deleted or `publishable_local` assets.
+9. With `ATRIUM_CAPTURE_LOCAL_MOCK=1`, create a private draft, terminate after any injected phase in tests, retry, and confirm one object/asset/version. Do not use real district content.
+10. For authenticated acceptance, use the bundled public native client, sign in to AI Studio, create one synthetic private draft, and exercise the separate internal-publication button. Use the `AtriumOAuthClientId` MDM preference only to target a separately approved test client.
 
 The committed `capture-session-macos-v1.json` fixture provides the automated language-neutral equivalent and decodes in TypeScript and Swift.
 

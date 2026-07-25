@@ -197,6 +197,7 @@ public extension AssetElement {
 
 // MARK: - AnnotationElement
 public struct AnnotationElement: Codable {
+    public let arrowDirection: ArrowDirection?
     public let color: String?
     public let geometry: Geometry
     public let id: String
@@ -204,6 +205,7 @@ public struct AnnotationElement: Codable {
     public let text: String?
 
     public enum CodingKeys: String, CodingKey {
+        case arrowDirection = "arrowDirection"
         case color = "color"
         case geometry = "geometry"
         case id = "id"
@@ -211,7 +213,8 @@ public struct AnnotationElement: Codable {
         case text = "text"
     }
 
-    public init(color: String?, geometry: Geometry, id: String, kind: Kind, text: String?) {
+    public init(arrowDirection: ArrowDirection?, color: String?, geometry: Geometry, id: String, kind: Kind, text: String?) {
+        self.arrowDirection = arrowDirection
         self.color = color
         self.geometry = geometry
         self.id = id
@@ -239,6 +242,7 @@ public extension AnnotationElement {
     }
 
     func with(
+        arrowDirection: ArrowDirection?? = nil,
         color: String?? = nil,
         geometry: Geometry? = nil,
         id: String? = nil,
@@ -246,6 +250,7 @@ public extension AnnotationElement {
         text: String?? = nil
     ) -> AnnotationElement {
         return AnnotationElement(
+            arrowDirection: arrowDirection ?? self.arrowDirection,
             color: color ?? self.color,
             geometry: geometry ?? self.geometry,
             id: id ?? self.id,
@@ -261,6 +266,13 @@ public extension AnnotationElement {
     func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
         return String(data: try self.jsonData(), encoding: encoding)
     }
+}
+
+public enum ArrowDirection: String, Codable {
+    case downLeft = "down_left"
+    case downRight = "down_right"
+    case upLeft = "up_left"
+    case upRight = "up_right"
 }
 
 // MARK: - Geometry

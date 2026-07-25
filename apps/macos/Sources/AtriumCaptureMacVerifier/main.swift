@@ -27,6 +27,7 @@ enum AtriumCaptureMacVerifier {
             sourcePNG: source,
             crop: nil,
             annotations: [AnnotationElement(
+                arrowDirection: nil,
                 color: "#000000",
                 geometry: Geometry(height: 4, width: 4, x: 3, y: 3),
                 id: "synthetic-redaction",

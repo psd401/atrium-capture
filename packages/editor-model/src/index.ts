@@ -356,6 +356,9 @@ function scaleGeometry(geometry: Geometry, factor: number): Geometry {
 
 function assertAnnotation(annotation: AnnotationElement): void {
   assertGeometry(annotation.geometry);
+  if (annotation.kind !== Kind.Arrow && annotation.arrowDirection !== undefined) {
+    throw new Error('arrow_direction_requires_arrow');
+  }
   if (annotation.kind === Kind.Text && !annotation.text?.trim()) {
     throw new Error('text_annotation_requires_text');
   }

@@ -128,16 +128,19 @@ public enum CoreGraphicsReviewRenderer {
             context.setLineWidth(3)
             context.stroke(rect)
         case .arrow:
-            let start = CGPoint(x: rect.minX, y: rect.minY)
-            let end = CGPoint(x: rect.maxX, y: rect.maxY)
+            let (start, end) = arrowEndpoints(
+                direction: annotation.arrowDirection ?? .upRight,
+                rect: rect
+            )
             context.setStrokeColor(color.cgColor)
             context.setFillColor(color.cgColor)
             context.setLineWidth(4)
+            context.setLineCap(.round)
             context.move(to: start)
             context.addLine(to: end)
             context.strokePath()
             let angle = atan2(end.y - start.y, end.x - start.x)
-            let head: CGFloat = 13
+            let head = max(8, min(20, min(rect.width, rect.height) / 2))
             context.move(to: end)
             context.addLine(to: CGPoint(
                 x: end.x - head * cos(angle - .pi / 6),
@@ -184,6 +187,34 @@ public enum CoreGraphicsReviewRenderer {
             break
         }
         context.restoreGState()
+    }
+
+    private static func arrowEndpoints(
+        direction: ArrowDirection,
+        rect: CGRect
+    ) -> (CGPoint, CGPoint) {
+        switch direction {
+        case .upRight:
+            (
+                CGPoint(x: rect.minX, y: rect.minY),
+                CGPoint(x: rect.maxX, y: rect.maxY)
+            )
+        case .downRight:
+            (
+                CGPoint(x: rect.minX, y: rect.maxY),
+                CGPoint(x: rect.maxX, y: rect.minY)
+            )
+        case .upLeft:
+            (
+                CGPoint(x: rect.maxX, y: rect.minY),
+                CGPoint(x: rect.minX, y: rect.maxY)
+            )
+        case .downLeft:
+            (
+                CGPoint(x: rect.maxX, y: rect.maxY),
+                CGPoint(x: rect.minX, y: rect.minY)
+            )
+        }
     }
 
     private static func renderRect(_ geometry: Geometry, imageHeight: CGFloat) -> CGRect {

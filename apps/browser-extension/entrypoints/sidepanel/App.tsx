@@ -19,6 +19,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent } 
 import { browser } from 'wxt/browser';
 
 import { authenticationFailureMessage } from '../../src/authentication-guidance.js';
+import { arrowEndpoints, directionForArrow } from '../../src/arrow-geometry.js';
 import type { PublicationSnapshot } from '../../src/publication-service.js';
 import type { SupportDiagnostics } from '../../src/diagnostics-service.js';
 import type { NativeBridgeSnapshot } from '../../src/native-bridge-service.js';
@@ -461,6 +462,7 @@ export function App() {
     }
     await editorCommand({
       annotation: {
+        ...(tool === Kind.Arrow ? { arrowDirection: directionForArrow(drawingStart, end) } : {}),
         geometry,
         id: crypto.randomUUID(),
         kind: tool,
@@ -1101,17 +1103,35 @@ function colorFor(kind: Kind): string {
 function renderAnnotationPreview(annotation: AnnotationElement) {
   const geometry = annotation.geometry;
   if (annotation.kind === Kind.Arrow) {
+    const { endX, endY, startX, startY } = arrowEndpoints(geometry, annotation.arrowDirection);
+    const angle = Math.atan2(endY - startY, endX - startX);
+    const head = Math.max(8, Math.min(20, Math.min(geometry.width, geometry.height) / 2));
+    const headOne = `${endX - head * Math.cos(angle - Math.PI / 6)},${
+      endY - head * Math.sin(angle - Math.PI / 6)
+    }`;
+    const headTwo = `${endX - head * Math.cos(angle + Math.PI / 6)},${
+      endY - head * Math.sin(angle + Math.PI / 6)
+    }`;
     return (
-      <line
-        className="annotation-arrow"
-        key={annotation.id}
-        stroke={annotation.color ?? '#DC2626'}
-        strokeWidth="4"
-        x1={geometry.x}
-        x2={geometry.x + geometry.width}
-        y1={geometry.y + geometry.height}
-        y2={geometry.y}
-      />
+      <g key={annotation.id}>
+        <line
+          className="annotation-arrow"
+          stroke={annotation.color ?? '#DC2626'}
+          strokeWidth="4"
+          x1={startX}
+          x2={endX}
+          y1={startY}
+          y2={endY}
+        />
+        <polyline
+          fill="none"
+          points={`${headOne} ${endX},${endY} ${headTwo}`}
+          stroke={annotation.color ?? '#DC2626'}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="4"
+        />
+      </g>
     );
   }
   if (annotation.kind === Kind.Text) {

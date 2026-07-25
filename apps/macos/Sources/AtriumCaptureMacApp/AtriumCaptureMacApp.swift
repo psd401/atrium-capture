@@ -10,6 +10,12 @@ import SwiftUI
 
 @MainActor
 final class CaptureAppModel: ObservableObject {
+    private struct ScreenshotPreviewCacheEntry {
+        let assetID: String
+        let revision: Int
+        let image: NSImage
+    }
+
     @Published private(set) var session: AtriumCaptureSession?
     @Published private(set) var permissions = MacPermissionCenter.snapshot()
     @Published private(set) var statusCode = "READY"
@@ -35,7 +41,7 @@ final class CaptureAppModel: ObservableObject {
     private let clipboard = MacClipboardController()
     private let shortcuts = GlobalCaptureShortcuts()
     private var permissionTimer: Timer?
-    private var screenshotImageCache: [String: NSImage] = [:]
+    private var screenshotImageCache: [String: ScreenshotPreviewCacheEntry] = [:]
 
     init() {
         do {
@@ -246,24 +252,69 @@ final class CaptureAppModel: ObservableObject {
 
     func screenshotImage(for step: StepElement) -> NSImage? {
         guard
+            let session,
             let assetID = step.screenshotAssetID,
-            let asset = session?.assets.first(where: {
+            let asset = session.assets.first(where: {
                 $0.assetID == assetID && $0.state != .deleted
             })
         else {
             return nil
         }
-        if let cached = screenshotImageCache[assetID] {
-            return cached
+        if let cached = screenshotImageCache[step.stepID],
+           cached.assetID == assetID,
+           cached.revision == session.revision {
+            return cached.image
         }
         guard
-            let data = try? vault.read(localKey: asset.localKey),
-            let image = NSImage(data: data)
+            let source = try? vault.read(localKey: asset.localKey)
         else {
             return nil
         }
-        screenshotImageCache[assetID] = image
+        let previewData: Data
+        if asset.state == .rawLocal {
+            guard let flattened = try? CoreGraphicsReviewRenderer.flatten(
+                sourcePNG: source,
+                crop: step.crop,
+                annotations: step.annotations ?? []
+            ) else {
+                return nil
+            }
+            previewData = flattened.pngData
+        } else {
+            previewData = source
+        }
+        guard let image = NSImage(data: previewData) else { return nil }
+        screenshotImageCache[step.stepID] = ScreenshotPreviewCacheEntry(
+            assetID: assetID,
+            revision: session.revision,
+            image: image
+        )
         return image
+    }
+
+    func editableImageBounds(for step: StepElement) -> NativeRect? {
+        guard
+            let assetID = step.screenshotAssetID,
+            let asset = session?.assets.first(where: {
+                $0.assetID == assetID && $0.state == .rawLocal
+            })
+        else {
+            return nil
+        }
+        if let crop = step.crop {
+            return NativeRect(
+                x: crop.x,
+                y: crop.y,
+                width: crop.width,
+                height: crop.height
+            )
+        }
+        return NativeRect(
+            x: 0,
+            y: 0,
+            width: Double(asset.pixelWidth),
+            height: Double(asset.pixelHeight)
+        )
     }
 
     func flattenAndApprove() {
@@ -443,26 +494,30 @@ final class CaptureAppModel: ObservableObject {
         }
     }
 
-    func addAnnotation(stepID: String, kind: Kind) {
+    func addAnnotation(
+        stepID: String,
+        kind: Kind,
+        geometry: Geometry,
+        arrowDirection: ArrowDirection? = nil,
+        text: String? = nil
+    ) {
         guard var current = recorder.snapshot(),
               let step = current.steps.first(where: { $0.stepID == stepID }),
               let assetID = step.screenshotAssetID,
-              let asset = current.assets.first(where: { $0.assetID == assetID && $0.state == .rawLocal })
+              current.assets.contains(where: { $0.assetID == assetID && $0.state == .rawLocal })
         else { return }
-        let width = min(220.0, Double(asset.pixelWidth) * 0.35)
-        let height = min(90.0, Double(asset.pixelHeight) * 0.2)
-        let geometry = Geometry(
-            height: max(20, height),
-            width: max(20, width),
-            x: max(0, (Double(asset.pixelWidth) - width) / 2),
-            y: max(0, (Double(asset.pixelHeight) - height) / 2)
+        let cleanText = String(
+            (text ?? "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .prefix(300)
         )
         let annotation = AnnotationElement(
-            color: kind == .redaction ? "#000000" : "#FFD400",
+            arrowDirection: kind == .arrow ? arrowDirection : nil,
+            color: annotationColor(kind),
             geometry: geometry,
             id: UUID().uuidString.lowercased(),
             kind: kind,
-            text: kind == .text ? "Annotation" : nil
+            text: kind == .text ? (cleanText.isEmpty ? "Annotation" : cleanText) : nil
         )
         do {
             current = try NativeReviewEditor.setAnnotations(
@@ -475,6 +530,22 @@ final class CaptureAppModel: ObservableObject {
             statusCode = "ANNOTATION_ADDED"
         } catch {
             statusCode = "ANNOTATION_FAILED"
+        }
+    }
+
+    func undoLastAnnotation(stepID: String) {
+        guard let current = recorder.snapshot(),
+              let step = current.steps.first(where: { $0.stepID == stepID }),
+              var annotations = step.annotations,
+              !annotations.isEmpty
+        else { return }
+        annotations.removeLast()
+        applyReviewMutation {
+            try NativeReviewEditor.setAnnotations(
+                in: current,
+                stepID: stepID,
+                annotations: annotations
+            )
         }
     }
 
@@ -506,6 +577,18 @@ final class CaptureAppModel: ObservableObject {
             try recorder.replaceReviewedSession(updated)
             session = updated
             statusCode = "CROP_UPDATED"
+        } catch {
+            statusCode = "CROP_FAILED"
+        }
+    }
+
+    func resetCrop(stepID: String) {
+        guard let current = recorder.snapshot() else { return }
+        do {
+            let updated = try NativeReviewEditor.setCrop(in: current, stepID: stepID, crop: nil)
+            try recorder.replaceReviewedSession(updated)
+            session = updated
+            statusCode = "CROP_RESET"
         } catch {
             statusCode = "CROP_FAILED"
         }
@@ -672,6 +755,15 @@ final class CaptureAppModel: ObservableObject {
             statusCode = "REVIEW_UPDATED"
         } catch {
             statusCode = "REVIEW_UPDATE_FAILED"
+        }
+    }
+
+    private func annotationColor(_ kind: Kind) -> String {
+        switch kind {
+        case .redaction, .blur, .mosaic:
+            "#000000"
+        case .highlight, .rectangle, .arrow, .text:
+            "#FFD400"
         }
     }
 }

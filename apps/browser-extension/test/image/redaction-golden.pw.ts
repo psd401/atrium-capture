@@ -40,6 +40,7 @@ test('flattens opaque redaction pixels and strips source PNG metadata', async ({
             source: Blob,
             options: {
               annotations: Array<{
+                arrowDirection?: string;
                 color?: string;
                 geometry: { height: number; width: number; x: number; y: number };
                 id: string;
@@ -94,6 +95,7 @@ test('flattens opaque redaction pixels and strips source PNG metadata', async ({
             kind: 'mosaic',
           },
           {
+            arrowDirection: 'down_right',
             color: '#DC2626',
             geometry: { height: 2, width: 3, x: 1, y: 5 },
             id: '10000000-0000-4000-8000-000000000003',

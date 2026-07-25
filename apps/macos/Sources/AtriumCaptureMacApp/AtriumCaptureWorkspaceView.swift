@@ -6,6 +6,9 @@ import SwiftUI
 
 struct AtriumCaptureWorkspaceView: View {
     @ObservedObject var model: CaptureAppModel
+    @State private var selectedToolByStep: [String: Kind] = [:]
+    @State private var draftRectByStep: [String: CGRect] = [:]
+    @State private var annotationTextByStep: [String: String] = [:]
 
     var body: some View {
         NavigationSplitView {
@@ -398,42 +401,55 @@ struct AtriumCaptureWorkspaceView: View {
                 }
             }
 
-            screenshotPreview(for: step)
-
-            Divider()
-
             HStack(spacing: 7) {
-                Button("Redact") {
-                    model.addAnnotation(stepID: step.stepID, kind: .redaction)
-                }
-                Button("Highlight") {
-                    model.addAnnotation(stepID: step.stepID, kind: .highlight)
-                }
-                Button("Rectangle") {
-                    model.addAnnotation(stepID: step.stepID, kind: .rectangle)
-                }
-                Button("Arrow") {
-                    model.addAnnotation(stepID: step.stepID, kind: .arrow)
-                }
-                Button("Text") {
-                    model.addAnnotation(stepID: step.stepID, kind: .text)
-                }
-                Menu("More") {
-                    Button("Blur") {
-                        model.addAnnotation(stepID: step.stepID, kind: .blur)
+                annotationToolButton("Redact", kind: .redaction, step: step)
+                annotationToolButton("Highlight", kind: .highlight, step: step)
+                annotationToolButton("Rectangle", kind: .rectangle, step: step)
+                annotationToolButton("Arrow", kind: .arrow, step: step)
+                annotationToolButton("Text", kind: .text, step: step)
+                Menu(moreMenuTitle(for: step)) {
+                    Button(toolMenuTitle("Blur", kind: .blur, step: step)) {
+                        selectTool(.blur, for: step)
                     }
-                    Button("Mosaic") {
-                        model.addAnnotation(stepID: step.stepID, kind: .mosaic)
+                    Button(toolMenuTitle("Mosaic", kind: .mosaic, step: step)) {
+                        selectTool(.mosaic, for: step)
                     }
                     Button("Crop center 80%") {
                         model.setCenterCrop(stepID: step.stepID)
                     }
+                    Button("Reset crop") {
+                        model.resetCrop(stepID: step.stepID)
+                    }
+                    .disabled(step.crop == nil)
                 }
                 .menuStyle(.borderlessButton)
                 .foregroundStyle(AtriumCaptureTheme.evergreen)
             }
             .buttonStyle(AtriumSecondaryButtonStyle())
             .disabled(model.session?.state != .review)
+
+            annotationGuidance(for: step)
+            screenshotPreview(for: step)
+
+            HStack(spacing: 7) {
+                Button("Undo annotation") {
+                    model.undoLastAnnotation(stepID: step.stepID)
+                }
+                .disabled((step.annotations ?? []).isEmpty)
+                if step.crop != nil {
+                    Button("Reset crop") {
+                        model.resetCrop(stepID: step.stepID)
+                    }
+                }
+                Spacer()
+                Text("\((step.annotations ?? []).count) annotations")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(AtriumCaptureTheme.muted)
+            }
+            .buttonStyle(AtriumSecondaryButtonStyle())
+            .disabled(model.session?.state != .review)
+
+            Divider()
 
             HStack(spacing: 7) {
                 Button("Move up") { model.moveStep(stepID: step.stepID, offset: -1) }
@@ -453,17 +469,42 @@ struct AtriumCaptureWorkspaceView: View {
     @ViewBuilder
     private func screenshotPreview(for step: StepElement) -> some View {
         if let screenshot = model.screenshotImage(for: step) {
-            Image(nsImage: screenshot)
-                .resizable()
-                .interpolation(.medium)
-                .aspectRatio(contentMode: .fit)
-                .frame(maxWidth: .infinity)
-                .background(Color.black.opacity(0.04))
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(AtriumCaptureTheme.border, lineWidth: 1)
+            AtriumScreenshotCanvas(
+                image: screenshot,
+                activeTool: selectedToolByStep[step.stepID],
+                editing: model.session?.state == .review
+                    && model.editableImageBounds(for: step) != nil,
+                draftRect: Binding(
+                    get: { draftRectByStep[step.stepID] },
+                    set: { draftRectByStep[step.stepID] = $0 }
+                )
+            ) { start, end, previewSize in
+                guard
+                    let tool = selectedToolByStep[step.stepID],
+                    let imageBounds = model.editableImageBounds(for: step),
+                    let geometry = NativeAnnotationPlacement.geometry(
+                        from: NativePoint(x: start.x, y: start.y),
+                        to: NativePoint(x: end.x, y: end.y),
+                        previewWidth: previewSize.width,
+                        previewHeight: previewSize.height,
+                        imageBounds: imageBounds
+                    )
+                else {
+                    return
                 }
+                model.addAnnotation(
+                    stepID: step.stepID,
+                    kind: tool,
+                    geometry: geometry,
+                    arrowDirection: tool.rawValue == Kind.arrow.rawValue
+                        ? NativeAnnotationPlacement.arrowDirection(
+                            from: NativePoint(x: start.x, y: start.y),
+                            to: NativePoint(x: end.x, y: end.y)
+                        )
+                        : nil,
+                    text: annotationTextByStep[step.stepID]
+                )
+            }
                 .accessibilityLabel("Screenshot for step \(step.sequence + 1)")
         } else {
             Label("Screenshot preview unavailable", systemImage: "photo.badge.exclamationmark")
@@ -473,6 +514,95 @@ struct AtriumCaptureWorkspaceView: View {
                 .background(AtriumCaptureTheme.canvas)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
+    }
+
+    private func annotationToolButton(
+        _ title: String,
+        kind: Kind,
+        step: StepElement
+    ) -> some View {
+        Button(toolMenuTitle(title, kind: kind, step: step)) {
+            selectTool(kind, for: step)
+        }
+    }
+
+    @ViewBuilder
+    private func annotationGuidance(for step: StepElement) -> some View {
+        if let tool = selectedToolByStep[step.stepID] {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Label(
+                        "Drag over the screenshot to place \(toolDisplayName(tool)).",
+                        systemImage: "cursorarrow.motionlines"
+                    )
+                    Spacer()
+                    Button("Undo") {
+                        model.undoLastAnnotation(stepID: step.stepID)
+                    }
+                    .buttonStyle(AtriumSecondaryButtonStyle())
+                    .disabled((step.annotations ?? []).isEmpty)
+                    Button("Done") {
+                        selectedToolByStep[step.stepID] = nil
+                        draftRectByStep[step.stepID] = nil
+                    }
+                    .buttonStyle(AtriumSecondaryButtonStyle())
+                }
+                if tool.rawValue == Kind.text.rawValue {
+                    TextField(
+                        "Annotation text",
+                        text: Binding(
+                            get: { annotationTextByStep[step.stepID] ?? "Annotation" },
+                            set: { annotationTextByStep[step.stepID] = $0 }
+                        )
+                    )
+                    .textFieldStyle(.roundedBorder)
+                }
+                if tool.rawValue == Kind.blur.rawValue
+                    || tool.rawValue == Kind.mosaic.rawValue {
+                    Text("Blur and mosaic are visual effects, not privacy redactions.")
+                        .foregroundStyle(AtriumCaptureTheme.warning)
+                } else if tool.rawValue == Kind.redaction.rawValue {
+                    Text("Redaction is flattened last as opaque replacement pixels.")
+                        .foregroundStyle(AtriumCaptureTheme.evergreen)
+                }
+            }
+            .font(.system(size: 11, weight: .medium))
+            .padding(10)
+            .background(AtriumCaptureTheme.mint)
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        } else {
+            Text("Choose an edit tool, then drag directly over the screenshot.")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AtriumCaptureTheme.inkSoft)
+        }
+    }
+
+    private func selectTool(_ kind: Kind, for step: StepElement) {
+        if selectedToolByStep[step.stepID]?.rawValue == kind.rawValue {
+            selectedToolByStep[step.stepID] = nil
+            draftRectByStep[step.stepID] = nil
+        } else {
+            selectedToolByStep[step.stepID] = kind
+        }
+    }
+
+    private func toolMenuTitle(_ title: String, kind: Kind, step: StepElement) -> String {
+        selectedToolByStep[step.stepID]?.rawValue == kind.rawValue
+            ? "✓ \(title)"
+            : title
+    }
+
+    private func moreMenuTitle(for step: StepElement) -> String {
+        guard let tool = selectedToolByStep[step.stepID],
+              tool.rawValue == Kind.blur.rawValue || tool.rawValue == Kind.mosaic.rawValue
+        else {
+            return "More"
+        }
+        return "✓ \(toolDisplayName(tool))"
+    }
+
+    private func toolDisplayName(_ kind: Kind) -> String {
+        kind.rawValue.replacingOccurrences(of: "_", with: " ")
     }
 
     private func permissionRow(
@@ -542,6 +672,155 @@ struct AtriumCaptureWorkspaceView: View {
                 word.prefix(1).uppercased() + word.dropFirst().lowercased()
             }
             .joined(separator: " ")
+    }
+}
+
+private struct AtriumScreenshotCanvas: View {
+    let image: NSImage
+    let activeTool: Kind?
+    let editing: Bool
+    @Binding var draftRect: CGRect?
+    let onCommit: (CGPoint, CGPoint, CGSize) -> Void
+    @State private var draftStart: CGPoint?
+    @State private var draftEnd: CGPoint?
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack {
+                Image(nsImage: image)
+                    .resizable()
+                    .interpolation(.medium)
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+
+                if let draftRect {
+                    draftOverlay(draftRect)
+                }
+
+                if editing, activeTool != nil {
+                    Rectangle()
+                        .fill(Color.clear)
+                        .contentShape(Rectangle())
+                        .gesture(
+                            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                                .onChanged { value in
+                                    draftStart = clamped(value.startLocation, within: proxy.size)
+                                    draftEnd = clamped(value.location, within: proxy.size)
+                                    draftRect = normalizedRect(
+                                        from: value.startLocation,
+                                        to: value.location,
+                                        within: proxy.size
+                                    )
+                                }
+                                .onEnded { value in
+                                    let start = clamped(value.startLocation, within: proxy.size)
+                                    let end = clamped(value.location, within: proxy.size)
+                                    draftRect = nil
+                                    draftStart = nil
+                                    draftEnd = nil
+                                    onCommit(start, end, proxy.size)
+                                }
+                        )
+                        .accessibilityLabel("Editable screenshot canvas")
+                        .accessibilityHint("Drag to place the selected annotation.")
+                }
+            }
+            .frame(width: proxy.size.width, height: proxy.size.height)
+        }
+        .aspectRatio(imageAspectRatio, contentMode: .fit)
+        .frame(maxWidth: .infinity)
+        .background(Color.black.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    activeTool == nil
+                        ? AtriumCaptureTheme.border
+                        : AtriumCaptureTheme.evergreen,
+                    lineWidth: activeTool == nil ? 1 : 2
+                )
+        }
+    }
+
+    @ViewBuilder
+    private func draftOverlay(_ rect: CGRect) -> some View {
+        if activeTool?.rawValue == Kind.arrow.rawValue,
+           let draftStart,
+           let draftEnd {
+            arrowPath(from: draftStart, to: draftEnd)
+            .stroke(Color.yellow, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+        } else {
+            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                .fill(draftFill)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 3, style: .continuous)
+                        .stroke(draftStroke, lineWidth: 2)
+                }
+                .frame(width: max(1, rect.width), height: max(1, rect.height))
+                .position(x: rect.midX, y: rect.midY)
+        }
+    }
+
+    private func arrowPath(from start: CGPoint, to end: CGPoint) -> Path {
+        let angle = atan2(end.y - start.y, end.x - start.x)
+        let head = max(8, min(18, hypot(end.x - start.x, end.y - start.y) / 4))
+        var path = Path()
+        path.move(to: start)
+        path.addLine(to: end)
+        path.move(to: end)
+        path.addLine(to: CGPoint(
+            x: end.x - head * cos(angle - .pi / 6),
+            y: end.y - head * sin(angle - .pi / 6)
+        ))
+        path.move(to: end)
+        path.addLine(to: CGPoint(
+            x: end.x - head * cos(angle + .pi / 6),
+            y: end.y - head * sin(angle + .pi / 6)
+        ))
+        return path
+    }
+
+    private var imageAspectRatio: CGFloat {
+        guard image.size.width > 0, image.size.height > 0 else { return 1 }
+        return image.size.width / image.size.height
+    }
+
+    private var draftFill: Color {
+        switch activeTool?.rawValue {
+        case Kind.redaction.rawValue:
+            Color.black.opacity(0.82)
+        case Kind.highlight.rawValue:
+            Color.yellow.opacity(0.28)
+        case Kind.blur.rawValue, Kind.mosaic.rawValue:
+            Color.gray.opacity(0.42)
+        case Kind.text.rawValue:
+            Color.black.opacity(0.68)
+        default:
+            Color.clear
+        }
+    }
+
+    private var draftStroke: Color {
+        activeTool?.rawValue == Kind.redaction.rawValue
+            ? Color.white
+            : Color.yellow
+    }
+
+    private func normalizedRect(from start: CGPoint, to end: CGPoint, within size: CGSize) -> CGRect {
+        let clampedStart = clamped(start, within: size)
+        let clampedEnd = clamped(end, within: size)
+        return CGRect(
+            x: min(clampedStart.x, clampedEnd.x),
+            y: min(clampedStart.y, clampedEnd.y),
+            width: abs(clampedEnd.x - clampedStart.x),
+            height: abs(clampedEnd.y - clampedStart.y)
+        )
+    }
+
+    private func clamped(_ point: CGPoint, within size: CGSize) -> CGPoint {
+        CGPoint(
+            x: min(max(0, point.x), size.width),
+            y: min(max(0, point.y), size.height)
+        )
     }
 }
 #endif

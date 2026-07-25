@@ -75,6 +75,42 @@ describe('runtime message boundary', () => {
         },
       }),
     ).toBeUndefined();
+    expect(
+      parseIncomingMessage({
+        kind: 'editor.command',
+        payload: {
+          command: {
+            annotation: {
+              arrowDirection: 'down_right',
+              geometry: { height: 20, width: 100, x: 10, y: 10 },
+              id: crypto.randomUUID(),
+              kind: 'arrow',
+            },
+            kind: 'add_annotation',
+            stepId: crypto.randomUUID(),
+          },
+          commandId: crypto.randomUUID(),
+        },
+      }),
+    ).toBeTruthy();
+    expect(
+      parseIncomingMessage({
+        kind: 'editor.command',
+        payload: {
+          command: {
+            annotation: {
+              arrowDirection: 'sideways',
+              geometry: { height: 20, width: 100, x: 10, y: 10 },
+              id: crypto.randomUUID(),
+              kind: 'arrow',
+            },
+            kind: 'add_annotation',
+            stepId: crypto.randomUUID(),
+          },
+          commandId: crypto.randomUUID(),
+        },
+      }),
+    ).toBeUndefined();
   });
 
   it('accepts publication control metadata but rejects tokens and screenshot bytes', () => {

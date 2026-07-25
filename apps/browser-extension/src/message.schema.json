@@ -238,6 +238,10 @@
           "enum": ["arrow", "rectangle", "text", "highlight", "blur", "mosaic", "redaction"]
         },
         "geometry": { "$ref": "#/$defs/rect" },
+        "arrowDirection": {
+          "type": "string",
+          "enum": ["up_right", "down_right", "up_left", "down_left"]
+        },
         "text": { "type": "string", "maxLength": 1000 },
         "color": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" }
       }
