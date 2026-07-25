@@ -53,6 +53,10 @@ completion, and version creation are live verified. The extension produced a
 six-image private draft; its exact title, instructions, authoring route, and
 loaded image elements were verified in Atrium. The signed Mac app produced a
 two-image private draft with one current version and a synchronized title.
+Final product training documents were then submitted through the same
+private-default path: a five-step browser-extension walkthrough and a ten-step
+Mac-app walkthrough. All 15 reviewed images reached ready state and the
+rendered first, middle, and final steps were visually inspected in Atrium.
 
 ## M4 — District browser pilot
 

@@ -26,9 +26,12 @@ with synthetic data: the extension recorded, reviewed, permanently redacted, and
 published a six-image private draft whose title, instructions, and images were
 verified in Atrium's editor; the Apple Development-signed Mac app resumed a
 durable publish job without duplication and produced a two-image private draft
-with a current version and synchronized title. The remaining release gates are
-private PSD-only Chrome Web Store signing and managed deployment, plus district
-Developer ID signing, notarization, and Mac MDM deployment.
+with a current version and synchronized title. Final synthetic
+[training walkthroughs](docs/training-walkthroughs.md) were also submitted as
+private Atrium drafts and visually verified: five browser-extension steps and
+ten Mac-app steps, with every reviewed image loaded. The remaining release gates
+are private PSD-only Chrome Web Store signing and managed deployment, plus
+district Developer ID signing, notarization, and Mac MDM deployment.
 
 ## Repository map
 
