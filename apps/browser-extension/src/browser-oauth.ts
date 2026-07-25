@@ -214,7 +214,7 @@ export class BrowserOAuthSession {
     try {
       tokens = await this.tokens.load();
     } catch {
-      await this.tokens.clear();
+      await this.tokens.clear().catch(() => undefined);
       return undefined;
     }
     if (tokens && tokens.clientId !== clientId) {
@@ -273,19 +273,33 @@ export interface TrustedStorageArea {
 
 /** Chrome storage adapter used only after the area is restricted to trusted contexts. */
 export class BrowserTrustedTokenStore implements TrustedTokenStore {
-  constructor(private readonly storage: TrustedStorageArea) {}
+  constructor(
+    private readonly storage: TrustedStorageArea,
+    private readonly trustedContextsReady: Promise<void> = Promise.resolve(),
+  ) {}
 
   async clear(): Promise<void> {
+    await this.requireTrustedContexts();
     await this.storage.remove(TOKEN_STORAGE_KEY);
   }
 
   async load(): Promise<OAuthTokenSet | undefined> {
+    await this.requireTrustedContexts();
     const value = (await this.storage.get(TOKEN_STORAGE_KEY))[TOKEN_STORAGE_KEY];
     return value === undefined ? undefined : parseStoredTokenSet(value);
   }
 
   async save(tokens: OAuthTokenSet): Promise<void> {
+    await this.requireTrustedContexts();
     await this.storage.set({ [TOKEN_STORAGE_KEY]: tokens });
+  }
+
+  private async requireTrustedContexts(): Promise<void> {
+    try {
+      await this.trustedContextsReady;
+    } catch {
+      throw new GatewayError('oauth_token_store_unavailable', false);
+    }
   }
 }
 
@@ -302,6 +316,7 @@ export function parseTokenResponse(value: unknown, now = Date.now()): OAuthToken
     typeof accessToken !== 'string' ||
     accessToken.length === 0 ||
     accessToken.length > 16_384 ||
+    /[\r\n]/.test(accessToken) ||
     tokenType !== 'Bearer' ||
     typeof expiresIn !== 'number' ||
     !Number.isFinite(expiresIn) ||
@@ -310,7 +325,8 @@ export function parseTokenResponse(value: unknown, now = Date.now()): OAuthToken
     (refreshToken !== undefined &&
       (typeof refreshToken !== 'string' ||
         refreshToken.length === 0 ||
-        refreshToken.length > 16_384))
+        refreshToken.length > 16_384 ||
+        /[\r\n]/.test(refreshToken)))
   ) {
     throw new GatewayError('oauth_token_response_invalid', false);
   }
@@ -335,6 +351,7 @@ function parseStoredTokenSet(value: unknown): OAuthTokenSet {
     typeof accessToken !== 'string' ||
     accessToken.length === 0 ||
     accessToken.length > 16_384 ||
+    /[\r\n]/.test(accessToken) ||
     typeof clientId !== 'string' ||
     clientId.length === 0 ||
     clientId.length > 500 ||
@@ -344,7 +361,8 @@ function parseStoredTokenSet(value: unknown): OAuthTokenSet {
     (refreshToken !== undefined &&
       (typeof refreshToken !== 'string' ||
         refreshToken.length === 0 ||
-        refreshToken.length > 16_384))
+        refreshToken.length > 16_384 ||
+        /[\r\n]/.test(refreshToken)))
   ) {
     throw new GatewayError('oauth_token_store_invalid', false);
   }

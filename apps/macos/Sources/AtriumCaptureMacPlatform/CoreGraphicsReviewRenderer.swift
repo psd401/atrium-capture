@@ -16,7 +16,6 @@ public struct FlattenedNativeImage: Equatable, Sendable {
 
 #if os(macOS)
 import AppKit
-import CoreImage
 import CoreGraphics
 import ImageIO
 import UniformTypeIdentifiers
@@ -85,7 +84,7 @@ public enum CoreGraphicsReviewRenderer {
             ))
         }
         for annotation in annotations where annotation.kind != .redaction {
-            draw(transform(annotation), in: context, imageHeight: CGFloat(height))
+            try draw(transform(annotation), in: context, imageHeight: CGFloat(height))
         }
 
         // Privacy redactions are deliberately last, opaque, and use copy blending.
@@ -115,7 +114,11 @@ public enum CoreGraphicsReviewRenderer {
         )
     }
 
-    private static func draw(_ annotation: AnnotationElement, in context: CGContext, imageHeight: CGFloat) {
+    private static func draw(
+        _ annotation: AnnotationElement,
+        in context: CGContext,
+        imageHeight: CGFloat
+    ) throws {
         let rect = renderRect(annotation.geometry, imageHeight: imageHeight)
         let color = parseColor(annotation.color) ?? NSColor.systemYellow
         context.saveGState()
@@ -167,26 +170,59 @@ public enum CoreGraphicsReviewRenderer {
             )
             NSGraphicsContext.restoreGraphicsState()
         case .blur, .mosaic:
-            if let current = context.makeImage() {
-                let input = CIImage(cgImage: current)
-                let output: CIImage
-                if annotation.kind == .blur {
-                    output = input.clampedToExtent().applyingGaussianBlur(sigma: 8).cropped(to: input.extent)
-                } else {
-                    output = input.applyingFilter("CIPixellate", parameters: [
-                        kCIInputScaleKey: 12,
-                        kCIInputCenterKey: CIVector(x: rect.midX, y: rect.midY),
-                    ])
-                }
-                let ciContext = CIContext(options: [.cacheIntermediates: false])
-                if let filtered = ciContext.createCGImage(output, from: rect) {
-                    context.draw(filtered, in: rect)
-                }
+            guard let current = context.makeImage() else {
+                throw NativeRenderError.contextCreationFailed
             }
+            let patch = try resampledPatch(
+                current,
+                rect: rect,
+                sampleSize: annotation.kind == .blur ? 5 : 12
+            )
+            context.saveGState()
+            context.clip(to: rect)
+            context.interpolationQuality = annotation.kind == .blur ? .high : .none
+            context.draw(patch, in: rect)
+            context.restoreGState()
         case .redaction:
             break
         }
         context.restoreGState()
+    }
+
+    private static func resampledPatch(
+        _ image: CGImage,
+        rect: CGRect,
+        sampleSize: CGFloat
+    ) throws -> CGImage {
+        let width = max(1, Int(ceil(rect.width / sampleSize)))
+        let height = max(1, Int(ceil(rect.height / sampleSize)))
+        guard let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let downsampled = CGContext(
+                  data: nil,
+                  width: width,
+                  height: height,
+                  bitsPerComponent: 8,
+                  bytesPerRow: 0,
+                  space: colorSpace,
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              )
+        else { throw NativeRenderError.contextCreationFailed }
+        let scaleX = CGFloat(width) / rect.width
+        let scaleY = CGFloat(height) / rect.height
+        downsampled.interpolationQuality = .high
+        downsampled.draw(
+            image,
+            in: CGRect(
+                x: -rect.minX * scaleX,
+                y: -rect.minY * scaleY,
+                width: CGFloat(image.width) * scaleX,
+                height: CGFloat(image.height) * scaleY
+            )
+        )
+        guard let patch = downsampled.makeImage() else {
+            throw NativeRenderError.contextCreationFailed
+        }
+        return patch
     }
 
     private static func arrowEndpoints(

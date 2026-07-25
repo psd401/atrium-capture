@@ -5,11 +5,23 @@ import AtriumCaptureMacPlatform
 import SwiftUI
 
 struct AtriumCaptureWorkspaceView: View {
+    private enum FocusField: Hashable {
+        case guideTitle
+        case manualInstruction
+        case stepInstruction(String)
+        case annotationText(String)
+    }
+
     @ObservedObject var model: CaptureAppModel
     @State private var selectedToolByStep: [String: Kind] = [:]
     @State private var draftRectByStep: [String: CGRect] = [:]
     @State private var annotationTextByStep: [String: String] = [:]
     @State private var guideTitleDraft = ""
+    @FocusState private var focusedField: FocusField?
+    private let sidebarControlColumns = [
+        GridItem(.flexible(minimum: 0), spacing: 8),
+        GridItem(.flexible(minimum: 0), spacing: 8),
+    ]
 
     var body: some View {
         NavigationSplitView {
@@ -37,6 +49,9 @@ struct AtriumCaptureWorkspaceView: View {
         .frame(minWidth: 920, minHeight: 620)
         .onAppear {
             guideTitleDraft = model.session?.title ?? ""
+            DispatchQueue.main.async {
+                focusedField = nil
+            }
         }
         .onChange(of: model.session?.sessionID) {
             guideTitleDraft = model.session?.title ?? ""
@@ -93,7 +108,7 @@ struct AtriumCaptureWorkspaceView: View {
             }
             .buttonStyle(AtriumPrimaryButtonStyle())
 
-            HStack(spacing: 8) {
+            LazyVGrid(columns: sidebarControlColumns, alignment: .leading, spacing: 8) {
                 Button("Screen Recording settings") {
                     model.openScreenRecordingSettings()
                 }
@@ -112,7 +127,7 @@ struct AtriumCaptureWorkspaceView: View {
 
     private var recordingCard: some View {
         sectionCard(title: "Recorder", systemImage: "record.circle") {
-            HStack(spacing: 8) {
+            LazyVGrid(columns: sidebarControlColumns, alignment: .leading, spacing: 8) {
                 Button("Start new recording") { model.start() }
                     .buttonStyle(AtriumPrimaryButtonStyle())
                     .disabled(!model.canStartRecording)
@@ -162,7 +177,7 @@ struct AtriumCaptureWorkspaceView: View {
             Divider()
 
             AtriumSectionLabel(title: "Quick capture", systemImage: "viewfinder")
-            HStack(spacing: 8) {
+            LazyVGrid(columns: sidebarControlColumns, alignment: .leading, spacing: 8) {
                 Button {
                     model.captureRegion()
                 } label: {
@@ -209,6 +224,7 @@ struct AtriumCaptureWorkspaceView: View {
             HStack(spacing: 8) {
                 TextField("Add a manual step", text: $model.manualInstruction)
                     .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .manualInstruction)
                 Button("Add") { model.insertManualStep() }
                     .buttonStyle(AtriumSecondaryButtonStyle())
                     .disabled(
@@ -305,6 +321,14 @@ struct AtriumCaptureWorkspaceView: View {
 
             if model.publishJob?.phase == .readyAsDraft {
                 Button {
+                    model.openAtriumDraft()
+                } label: {
+                    Label("Open Atrium draft", systemImage: "arrow.up.right.square")
+                }
+                .buttonStyle(AtriumSecondaryButtonStyle())
+                .disabled(!model.canOpenAtriumDraft)
+
+                Button {
                     model.publishInternally()
                 } label: {
                     Label("Publish draft internally", systemImage: "person.2.badge.gearshape")
@@ -398,48 +422,51 @@ struct AtriumCaptureWorkspaceView: View {
 
     private var guideWorkspace: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 14) {
-                VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .center, spacing: 14) {
                     AtriumSectionLabel(title: "Visual guide", systemImage: "square.stack.3d.up")
-                    HStack(spacing: 8) {
-                        TextField("Guide title", text: $guideTitleDraft)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 26, weight: .bold))
-                            .foregroundStyle(AtriumCaptureTheme.ink)
-                            .onSubmit {
-                                model.updateTitle(guideTitleDraft)
-                            }
-                            .disabled(!model.canEditGuideTitle)
-                        if model.canEditGuideTitle {
-                            Button("Save title") {
-                                model.updateTitle(guideTitleDraft)
-                            }
-                            .buttonStyle(AtriumSecondaryButtonStyle())
-                            .disabled(
-                                guideTitleDraft
-                                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                                    .isEmpty
-                                    || guideTitleDraft.count > 500
-                            )
+                    Spacer(minLength: 8)
+                    AtriumStatusPill(
+                        label: "\(model.session?.steps.count ?? 0) steps",
+                        recording: model.session?.state == .recording
+                    )
+                }
+                HStack(spacing: 8) {
+                    TextField("Guide title", text: $guideTitleDraft)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundStyle(AtriumCaptureTheme.ink)
+                        .frame(minWidth: 0, maxWidth: .infinity)
+                        .focused($focusedField, equals: .guideTitle)
+                        .onSubmit {
+                            model.updateTitle(guideTitleDraft)
                         }
-                    }
-                    if let job = model.publishJob {
-                        Text(
-                            job.remoteTitle == model.session?.title
-                                ? "Title saved in Atrium."
-                                : job.contentObjectID == nil
-                                    ? "Title saved locally and will sync when Atrium confirms the draft."
-                                    : "Title saved locally; Atrium sync will retry safely."
+                        .disabled(!model.canEditGuideTitle)
+                    if model.canEditGuideTitle {
+                        Button("Save title") {
+                            model.updateTitle(guideTitleDraft)
+                        }
+                        .buttonStyle(AtriumSecondaryButtonStyle())
+                        .fixedSize(horizontal: true, vertical: false)
+                        .disabled(
+                            guideTitleDraft
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+                                .isEmpty
+                                || guideTitleDraft.count > 500
                         )
-                            .font(.system(size: 11))
-                            .foregroundStyle(AtriumCaptureTheme.muted)
                     }
                 }
-                Spacer()
-                AtriumStatusPill(
-                    label: "\(model.session?.steps.count ?? 0) steps",
-                    recording: model.session?.state == .recording
-                )
+                if let job = model.publishJob {
+                    Text(
+                        job.remoteTitle == model.session?.title
+                            ? "Title saved in Atrium."
+                            : job.contentObjectID == nil
+                                ? "Title saved locally and will sync when Atrium confirms the draft."
+                                : "Title saved locally; Atrium sync will retry safely."
+                    )
+                        .font(.system(size: 11))
+                        .foregroundStyle(AtriumCaptureTheme.muted)
+                }
             }
             .padding(24)
             .background(AtriumCaptureTheme.panel)
@@ -512,6 +539,7 @@ struct AtriumCaptureWorkspaceView: View {
                     .frame(minHeight: 38)
                     .background(AtriumCaptureTheme.canvas)
                     .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                    .focused($focusedField, equals: .stepInstruction(step.stepID))
                     .disabled(!model.canEditGuideContent)
 
                     HStack(spacing: 7) {
@@ -676,6 +704,7 @@ struct AtriumCaptureWorkspaceView: View {
                         )
                     )
                     .textFieldStyle(.roundedBorder)
+                    .focused($focusedField, equals: .annotationText(step.stepID))
                 }
                 if tool.rawValue == Kind.blur.rawValue
                     || tool.rawValue == Kind.mosaic.rawValue {

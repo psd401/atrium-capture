@@ -693,6 +693,29 @@ public actor DurableNativePublisher {
         )
     }
 
+    public func retry(
+        jobID: String,
+        publishInternal: Bool = false,
+        now: Date = Date()
+    ) async throws -> AtriumCapturePublishJob {
+        guard var job = try repository.loadJob(jobID: jobID) else {
+            throw NativePublishError.jobNotFound
+        }
+        if job.phase == .needsAttention {
+            job = job.with(
+                lastError: .some(nil),
+                phase: Self.recoveryPhase(for: job, publishInternal: publishInternal),
+                updatedAt: now
+            )
+            try repository.saveJob(job)
+        }
+        return try await resume(
+            jobID: jobID,
+            publishInternal: publishInternal,
+            now: now
+        )
+    }
+
     private func resumeExclusive(
         jobID: String,
         publishInternal: Bool,
@@ -936,6 +959,21 @@ public actor DurableNativePublisher {
         }
         return "## Steps\n\n" + lines.joined(separator: "\n")
     }
+
+    private static func recoveryPhase(
+        for job: AtriumCapturePublishJob,
+        publishInternal: Bool
+    ) -> Phase {
+        guard job.contentObjectID != nil else { return .creatingObject }
+        let uploads = job.assetUploads ?? []
+        guard uploads.allSatisfy({
+            $0.state == .ready && $0.remoteAssetID != nil
+        }) else {
+            return .uploadingAssets
+        }
+        guard job.currentVersionID != nil else { return .creatingVersion }
+        return publishInternal ? .publishingInternal : .readyAsDraft
+    }
 }
 
 public enum MockNativeFailurePoint: String, Sendable {
@@ -964,13 +1002,16 @@ public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Send
     private var titles: [String: String] = [:]
     private var failurePoint: MockNativeFailurePoint?
     private let failureRequestID: String?
+    private let failureRetryable: Bool
 
     public init(
         failAfterCommitAt failurePoint: MockNativeFailurePoint? = nil,
-        failureRequestID: String? = nil
+        failureRequestID: String? = nil,
+        failureRetryable: Bool = true
     ) {
         self.failurePoint = failurePoint
         self.failureRequestID = failureRequestID
+        self.failureRetryable = failureRetryable
     }
 
     public var remoteCounts: (objects: Int, assets: Int, versions: Int, publishes: Int) {
@@ -1065,7 +1106,7 @@ public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Send
         throw NativeGatewayFailure(
             code: "MOCK_LOST_RESPONSE",
             requestID: failureRequestID,
-            retryable: true
+            retryable: failureRetryable
         )
     }
 }

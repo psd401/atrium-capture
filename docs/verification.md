@@ -2,13 +2,27 @@
 
 This file records reproducible local evidence for milestone exit gates. A milestone is listed as complete only after its stated gate passes; planned CI or source inspection alone is not counted as runtime evidence.
 
-## Production Atrium publishing update — browser boundaries pass; final operator draft pending (2026-07-24)
+## Production Atrium private-draft acceptance — pass (2026-07-25)
 
 - Audited current AI Studio `dev` merge `d4d6fb87`; its OIDC, content, collection, capture provenance, authored-asset, version, and publication contracts remain behind the same gateway boundary. No AI Studio source or production asset was copied.
 - `pnpm smoke:atrium` verifies the deployed issuer, authorization/token/revocation endpoints, S256, required content scopes, both bundled public-client registrations, and a structured fail-closed `401` from production collection discovery without sending a credential or capture. Each exact callback/scope request must produce a real HTTP 3xx authorization redirect without completing sign-in or printing the IDs. The two documented environment variables override both bundled IDs together only for separately approved test clients.
 - `pnpm smoke:atrium:browser-token` sends an intentionally invalid synthetic code with the exact stable extension origin. Production reaches code validation and returns `invalid_grant`. No authorization, credential, capture, or token is involved.
 - `pnpm smoke:atrium:browser-content` loads the production build in Chromium and proves all eight gateway routes are reachable from the real extension worker with a synthetic invalid token. Each returns the bounded `401 INVALID_TOKEN` envelope.
 - The production native app completed district login, returned through `org.psd401.atrium-capture:/oauth/callback`, exchanged the code, persisted the token set in Keychain, displayed `Atrium Signed In` / `Connected to Atrium`, and remained running. The first callback exposed a Swift actor-isolation trap because AuthenticationServices completed on Safari's XPC queue; the callback bridge is now nonisolated and a background-queue regression test passes.
+- The production extension accepted the committed six-step synthetic fixture. It
+  survived a service-worker restart, omitted ordinary typed and password
+  literals, flattened irreversible redactions, deleted raw assets, created one
+  private object, uploaded six authored assets, and created one Markdown
+  version. The acceptance runner opened the authenticated
+  `/atrium/{objectId}/edit` route and verified the exact title, every
+  instruction, and six complete image elements with nonzero dimensions. It
+  returned `{"authentication":"district_login","readerAssets":6,"status":"pass"}`.
+- The Apple Development-signed Mac app resumed its existing durable synthetic
+  publication after the direct-upload transport fix. It returned
+  `{"assetCount":2,"phase":"ready_as_draft","status":"pass","stepCount":2,"titleSynchronized":true}`.
+  Outbox inspection verified one private object, two ready remote assets, one
+  current version, a private authoring link, and no internal publication. The
+  retry reused the same object and asset idempotency keys.
 
 ## Registered-client acceptance
 
@@ -55,11 +69,11 @@ Chromium executable may be supplied through
 `chromiumapp.org` identity callback—not cross-browser identity compatibility—is
 the release gate.
 
-The production first-party interaction must show only district login when no
-valid AI Studio session exists, then return automatically to Atrium Capture.
-Employees never configure a client ID, secret, callback, scope, or consent
-decision. The operator-attended private-draft acceptance records the remaining
-runtime evidence for that interaction without weakening third-party consent.
+The production first-party interaction shows only district login when no valid
+AI Studio session exists, then returns automatically to Atrium Capture. Employees
+never configure a client ID, secret, callback, scope, or consent decision. The
+authenticated private-draft runs above provide the runtime evidence without
+weakening third-party consent.
 
 The 2026-07-24 live extension run completed district login, callback, and token
 exchange. Its first private-draft attempt exposed a browser-only client defect:
@@ -70,15 +84,23 @@ receiver-neutral wrapper and a regression test requires that calling convention.
 API/S3 deadlines and durable phase/request diagnostics prevent another
 indefinite or opaque acceptance failure.
 
-- The TypeScript production gateway contract tests verify private bodyless creation, capture `sourceRef`, selectable collection filtering, deterministic ready/pending asset recovery, recovery after an ambiguous direct-S3 response, rejection of non-AWS upload hosts before image bytes are sent, direct S3 upload without an Atrium bearer header, canonical asset Markdown, `If-Match` preconditions, reader URL, and explicit intranet publication.
+- The TypeScript production gateway contract tests verify private bodyless
+  creation, capture `sourceRef`, selectable collection filtering, deterministic
+  ready/pending asset recovery, recovery after an ambiguous direct-S3 response,
+  rejection of non-AWS upload hosts before image bytes are sent, direct S3
+  upload without an Atrium bearer header, canonical asset Markdown, `If-Match`
+  preconditions, the private authoring URL, and explicit intranet publication.
 - Browser OAuth tests verify the immutable `/atrium` callback, code exchange, trusted-only token persistence, one refresh across concurrent callers, refresh rotation, revocation, malformed-store rejection, and token rejection at the runtime-message boundary. Publication commands are serialized before remote I/O.
 - The Mac production gateway compiles under Swift 6 strict concurrency. Its on-host release verifier and macOS-only contract tests inject the same production-shaped sequence and exact header assertions; the portable Swift suite continues to cover durable phase recovery and shared fixtures. Native OAuth now includes the documented callback, strict stored-token validation, Keychain storage, refresh rotation, revocation, and a nonisolated AuthenticationServices completion bridge.
 - Browser startup recovery revisits durable terminal drafts to finish local raw-data deletion/session submission. The native publisher orders that cleanup before its terminal job commit and restores ready/complete jobs into the UI after restart without repeating remote writes. A native test keeps a synthetic raw sentinel under `delete_after_submit`, uploads exactly one derivative, deletes the sentinel after the draft commit, and persists `submitted`.
-- The only remaining production durability limitation is Atrium's non-idempotent asset-initiation route. A lost initiation response can leave an expired reservation row; clients fail safely and never upload raw bytes or invent a host. ADR 0006 contains reproducible evidence and the required server-side remedy.
-- Browser authenticated production acceptance now has passing registration,
-  token, and extension-worker content-route boundaries. The remaining evidence
-  is one operator-attended synthetic private draft through asset and version
-  completion; employees configure nothing.
+- Asset initiation now uses a stable per-asset `Idempotency-Key`; replay returns
+  the same row with a refreshed upload request. Production also returns a
+  checksum hoisted into the signed S3 query. Both clients omit the identical
+  unsigned duplicate header, retain required signed headers, and fail closed on
+  a checksum mismatch. Each gateway also recomputes SHA-256 from the exact
+  flattened byte buffer and rejects a caller/digest mismatch before network
+  I/O. Contract tests and the authenticated runs cover this exact transport
+  shape.
 
 ## M0 — complete (2026-07-22)
 
@@ -114,24 +136,24 @@ Exit-gate conclusion: the production extension-loaded workflow survives a forced
 
 Exit-gate conclusion: golden and lifecycle tests prove redacted source pixels and source metadata are not recoverable from exported or locally publishable bytes, and unreviewed/raw assets cannot cross the publishable boundary.
 
-## M3 — locally complete (2026-07-22)
+## M3 — complete (2026-07-25)
 
 - The language-neutral publish-job contract has a backward-compatible optional `readerUrl`; strict schema validation and the generated TypeScript and Swift models decode both queued and ready-draft shared fixtures.
 - `AtriumGateway` exposes independent OAuth, collection discovery, immutable asset, idempotency, and publication capabilities. The original unavailable implementation failed closed; the synthetic HTTP implementation accepts only `/_mock/atrium-capture/v1` and validates bounded responses at the client trust boundary.
 - Authorization tests prove S256 PKCE state/challenge handling, use the fixed Chrome Identity redirect, keep the verifier out of the authorization URL, validate token responses, and send no token through a runtime message. The original unavailable boundary has since been superseded by the production update above.
 - Publisher tests inject a connection loss after remote commit at private-object creation, each asset upload, version creation, and internal publication. Every retry ends with exactly one object, one copy of each asset, and one version; visibility stays private until the separate internal-publication action.
-- IndexedDB version 3 stores the durable outbox. A browser-service test closes the repository after a committed-but-unacknowledged object creation, opens a new repository instance, resumes the job, and obtains one private draft and reader link without selecting the retained raw sentinel.
-- The side panel provides contextual next-step guidance, a collection picker/managed-default indication, phase/error status, safe retry, reader link, and explicit internal-publication action. It exposes **Sign in to AI Studio** from the trusted extension context using the bundled production public client ID; managed policy can only override it for approved testing.
+- IndexedDB version 3 stores the durable outbox. A browser-service test closes the repository after a committed-but-unacknowledged object creation, opens a new repository instance, resumes the job, and obtains one private draft and authoring link without selecting the retained raw sentinel.
+- The side panel provides contextual next-step guidance, a collection picker/managed-default indication, phase/error status, safe retry, private-draft link, and explicit internal-publication action. It exposes **Sign in to AI Studio** from the trusted extension context using the bundled production public client ID; managed policy can only override it for approved testing.
 - `pnpm typecheck`, `pnpm contracts:check`, `pnpm messages:check`, package/unit tests, the localhost HTTP integration test, production WXT build, and extension-loaded Chromium workflow pass. Swift 6 decodes the new ready-draft fixture in the official container.
 - [ADR 0003](adr/0003-durable-atrium-publication.md) records persistence-before-I/O, idempotency, private-default, raw-asset exclusion, PKCE, and the no-invented-route decision.
 
-Exit-gate conclusion: every locally mockable publication phase recovers from a
-post-commit interruption without duplicate remote state and private is the
-default. Production registration, token exchange, first-party login, and real
-extension-worker route access pass; final operator draft acceptance and the
-non-idempotent asset-initiation interval remain.
+Exit-gate conclusion: every publication phase recovers from a post-commit
+interruption without duplicate remote state and private is the default.
+Production registration, token exchange, first-party login, real
+extension-worker route access, idempotent authored-asset upload, version
+creation, and private-draft content acceptance pass from both clients.
 
-## M4 — locally complete (2026-07-22)
+## M4 — engineering complete (2026-07-25)
 
 - The production manifest packages a Chrome-managed-storage schema for versioned origin allow/deny rules, URL retention, raw-image retention, default collection, image-byte budget, and step budget. The worker restricts managed storage to trusted contexts, validates it again, fails closed on malformed data, and immediately refreshes content listeners on change.
 - Recorder tests prove deny-before-allow behavior, trusted-sender URL use, no-URL retention, invalid-policy refusal, and pause-before-commit when a screenshot would exceed the administrator budget.
@@ -142,9 +164,9 @@ non-idempotent asset-initiation interval remain.
 - The complete local gate passes formatting, lint, strict typechecking, schema/message generation checks, unit/integration tests, production WXT build, extension-loaded Chromium acceptance, Swift fixture decode, license allowlist, and dependency audit.
 
 Exit-gate conclusion: every locally buildable pilot control, privacy review,
-support diagnostic, and rollback check passes. Browser authorization, token
-exchange, and worker route access pass; final authenticated image/version
-acceptance is operator-attended.
+support diagnostic, rollback check, and authenticated synthetic image/version
+acceptance passes. District rollout remains an operational approval and managed
+deployment action, not an implementation dependency.
 
 ## M5 — locally complete (2026-07-22)
 
@@ -155,27 +177,40 @@ acceptance is operator-attended.
 - CI now generates and verifies the browser package after extension acceptance. [Browser v1 release](browser-v1-release.md) records the supported district matrix, automated commands, manual synthetic ring, signing custody, store checklist, and the rule that signing/upload/deployment require explicit approval.
 - Formatting, lint, strict typechecking, schema/message freshness, all unit/integration tests, build, extension acceptance, package verification, Swift shared-contract tests, license allowlist, and a high-severity audit pass.
 
-Exit-gate conclusion: every locally buildable Browser v1 implementation, hardening, package, health, documentation, and automated acceptance gate passes. The artifact is deliberately unsigned and undeployed; those external release actions were not authorized. Live workflow publication remains gated only by the named Atrium contracts.
+Exit-gate conclusion: every locally buildable Browser v1 implementation,
+hardening, package, health, documentation, automated acceptance, and
+authenticated private-draft gate passes. The artifact is deliberately unsigned
+and undeployed; those external release actions were not authorized.
 
-## M6 — locally complete (2026-07-22)
+## M6 — complete (2026-07-25)
 
 - The Swift package now builds generated contracts, platform-neutral native core, macOS adapters, SwiftUI app, native host, and acceptance verifier. The actual AppKit/ScreenCaptureKit/Accessibility/AuthenticationServices/Security targets compile and link with the installed macOS 15.4 SDK under Swift 6 strict concurrency.
-- The Swift suite executes 51 tests on macOS across shared fixtures, recorder persistence/restart, duplicate merging, ordering, secure-field rejection, generic input intent, exact bridge validation, serialized screenshots, mandatory sensitive-step redaction, durable publishing, ambiguous-create and restart-phase title reconciliation, submitted-state race protection, saved-guide switching, file-backed outbox restart/raw-byte cleanup, terminal-outbox restoration, bounded production request-ID diagnostics, mixed-scale display geometry, pixel sampling, bounded pins, clipboard retention, production gateway configuration, sequential TCC prompting, interactive annotation placement, every renderer tool, four arrow directions, and the off-main AuthenticationServices callback.
+- The Swift suite executes 58 tests on macOS across shared fixtures, recorder persistence/restart, duplicate merging, ordering, secure-field rejection, generic input intent, exact bridge validation, serialized screenshots, mandatory sensitive-step redaction, durable publishing, ambiguous-create and restart-phase title reconciliation, submitted-state race protection, saved-guide switching, file-backed outbox restart/raw-byte cleanup, terminal-outbox restoration, bounded production request-ID diagnostics, mixed-scale display geometry, pixel sampling, bounded pins, clipboard retention, production gateway configuration, exact upload-byte digest validation, sequential TCC prompting, interactive annotation placement, every renderer tool, four arrow directions, and the off-main AuthenticationServices callback.
 - The shared `capture-session-macos-v1.json` validates against the same schema in AJV and decodes through generated TypeScript and Swift models. A recorder test normalizes synthetic Finder, System Settings, and Office events into one `surface: macos` contract without a value field.
 - Accessibility source inspection and tests enforce the value-free boundary: the adapter never asks for `kAXValueAttribute`; secure roles return no name and are rejected before ScreenCaptureKit. Rejected-event receipts survive restart, frames pass through an explicit serialized queue, and merged-event raw files are discarded rather than retained as unreferenced assets.
 - Native review uses the same generated crop/annotation/session types and renders each local screenshot directly in its step card. A live signed-app capture persisted 1512×982 PNG assets and the rebuilt review workspace exposed lazy-loaded 645×419 previews. The signed editor was then exercised with redaction, blur, mosaic, highlight, rectangle, arrow, text, crop, and undo. Tools use drag-to-place image coordinates, previews run through the production renderer, **Undo** remains beside **Done**, and arrows retain all four drag directions through the backward-compatible optional `arrowDirection` contract field. Input and otherwise flagged screenshot steps cannot be flattened, approved, or enqueued without an opaque redaction; mosaic does not satisfy the gate. The Core Graphics release verifier injects a synthetic metadata marker, replaces target pixels with opaque black, preserves neighboring pixels, and proves `tEXt`/`iTXt`/`zTXt`/`eXIf`/`tIME` are absent.
 - The native durable publisher persists every phase, accepts only `publishable_local`, defaults to private draft, and recovers lost responses after object, asset, version, and internal-publish commits with exactly one remote result each.
-- Authenticated production acceptance reached bodyless private-object creation on 2026-07-24, but Atrium returned retryable `INTERNAL_ERROR` after the title became visible and before the client received its object ID. The persisted native outbox remained at `creating_object`, proving that no image upload or version request ran. The Mac client now preserves bounded Atrium request IDs, treats `IDEMPOTENCY_IN_PROGRESS` as retryable, exposes phase-specific guidance, and retries only with the same durable job. Completing this live gate requires the external Atrium service to reconcile/replay the ambiguous committed create.
+- Authenticated production acceptance on 2026-07-25 resumed the same durable
+  job after a failed direct-upload attempt. The signed app created no duplicate
+  object or asset, uploaded both reviewed synthetic images, created a current
+  version, synchronized a post-create title change, returned the private
+  authoring link, and remained private.
+- The final rebuilt bundle then repeated production acceptance from a fresh
+  isolated root. The acceptance fixture generated new provenance/event/asset
+  UUIDs, created one new private draft without a retry, uploaded two
+  exact-digest derivatives, created one current version, synchronized the
+  renamed title, returned the private authoring link, and did not request
+  internal publication. Its bounded result was
+  `{"assetCount":2,"phase":"ready_as_draft","status":"pass","stepCount":2,"titleSynchronized":true}`.
 - Native OAuth implements S256 PKCE, `ASWebAuthenticationSession`, the documented HTTPS token/revocation endpoints, bounded Bearer response validation, refresh rotation, and off-main-thread SecItem Keychain access. The production public client UUID is bundled, and the UI guides employees from capture access through **Sign in to AI Studio** without exposing deployment configuration.
 - The optional Chrome bridge requests `nativeMessaging` from a user gesture. Browser tests prove it omits browser URLs, screenshots, typed values, and tokens; the packaged Swift host accepts the shared fixture and rejects nested `imageData`.
 - `scripts/build-macos-app.sh` produces and verifies an ad-hoc-signed `Atrium Capture.app` with the native helper embedded. It does not install the host, notarize, upload, or deploy.
 
 Exit-gate conclusion: synthetic Finder/System Settings/Office semantics produce
 the same valid capture document model and private-default publish phases as the
-browser. Every local M6 build, recovery, privacy, fixture, and packaging gate
-passes; native production authentication and both capture permissions are live
-verified on an Apple Development-signed build. Private-draft acceptance remains
-an operator check.
+browser. Every M6 build, recovery, privacy, fixture, packaging, authentication,
+capture-permission, and production private-draft gate passes on an Apple
+Development-signed build.
 
 ## M7 — locally complete (2026-07-22)
 
@@ -192,14 +227,29 @@ Exit-gate conclusion: native overlay behavior is implemented and automatically v
 ## Atrium visual alignment follow-up — complete (2026-07-24)
 
 - The current Atrium product was used as a transient visual reference for color, density, radii, and hierarchy only. No production screenshot, content, font, icon pack, or frontend asset was added to the repository.
-- The extension side panel renders its 420-point-wide empty state without horizontal overflow. Visual inspection confirms the brand lockup, private-default message, recorder action, step card, diagnostics, permission rationale, and typed-value/password notice remain legible in the side-panel hierarchy.
+- The extension side panel renders its empty, review, and publishable states at
+  320, 360, and 420 pixels without horizontal overflow or clipped interactive
+  controls. Final screenshot inspection confirms intentional single-line title
+  truncation, readable wrapped instructions, the brand lockup, private-default
+  message, recorder/review actions, diagnostics, permission rationale, and
+  typed-value/password notice remain legible. The extension-loaded workflow now
+  durably records the normalized `Submit the form.` step before allowing its
+  immediate navigation to continue after a forced worker stop.
 - Browser semantic tokens use evergreen primary actions, mint review/selection states, warm neutral canvas, white panels, amber warnings, and restrained destructive red. The small-text muted role measures 5.01:1 against white; evergreen primary actions measure 12.40:1 with white text.
 - The Mac app uses equivalent native SwiftUI color roles and reusable button, panel, brand, status-pill, and section-label components. Its recorder, quick capture, review, private-draft capability gate, pins, and step editor remain platform-native rather than reproducing the Atrium content-library layout.
 - Region and element quick captures append to the current unpublished guide instead of replacing it. The normalized session plus receipts recover after restart; manual steps can reopen a prepared guide for privacy review; and titles remain editable in every state. New-guide and saved-guide controls preserve older sessions while their outbox jobs recover independently. Publish jobs freeze the create title, then use the documented metadata update to reconcile later renames without changing an ambiguous idempotent create request. Step/image content remains frozen for an existing version.
 - The native app exposes the same capture model through a SwiftUI menu-bar extra and single workspace window. Region/element capture, recording control, workspace activation, and explicit `SMAppService` start-at-login control require no daemon, screenshot IPC, or second state owner.
-- The ad-hoc-signed Mac bundle was launched with `CFFIXED_USER_HOME` pointed at an empty synthetic temporary root. A target-window-only Core Graphics capture verified its 1080×720 empty workspace, private-default hierarchy, permission card, recorder controls, and no-step state without reading the real Application Support store or the rest of the desktop. The rebuilt UI requests Screen Recording and Accessibility sequentially, links directly to both privacy panes, hides the entire permission card after both grants, shows contextual review guidance, and exposes **Sign in to AI Studio** using the bundled public client.
+- The final ad-hoc-signed Mac bundle was launched with an isolated synthetic data
+  root. A target-window-only Core Graphics capture verified its review workspace
+  without reading the real Application Support store or the rest of the desktop.
+  The two-column sidebar controls, title/save layout, two-step status, editor
+  tools, instructions, screenshot preview, and review/publish guidance have no
+  clipping or broken wrapping at the minimum supported layout. The rebuilt UI
+  requests Screen Recording and Accessibility sequentially, links directly to
+  both privacy panes, hides the entire permission card after both grants, and
+  exposes **Sign in to AI Studio** using the bundled public client.
 - The original Mac app icon was generated without an input image, production asset, third-party logo, font, or trademark. Its transparent 1024×1024 master remains recognizable at the 16-point Retina representation; the derived `.icns` is declared by `CFBundleIconFile`, copied into the bundle, and covered by a fail-closed build check.
-- `pnpm check` passes formatting, OpenWiki normalization, lint, strict typechecking, generated contract/message freshness, five shared fixture validations, 97 TypeScript tests, production builds, the real extension worker/panel restart workflow, the irreversible redaction golden, extension packaging, 51 Swift tests, and the dependency-license allowlist.
+- `pnpm check` passes formatting, OpenWiki normalization, lint, strict typechecking, generated contract/message freshness, five shared fixture validations, 109 TypeScript tests, production builds, the real extension worker/panel restart workflow, the irreversible redaction golden, extension packaging, 58 Swift tests, and the dependency-license allowlist.
 - `scripts/build-macos-app.sh` compiles the production SwiftUI workspace, runs the native redaction, production-gateway, pin, and bridge verifiers, validates the plist, produces the app bundle, and verifies its ad-hoc signature. `pnpm security:audit` reports no known vulnerabilities.
 - GitHub CI and the automatic Claude review pass on PR #11. The review reported no code findings; its sole workflow annotation identified the deprecated Node 20-based checkout v4 action, so every workflow now pins the verified official checkout v7.0.1 commit.
 - [ADR 0005](adr/0005-atrium-aligned-visual-language.md) records the cross-platform presentation roles, privacy hierarchy, accessibility requirements, and no-production-asset boundary.

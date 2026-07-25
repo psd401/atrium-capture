@@ -19,12 +19,13 @@ M0 through M7 are implemented locally. The production Manifest V3 extension and
 native SwiftUI/AppKit companion record, recover, review, annotate, permanently
 redact, and package synthetic workflows through the same generated contracts.
 Durable browser and native publishers pass failure-after-commit tests and
-production-contract request/response tests. Native district sign-in is live
-verified. Browser registration, token exchange, and real extension-worker access
-to every documented content route are live verified; final private-draft
-acceptance is an operator-attended synthetic check. Release signing/deployment
-remain external gates, and Atrium's one non-idempotent asset-reservation interval
-is documented rather than hidden.
+production-contract request/response tests. Production acceptance is complete
+with synthetic data: the extension recorded, reviewed, permanently redacted, and
+published a six-image private draft whose title, instructions, and images were
+verified in Atrium's editor; the Apple Development-signed Mac app resumed a
+durable publish job without duplication and produced a two-image private draft
+with a current version and synchronized title. Release signing, notarization,
+store submission, and managed deployment remain external gates.
 
 ## Repository map
 

@@ -3,6 +3,8 @@ import AtriumCaptureCore
 import Foundation
 
 #if os(macOS)
+import CryptoKit
+
 public let atriumProductionOrigin = URL(string: "https://aistudio.psd401.ai")!
 public let atriumMacProductionOAuthClientID = "fbdaa815-1b0f-435b-805f-1732805720c1"
 public let atriumMacOAuthRedirectScheme = "org.psd401.atrium-capture"
@@ -151,7 +153,7 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
         pixelWidth: Int,
         pixelHeight: Int,
         sha256: String,
-        idempotencyKey _: String
+        idempotencyKey: String
     ) async throws -> NativeAssetResult {
         guard !pngData.isEmpty,
               pngData.count <= 20 * 1_024 * 1_024,
@@ -160,6 +162,12 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
         else { throw NativeGatewayFailure(code: "ASSET_INVALID", retryable: false) }
         let objectID = try Self.uuid(objectID)
         let localAssetID = try Self.uuid(localAssetID)
+        let actualSHA256 = SHA256.hash(data: pngData)
+            .map { String(format: "%02x", $0) }
+            .joined()
+        guard actualSHA256 == sha256.lowercased() else {
+            throw NativeGatewayFailure(code: "ASSET_SHA256_MISMATCH", retryable: false)
+        }
         let digest = try Self.base64URLDigest(hex: sha256)
         let filename = "atrium-capture-\(localAssetID).png"
 
@@ -174,15 +182,6 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
             if existing.state == "ready" {
                 return NativeAssetResult(assetID: existing.id)
             }
-            do {
-                return try await completeAsset(
-                    objectID: objectID,
-                    assetID: existing.id,
-                    digest: digest
-                )
-            } catch {
-                if existing.uploadExpiresAt > Date() { throw error }
-            }
         }
 
         let initiated = try await initiateAsset(
@@ -192,27 +191,43 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
             pngData: pngData,
             digest: digest,
             pixelWidth: pixelWidth,
-            pixelHeight: pixelHeight
+            pixelHeight: pixelHeight,
+            idempotencyKey: idempotencyKey
         )
         var uploadRequest = URLRequest(url: try Self.validUploadURL(initiated.uploadURL))
         uploadRequest.httpMethod = "PUT"
         uploadRequest.httpBody = pngData
         uploadRequest.setValue(initiated.contentTypeHeader, forHTTPHeaderField: "content-type")
-        uploadRequest.setValue(initiated.checksumHeader, forHTTPHeaderField: "x-amz-checksum-sha256")
+        if initiated.sendChecksumHeader {
+            uploadRequest.setValue(
+                initiated.checksumHeader,
+                forHTTPHeaderField: "x-amz-checksum-sha256"
+            )
+        }
         var uploadFailure: Error?
         do {
             let (data, response) = try await transport.data(for: uploadRequest)
             guard data.count <= 1_000_000,
-                  let http = response as? HTTPURLResponse,
-                  (200..<300).contains(http.statusCode)
+                  let http = response as? HTTPURLResponse
             else {
-                throw NativeGatewayFailure(code: "ATRIUM_ASSET_UPLOAD_FAILED", retryable: true)
+                throw NativeGatewayFailure(code: "ATRIUM_ASSET_UPLOAD_INVALID_RESPONSE", retryable: false)
             }
+            guard (200..<300).contains(http.statusCode) else {
+                let requestID = http.value(forHTTPHeaderField: "x-amz-request-id").flatMap {
+                    $0.isEmpty || $0.count > 200 ? nil : $0
+                }
+                throw NativeGatewayFailure(
+                    code: "ATRIUM_ASSET_UPLOAD_HTTP_\(http.statusCode)",
+                    requestID: requestID,
+                    retryable: http.statusCode == 408
+                        || http.statusCode == 429
+                        || http.statusCode >= 500
+                )
+            }
+        } catch let failure as NativeGatewayFailure {
+            uploadFailure = failure
         } catch {
-            uploadFailure = NativeGatewayFailure(
-                code: "ATRIUM_ASSET_UPLOAD_FAILED",
-                retryable: true
-            )
+            uploadFailure = NativeGatewayFailure(code: "ATRIUM_ASSET_UPLOAD_FAILED", retryable: true)
         }
 
         do {
@@ -252,9 +267,10 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
         guard try Self.uuid(data["currentVersionId"]) == versionID,
               let slug = Self.string(data["slug"], maximum: 500)
         else { throw Self.invalidResponse() }
+        _ = slug
         return NativeVersionResult(
             versionID: versionID,
-            readerURL: origin.appending(path: "c/\(slug)").absoluteString
+            readerURL: origin.appending(path: "atrium/\(objectID)/edit").absoluteString
         )
     }
 
@@ -309,7 +325,8 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
         pngData: Data,
         digest: String,
         pixelWidth: Int,
-        pixelHeight: Int
+        pixelHeight: Int,
+        idempotencyKey: String
     ) async throws -> InitiatedAsset {
         let response = try await apiJSON(
             path: "content/\(objectID)/assets",
@@ -322,7 +339,8 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
                 "purpose": "capture_step",
                 "width": pixelWidth,
                 "height": pixelHeight,
-            ]
+            ],
+            headers: ["Idempotency-Key": idempotencyKey]
         )
         let data = try Self.dataRecord(response)
         let asset = try Self.asset(data)
@@ -333,14 +351,67 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
               let uploadURL = Self.string(upload["url"], maximum: 8_192),
               let contentType = Self.string(headers["content-type"], maximum: 100),
               let checksum = Self.string(headers["x-amz-checksum-sha256"], maximum: 100),
-              contentType == "image/png"
+              contentType == "image/png",
+              Self.normalizedBase64Checksum(checksum) == digest
         else { throw Self.invalidResponse() }
         return InitiatedAsset(
             asset: asset,
             uploadURL: uploadURL,
             contentTypeHeader: contentType,
-            checksumHeader: checksum
+            checksumHeader: checksum,
+            sendChecksumHeader: try Self.shouldSendChecksumHeader(
+                uploadURL: uploadURL,
+                returnedChecksum: checksum
+            )
         )
+    }
+
+    private static func normalizedBase64Checksum(_ value: String) -> String? {
+        guard value.range(
+            of: "^[A-Za-z0-9+/]{43}=$",
+            options: .regularExpression
+        ) != nil else {
+            return nil
+        }
+        return value
+            .replacingOccurrences(of: "+", with: "-")
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: "=", with: "")
+    }
+
+    /// S3 may integrity-bind the checksum as a signed query item or as an
+    /// unhoisted signed header. Do not duplicate a hoisted checksum as an
+    /// unsigned x-amz-* header; S3 rejects that otherwise valid request.
+    private static func shouldSendChecksumHeader(
+        uploadURL: String,
+        returnedChecksum: String
+    ) throws -> Bool {
+        guard let components = URLComponents(string: uploadURL) else {
+            throw NativeGatewayFailure(
+                code: "ATRIUM_ASSET_UPLOAD_URL_INVALID",
+                retryable: false
+            )
+        }
+        let items = components.queryItems ?? []
+        let checksumQuery = items.first {
+            $0.name.lowercased() == "x-amz-checksum-sha256"
+        }?.value
+        if let checksumQuery, checksumQuery != returnedChecksum {
+            throw NativeGatewayFailure(
+                code: "ATRIUM_ASSET_CHECKSUM_TRANSPORT_MISMATCH",
+                retryable: false
+            )
+        }
+        let signedHeaders = Set(
+            (
+                items.first {
+                    $0.name.lowercased() == "x-amz-signedheaders"
+                }?.value ?? ""
+            )
+            .split(separator: ";")
+            .map { $0.lowercased() }
+        )
+        return checksumQuery == nil || signedHeaders.contains("x-amz-checksum-sha256")
     }
 
     private func completeAsset(
@@ -429,13 +500,8 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
         guard data.count <= 1_000_000,
               let http = response as? HTTPURLResponse
         else { throw Self.invalidResponse() }
-        let json: Any
-        do {
-            json = try JSONSerialization.jsonObject(with: data)
-        } catch {
-            throw Self.invalidResponse()
-        }
         guard (200..<300).contains(http.statusCode) else {
+            let json = try? JSONSerialization.jsonObject(with: data)
             let record = try? Self.record(json)
             let error = try? Self.record(record?["error"])
             let rawCode = Self.string(error?["code"], maximum: 100)
@@ -454,7 +520,11 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
                 retryable: retryable
             )
         }
-        return json
+        do {
+            return try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw Self.invalidResponse()
+        }
     }
 
     private static func asset(_ value: Any?) throws -> ContentAsset {
@@ -543,11 +613,29 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
               url.user == nil,
               url.password == nil,
               let host = url.host,
-              host == "amazonaws.com" ||
-                host.hasSuffix(".amazonaws.com") ||
-                host.hasSuffix(".amazonaws.com.cn")
+              isS3UploadHost(host)
         else { throw NativeGatewayFailure(code: "ATRIUM_UPLOAD_URL_INVALID", retryable: false) }
         return url
+    }
+
+    private static func isS3UploadHost(_ value: String) -> Bool {
+        let host = value.lowercased()
+        let labels = host.split(separator: ".").map(String.init)
+        let partitionLabels: Int
+        if host.hasSuffix(".amazonaws.com.cn") {
+            partitionLabels = 3
+        } else if host.hasSuffix(".amazonaws.com") {
+            partitionLabels = 2
+        } else {
+            return false
+        }
+        guard labels.count > partitionLabels else { return false }
+        return labels.dropLast(partitionLabels).contains { label in
+            guard label == "s3" || (label.hasPrefix("s3-") && label.count > 3) else {
+                return false
+            }
+            return label.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }
+        }
     }
 
     private static func invalidResponse() -> NativeGatewayFailure {
@@ -585,6 +673,7 @@ private struct InitiatedAsset {
     let uploadURL: String
     let contentTypeHeader: String
     let checksumHeader: String
+    let sendChecksumHeader: Bool
 }
 
 private func firstNonempty(_ values: String?...) -> String? {

@@ -173,8 +173,30 @@ Run `pnpm smoke:atrium` before authenticated acceptance. The Mac token request
 is a native `URLSession` request; browser token and extension-worker content
 boundaries have their own credential-free probes. District sign-in and
 callback/token persistence are live verified on an Apple Development-signed
-build; private-draft acceptance still requires the capture permissions above
-and should be repeated on the stably signed pilot build. The remaining
-asset-initiation limitation is described in ADR 0006. District notarization,
-MDM packaging, host installation, OAuth registration, and deployment require
-explicit authorization and credentials/configuration outside this repository.
+build. That signed build also resumed the same durable synthetic job after a
+direct-upload failure and produced one private draft with two images, a current
+version, an authoring link, and a synchronized title without duplication.
+
+For a repeatable private-draft acceptance of the assembled app, create a fresh
+isolated root and run the app binary with the synthetic acceptance switches:
+
+```sh
+acceptance_root="$(mktemp -d /private/tmp/atrium-capture-production-acceptance.XXXXXX)"
+ATRIUM_CAPTURE_PRODUCTION_ACCEPTANCE=1 \
+ATRIUM_CAPTURE_UI_FIXTURE=review \
+ATRIUM_CAPTURE_DATA_ROOT="$acceptance_root" \
+  "dist/macos/Atrium Capture.app/Contents/MacOS/AtriumCaptureMacApp"
+cat "$acceptance_root/acceptance-result.json"
+```
+
+The harness uses new UUIDs on every production run so capture provenance cannot
+collide with an earlier synthetic guide. It may reuse a valid Keychain session
+or show district login, creates only a private draft, never requests internal
+publication, writes no token/content identifier/image to its bounded result,
+and terminates itself. Success reports `ready_as_draft`, two assets, two steps,
+an authoring link, and synchronized title status.
+
+Repeat the physical capture-permission/device matrix above on the final
+district-signed pilot artifact. District notarization, MDM packaging, host
+installation, OAuth registration, and deployment require explicit authorization
+and credentials/configuration outside this repository.

@@ -87,6 +87,17 @@ export class BrowserPublicationService {
     return this.serialize(() => this.drive(jobId));
   }
 
+  async retry(jobId: string): Promise<AtriumCapturePublishJob> {
+    return this.serialize(async () => {
+      const capabilities = await this.gateway.capabilities();
+      assertDraftPublishingAvailable(capabilities, await this.authentication(capabilities));
+      const job = await this.publisher.retry(jobId);
+      await this.markSubmitted(job);
+      await this.recordHealth(job);
+      return job;
+    });
+  }
+
   async syncTitleForSession(sessionId: string): Promise<AtriumCapturePublishJob | undefined> {
     return this.serialize(async () => {
       const job = await this.repository.getLatestPublishJobForSession(sessionId);

@@ -46,6 +46,16 @@ try {
         {
           body: JSON.stringify({
             kind: 'document',
+            sourceRef: {
+              capturedAt: '2026-01-15T15:00:00.000Z',
+              clientSurface: 'browser',
+              clientVersion: '1.0.0',
+              externalId: '10000000-0000-4000-8000-000000000001',
+              provider: 'atrium-capture',
+              sourceOrigins: ['https://fixture.example.test'],
+              type: 'capture',
+            },
+            tags: ['atrium-capture'],
             title: 'Synthetic boundary check',
             visibility: { level: 'private' },
           }),

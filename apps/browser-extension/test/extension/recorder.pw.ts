@@ -9,6 +9,7 @@ import {
   test,
   type BrowserContext,
   type Page,
+  type TestInfo,
   type Worker,
 } from '@playwright/test';
 
@@ -53,12 +54,14 @@ test.afterAll(async () => {
   }
 });
 
-test('records a multi-page workflow across a forced service-worker stop', async () => {
+// Playwright requires an object-destructured fixture argument before TestInfo.
+// eslint-disable-next-line no-empty-pattern
+test('records a multi-page workflow across a forced service-worker stop', async ({}, testInfo) => {
   const panel = await context.newPage();
   await panel.goto(`chrome-extension://${extensionId}/sidepanel.html`);
   await panel.setViewportSize({ height: 900, width: 420 });
   await extensionWorker(context);
-  await expectNoHorizontalOverflow(panel);
+  await verifyResponsiveLayout(panel, testInfo, 'empty');
   const page = await context.newPage();
   await page.goto(`${fixtureOrigin}/index.html`);
   await page.bringToFront();
@@ -66,6 +69,15 @@ test('records a multi-page workflow across a forced service-worker stop', async 
   await expect(panel.getByRole('button', { name: 'Start recording' })).toBeFocused();
   await panel.getByRole('button', { name: 'Start recording' }).click();
   await expect.poll(async () => (await snapshot(panel))?.state).toBe('recording');
+
+  const beforeUntrustedSubmit = (await snapshot(panel))?.steps.length ?? 0;
+  await page.locator('form').evaluate((form) => {
+    form.dispatchEvent(new SubmitEvent('submit', { bubbles: true, cancelable: true }));
+  });
+  await expect(page).toHaveURL(`${fixtureOrigin}/index.html`);
+  await expect
+    .poll(async () => (await snapshot(panel))?.steps.length ?? 0)
+    .toBe(beforeUntrustedSubmit);
 
   await page.locator('#begin-request').click();
   await page.locator('#request-label').fill('SYNTHETIC_LITERAL_MUST_NOT_PERSIST');
@@ -112,13 +124,20 @@ test('records a multi-page workflow across a forced service-worker stop', async 
   await panel.getByRole('button', { name: 'Stop and review' }).click();
 
   await expect(panel.getByRole('status')).toContainText('Ready for review');
-  await expectNoHorizontalOverflow(panel);
+  await verifyResponsiveLayout(panel, testInfo, 'review');
   const finalSnapshot = await snapshot(panel);
   const finalIds = finalSnapshot?.steps.map((step) => step.stepId) ?? [];
   expect(new Set(finalIds).size).toBe(finalIds.length);
   for (const stepId of acknowledgedStepIds) {
     expect(finalIds.filter((candidate) => candidate === stepId)).toHaveLength(1);
   }
+  const instructions = finalSnapshot?.steps.map((step) => step.instruction.generatedText) ?? [];
+  expect(instructions).toContain('Choose an option in Synthetic destination.');
+  expect(instructions).toContain('Submit the form.');
+  expect(instructions).toContain('Use the Ctrl+K keyboard shortcut.');
+  expect(instructions).not.toContain('Use the Ctrl+Control keyboard shortcut.');
+  expect(instructions.every((instruction) => instruction.length <= 250)).toBe(true);
+  expect(instructions.join(' ')).not.toContain('Test-only password');
   await expect(panel.locator('ol > li')).toHaveCount(finalIds.length);
   await expect(
     panel.getByText('Typed values are omitted. Password fields are never captured.'),
@@ -170,7 +189,7 @@ test('records a multi-page workflow across a forced service-worker stop', async 
     ),
   ).toBeVisible();
   await expect(panel.getByRole('button', { name: 'Sign in to AI Studio' })).toBeVisible();
-  await expectNoHorizontalOverflow(panel);
+  await verifyResponsiveLayout(panel, testInfo, 'publishable');
 
   await panel.getByText('Support diagnostics').click();
   await expect(
@@ -252,9 +271,45 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
     .toBe(true);
 }
 
+async function expectNoClippedControls(page: Page): Promise<void> {
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const viewportWidth = document.documentElement.clientWidth;
+        return [...document.querySelectorAll('button, input, select, textarea, a')].every(
+          (element) => {
+            const rect = element.getBoundingClientRect();
+            if (rect.width === 0 || rect.height === 0) {
+              return true;
+            }
+            return rect.left >= -0.5 && rect.right <= viewportWidth + 0.5;
+          },
+        );
+      }),
+    )
+    .toBe(true);
+}
+
+async function verifyResponsiveLayout(
+  page: Page,
+  testInfo: TestInfo,
+  state: 'empty' | 'review' | 'publishable',
+): Promise<void> {
+  for (const width of [320, 360, 420]) {
+    await page.setViewportSize({ height: 900, width });
+    await expectNoHorizontalOverflow(page);
+    await expectNoClippedControls(page);
+    await page.screenshot({
+      fullPage: true,
+      path: testInfo.outputPath(`sidepanel-${state}-${width}.png`),
+    });
+  }
+  await page.setViewportSize({ height: 900, width: 420 });
+}
+
 interface RecorderSnapshot {
   assets: Array<{ state: string }>;
   state: string;
-  steps: Array<{ stepId: string }>;
+  steps: Array<{ instruction: { generatedText: string }; stepId: string }>;
   title: string;
 }

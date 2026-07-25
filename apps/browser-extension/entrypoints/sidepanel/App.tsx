@@ -515,6 +515,11 @@ export function App() {
     });
   };
 
+  const atriumDraftUrl = safeAtriumDraftUrl(
+    publication?.job?.readerUrl,
+    publication?.capabilities.mode,
+  );
+
   return (
     <main>
       <header>
@@ -1059,18 +1064,19 @@ export function App() {
                       : 'Publishing needs attention before it can continue.'}
                 </p>
               )}
-              {publication.job.lastError?.retryable && (
-                <button
-                  disabled={pending}
-                  onClick={() => void publisherCommand('publisher.retry')}
-                  type="button"
-                >
-                  Retry safely
-                </button>
-              )}
-              {publication.job.readerUrl && (
-                <a href={publication.job.readerUrl} rel="noreferrer" target="_blank">
-                  Open Atrium reader
+              {(publication.job.lastError || publication.job.phase === Phase.NeedsAttention) &&
+                publication.authentication === 'signed_in' && (
+                  <button
+                    disabled={pending}
+                    onClick={() => void publisherCommand('publisher.retry')}
+                    type="button"
+                  >
+                    {publication.job.lastError?.retryable ? 'Retry safely' : 'Try again'}
+                  </button>
+                )}
+              {atriumDraftUrl && (
+                <a href={atriumDraftUrl} rel="noreferrer" target="_blank">
+                  Open Atrium draft
                 </a>
               )}
               {publication.job.phase === Phase.ReadyAsDraft &&
@@ -1200,6 +1206,41 @@ function formatBytes(bytes: number): string {
     return `${Math.round(bytes / 1024)} KB`;
   }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function safeAtriumDraftUrl(
+  value: string | undefined,
+  mode: PublicationSnapshot['capabilities']['mode'] | undefined,
+): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  try {
+    const url = new URL(value);
+    if (url.username || url.password || url.hash || url.search) {
+      return undefined;
+    }
+    if (
+      mode === 'live' &&
+      url.origin === 'https://aistudio.psd401.ai' &&
+      /^\/atrium\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/edit$/i.test(
+        url.pathname,
+      )
+    ) {
+      return url.toString();
+    }
+    if (
+      mode === 'mock' &&
+      ((url.protocol === 'https:' && url.hostname.endsWith('.example.test')) ||
+        (url.protocol === 'http:' &&
+          (url.hostname === '127.0.0.1' || url.hostname === 'localhost')))
+    ) {
+      return url.toString();
+    }
+  } catch {
+    // A malformed persisted or gateway URL is not exposed as a navigation.
+  }
+  return undefined;
 }
 
 function privacyLabel(step: StepElement, issues: ReviewIssue[]): string {

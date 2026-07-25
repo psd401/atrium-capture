@@ -208,6 +208,54 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
         }
     }
 
+    func testExplicitRetryRepairsNeedsAttentionWithoutRemoteDuplicates() async throws {
+        for failure in [
+            MockNativeFailurePoint.object,
+            .asset,
+            .version,
+            .internalPublish,
+        ] {
+            let repository = MemoryNativePublishRepository(assets: [
+                "assets/publishable.png": Data([1, 2, 3]),
+            ])
+            let gateway = MockNativeAtriumGateway(
+                failAfterCommitAt: failure,
+                failureRetryable: false
+            )
+            let publisher = DurableNativePublisher(repository: repository, gateway: gateway)
+            let job = try await publisher.enqueue(
+                session: makeSession(
+                    state: .publishable,
+                    review: .approved,
+                    assetState: .publishableLocal,
+                    stepReview: .approved
+                ),
+                jobID: "needs-attention-\(failure.rawValue)"
+            )
+
+            do {
+                _ = try await publisher.resume(jobID: job.jobID, publishInternal: true)
+                XCTFail("Expected the synthetic non-retryable response failure.")
+            } catch {}
+            let interrupted = try XCTUnwrap(repository.loadJob(jobID: job.jobID))
+            XCTAssertEqual(interrupted.phase, .needsAttention)
+            XCTAssertFalse(interrupted.lastError?.retryable ?? true)
+
+            let recovered = try await publisher.retry(
+                jobID: job.jobID,
+                publishInternal: true
+            )
+
+            XCTAssertEqual(recovered.phase, .complete)
+            XCTAssertNil(recovered.lastError)
+            let counts = gateway.remoteCounts
+            XCTAssertEqual(counts.objects, 1)
+            XCTAssertEqual(counts.assets, 1)
+            XCTAssertEqual(counts.versions, 1)
+            XCTAssertEqual(counts.publishes, 1)
+        }
+    }
+
     func testPublisherFreezesAmbiguousCreateTitleThenSynchronizesLatestRename() async throws {
         let repository = MemoryNativePublishRepository(assets: [
             "assets/publishable.png": Data([1, 2, 3]),

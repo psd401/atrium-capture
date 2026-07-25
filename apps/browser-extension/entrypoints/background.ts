@@ -34,12 +34,12 @@ export default defineBackground(() => {
   void browser.storage.managed
     .setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' })
     .catch(() => undefined);
-  void browser.storage.session
-    .setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' })
-    .catch(() => undefined);
+  const tokenStorageReady = browser.storage.local.setAccessLevel({
+    accessLevel: 'TRUSTED_CONTEXTS',
+  });
   const auth = new BrowserOAuthSession(
     browser.identity,
-    new BrowserTrustedTokenStore(browser.storage.session),
+    new BrowserTrustedTokenStore(browser.storage.local, tokenStorageReady),
     async () => {
       const snapshot = await managedPolicy.load();
       const clientId = snapshot.valid
@@ -239,7 +239,7 @@ export default defineBackground(() => {
           throw new Error('content_cannot_publish');
         }
         try {
-          return await publication.resume(message.payload.jobId);
+          return await publication.retry(message.payload.jobId);
         } catch (error) {
           return publicationFailureResponse(error);
         }

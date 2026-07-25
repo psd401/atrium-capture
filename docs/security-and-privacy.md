@@ -30,7 +30,9 @@ Blur is not sufficient for secrets that must be irrecoverable; permanent redacti
 - Chrome: Authorization Code + PKCE through `chrome.identity.launchWebAuthFlow()`.
 - Mac: Authorization Code + PKCE through `ASWebAuthenticationSession`.
 - No permanent `sk-` key and no OAuth client secret in either application.
-- Browser access/refresh tokens live in trusted-only extension session storage; content scripts never receive them and a full browser exit clears them.
+- Browser access/refresh tokens live in trusted-only extension-local storage;
+  content scripts never receive them, and sign-out/revocation clears them.
+  Persistence across managed browser restarts prevents repeated district login.
 - Mac refresh credentials live in Keychain.
 
 Both clients use the fixed production issuer and a bundled approved public client UUID. Optional managed preferences may override only that non-secret identifier for an approved test client. OAuth responses are bounded and validated as Bearer tokens; refresh rotation is serialized. The Mac credential record is stored through SecItem off the main thread. Tokens never enter session JSON, native messages, diagnostics, or console output.

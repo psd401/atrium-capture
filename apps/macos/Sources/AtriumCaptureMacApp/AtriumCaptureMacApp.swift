@@ -71,8 +71,11 @@ final class CaptureAppModel: ObservableObject {
 
     var canRetryPublish: Bool {
         currentSessionHasPublishJob
-            && publishJob?.lastError?.retryable == true
-            && publishJob?.phase != .needsAttention
+            && publishJob?.lastError != nil
+    }
+
+    var canOpenAtriumDraft: Bool {
+        publishJob?.readerURL != nil
     }
 
     var canEditGuideContent: Bool {
@@ -129,13 +132,16 @@ final class CaptureAppModel: ObservableObject {
         }
         let next = failure.retryable
             ? "Retry reuses the same durable request; do not start the capture over."
-            : "Contact district support with the code below."
+            : "Try again after confirming sign-in. If the same code repeats, contact district support."
         return "\(action) \(next)"
     }
 
     init() {
         do {
-            let root = try MacApplicationSupport.rootURL()
+            let environment = ProcessInfo.processInfo.environment
+            let root = try MacApplicationSupport.rootURL(environment: environment)
+            let productionAcceptanceResultURL =
+                try Self.productionAcceptanceResultURL(environment: environment, root: root)
             let recorder = try NativeRecorder(
                 persistence: FileNativeRecorderPersistence(url: root.appendingPathComponent("recorder-state.json"))
             )
@@ -150,7 +156,7 @@ final class CaptureAppModel: ObservableObject {
             )
             let oauthCoordinator = NativeOAuthCoordinator()
             let productionSettings = NativeAtriumProductionSettings.load()
-            let localMockEnabled = ProcessInfo.processInfo.environment["ATRIUM_CAPTURE_LOCAL_MOCK"] == "1"
+            let localMockEnabled = environment["ATRIUM_CAPTURE_LOCAL_MOCK"] == "1"
             let gateway: any NativeAtriumGateway
             if localMockEnabled {
                 gateway = MockNativeAtriumGateway()
@@ -175,6 +181,12 @@ final class CaptureAppModel: ObservableObject {
             regionSelector = RegionSelectionController(capture: capture)
             pinBoard = try PinBoard(
                 persistence: FilePinBoardPersistence(url: root.appendingPathComponent("pin-history.json"))
+            )
+            try Self.seedSyntheticReviewIfRequested(
+                environment: environment,
+                recorder: recorder,
+                repository: repository,
+                vault: vault
             )
             let recorderSession = recorder.snapshot()
             if let recorderSession {
@@ -228,17 +240,312 @@ final class CaptureAppModel: ObservableObject {
             } else if let productionSettings {
                 atriumAuthentication = .signedOut
                 Task { @MainActor [weak self] in
-                    self?.atriumAuthentication = await oauthCoordinator.status(
+                    guard let self else { return }
+                    atriumAuthentication = await oauthCoordinator.status(
                         configuration: productionSettings.oauth
                     )
-                    if self?.atriumAuthentication == .signedIn {
-                        await self?.resumePendingPublications()
+                    if let productionAcceptanceResultURL {
+                        do {
+                            if atriumAuthentication != .signedIn {
+                                _ = try await oauthCoordinator.signIn(
+                                    configuration: productionSettings.oauth
+                                )
+                                atriumAuthentication = .signedIn
+                            }
+                            await runProductionAcceptance(
+                                resultURL: productionAcceptanceResultURL
+                            )
+                        } catch {
+                            writeProductionAcceptanceResult(
+                                [
+                                    "status": "fail",
+                                    "stage": "authentication",
+                                ],
+                                to: productionAcceptanceResultURL
+                            )
+                            NSApplication.shared.terminate(nil)
+                        }
+                    } else if atriumAuthentication == .signedIn {
+                        await resumePendingPublications()
                     }
                 }
             }
         } catch {
-            fatalError("Atrium Capture could not initialize local storage.")
+            let failure = error as NSError
+            fatalError(
+                "Atrium Capture could not initialize local storage "
+                    + "(\(failure.domain):\(failure.code))."
+            )
         }
+    }
+
+    private static func seedSyntheticReviewIfRequested(
+        environment: [String: String],
+        recorder: NativeRecorder,
+        repository: FileNativePublishRepository,
+        vault: NativeAssetVault
+    ) throws {
+        guard
+            environment["ATRIUM_CAPTURE_LOCAL_MOCK"] == "1"
+                || environment["ATRIUM_CAPTURE_PRODUCTION_ACCEPTANCE"] == "1",
+            environment["ATRIUM_CAPTURE_UI_FIXTURE"] == "review",
+            recorder.snapshot() == nil
+        else {
+            return
+        }
+
+        let productionAcceptance =
+            environment["ATRIUM_CAPTURE_PRODUCTION_ACCEPTANCE"] == "1"
+        let identifier: (String) -> String = { deterministicValue in
+            productionAcceptance ? UUID().uuidString.lowercased() : deterministicValue
+        }
+        let sessionID = identifier("71000000-0000-4000-8000-000000000001")
+        let baseDate = Date(timeIntervalSince1970: 1_768_473_600)
+        _ = try recorder.start(
+            sessionID: sessionID,
+            title: "Synthetic native review guide",
+            appVersion: "1.0.0-ui-test",
+            osVersion: "synthetic",
+            now: baseDate
+        )
+        let frame = NativeCapturedFrame(
+            pngData: try syntheticReviewPNG(),
+            pixelWidth: 900,
+            pixelHeight: 520,
+            backingScaleFactor: 2
+        )
+        let firstAsset = try vault.writeRaw(
+            frame: frame,
+            sessionID: sessionID,
+            assetID: identifier("72000000-0000-4000-8000-000000000001")
+        )
+        let secondAsset = try vault.writeRaw(
+            frame: frame,
+            sessionID: sessionID,
+            assetID: identifier("72000000-0000-4000-8000-000000000002")
+        )
+        _ = try recorder.record(
+            NativeSemanticEvent(
+                eventID: identifier("73000000-0000-4000-8000-000000000001"),
+                occurredAt: baseDate.addingTimeInterval(1),
+                action: .click,
+                accessibilityRole: "AXButton",
+                accessibleName: "Synthetic continue button",
+                bounds: NativeRect(x: 70, y: 90, width: 220, height: 48),
+                appName: "Synthetic Fixture",
+                bundleID: "org.example.synthetic-fixture",
+                windowTitle: "Synthetic workflow",
+                backingScaleFactor: 2
+            ),
+            screenshot: firstAsset
+        )
+        _ = try recorder.record(
+            NativeSemanticEvent(
+                eventID: identifier("73000000-0000-4000-8000-000000000002"),
+                occurredAt: baseDate.addingTimeInterval(2),
+                action: .input,
+                accessibilityRole: "AXTextField",
+                accessibleName: "Synthetic account field",
+                bounds: NativeRect(x: 70, y: 170, width: 420, height: 48),
+                appName: "Synthetic Fixture",
+                bundleID: "org.example.synthetic-fixture",
+                windowTitle: "Synthetic workflow",
+                backingScaleFactor: 2
+            ),
+            screenshot: secondAsset
+        )
+        let stopped = try recorder.stop(now: baseDate.addingTimeInterval(3))
+        let canonical = try repository.reconcileSession(stopped)
+        try recorder.replaceReviewedSession(canonical)
+    }
+
+    private static func syntheticReviewPNG() throws -> Data {
+        guard
+            let bitmap = NSBitmapImageRep(
+                bitmapDataPlanes: nil,
+                pixelsWide: 900,
+                pixelsHigh: 520,
+                bitsPerSample: 8,
+                samplesPerPixel: 4,
+                hasAlpha: true,
+                isPlanar: false,
+                colorSpaceName: .deviceRGB,
+                bytesPerRow: 0,
+                bitsPerPixel: 0
+            ),
+            let context = NSGraphicsContext(bitmapImageRep: bitmap)
+        else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        NSColor(calibratedRed: 0.96, green: 0.97, blue: 0.96, alpha: 1).setFill()
+        NSRect(x: 0, y: 0, width: 900, height: 520).fill()
+        NSColor(calibratedRed: 0.05, green: 0.23, blue: 0.21, alpha: 1).setFill()
+        NSBezierPath(roundedRect: NSRect(x: 55, y: 380, width: 790, height: 78), xRadius: 16, yRadius: 16)
+            .fill()
+        NSString(string: "Synthetic workflow preview").draw(
+            at: NSPoint(x: 82, y: 402),
+            withAttributes: [
+                .font: NSFont.systemFont(ofSize: 24, weight: .bold),
+                .foregroundColor: NSColor.white,
+            ]
+        )
+        NSColor.white.setFill()
+        NSBezierPath(roundedRect: NSRect(x: 55, y: 74, width: 790, height: 270), xRadius: 16, yRadius: 16)
+            .fill()
+        NSString(string: "Synthetic account field").draw(
+            at: NSPoint(x: 82, y: 262),
+            withAttributes: [
+                .font: NSFont.systemFont(ofSize: 17, weight: .semibold),
+                .foregroundColor: NSColor.darkGray,
+            ]
+        )
+        NSColor(calibratedWhite: 0.91, alpha: 1).setFill()
+        NSBezierPath(roundedRect: NSRect(x: 82, y: 194, width: 560, height: 48), xRadius: 8, yRadius: 8)
+            .fill()
+        NSColor(calibratedRed: 0.05, green: 0.23, blue: 0.21, alpha: 1).setFill()
+        NSBezierPath(roundedRect: NSRect(x: 82, y: 112, width: 245, height: 52), xRadius: 10, yRadius: 10)
+            .fill()
+        NSString(string: "Continue").draw(
+            at: NSPoint(x: 158, y: 126),
+            withAttributes: [
+                .font: NSFont.systemFont(ofSize: 18, weight: .semibold),
+                .foregroundColor: NSColor.white,
+            ]
+        )
+        context.flushGraphics()
+        NSGraphicsContext.restoreGraphicsState()
+        guard let data = bitmap.representation(using: .png, properties: [:]) else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+        return data
+    }
+
+    private static func productionAcceptanceResultURL(
+        environment: [String: String],
+        root: URL
+    ) throws -> URL? {
+        guard environment["ATRIUM_CAPTURE_PRODUCTION_ACCEPTANCE"] == "1" else {
+            return nil
+        }
+        guard
+            environment["ATRIUM_CAPTURE_LOCAL_MOCK"] != "1",
+            environment["ATRIUM_CAPTURE_UI_FIXTURE"] == "review"
+        else {
+            throw CocoaError(.fileReadNoPermission)
+        }
+        // MacApplicationSupport.rootURL has already required and bounded this
+        // exact production-acceptance root. Do not re-normalize it here: directory
+        // URLs may have an empty lastPathComponent when they retain a trailing
+        // slash, causing a valid isolated root to fail initialization.
+        return root.appendingPathComponent("acceptance-result.json")
+    }
+
+    private func runProductionAcceptance(resultURL: URL) async {
+        do {
+            guard let sensitiveStep = session?.steps.first(where: { $0.action == .input }) else {
+                throw NativeReviewError.stepNotFound
+            }
+            addAnnotation(
+                stepID: sensitiveStep.stepID,
+                kind: .redaction,
+                geometry: Geometry(height: 70, width: 480, x: 90, y: 150)
+            )
+            flattenAndApprove()
+            guard let reviewed = session,
+                  reviewed.state == .publishable,
+                  reviewed.policy.reviewStatus == .approved
+            else {
+                throw NativeReviewError.incompletePrivacyReview
+            }
+            let existingJob = try repository.listJobs().last(where: {
+                $0.sessionID == reviewed.sessionID
+            })
+            var job: AtriumCapturePublishJob
+            if let existingJob {
+                job = existingJob.phase == .needsAttention
+                    ? try await publisher.retry(jobID: existingJob.jobID)
+                    : try await publisher.resume(jobID: existingJob.jobID)
+            } else {
+                job = try await publisher.enqueue(
+                    session: reviewed,
+                    collectionID: defaultCollectionID
+                )
+                job = try await publisher.resume(jobID: job.jobID)
+            }
+            publishJob = job
+            guard
+                job.phase == .readyAsDraft,
+                job.contentObjectID != nil,
+                job.currentVersionID != nil,
+                job.readerURL != nil,
+                job.assetUploads?.allSatisfy({
+                    $0.state == .ready && $0.remoteAssetID != nil
+                }) == true
+            else {
+                throw NativePublishError.gateway(
+                    code: job.lastError?.code ?? "ACCEPTANCE_DRAFT_INCOMPLETE"
+                )
+            }
+
+            let renameSuffix = " — title sync verified"
+            let renamedTitle = reviewed.title.hasSuffix(renameSuffix)
+                ? reviewed.title
+                : "\(reviewed.title)\(renameSuffix)"
+            let renamed = try repository.updateSessionTitle(
+                sessionID: reviewed.sessionID,
+                title: renamedTitle,
+                now: Date()
+            )
+            try recorder.replaceReviewedSession(renamed)
+            session = renamed
+            guard let synchronized = await publisher.syncTitle(jobID: job.jobID),
+                  synchronized.remoteTitle == renamedTitle,
+                  synchronized.lastError == nil
+            else {
+                throw NativePublishError.gateway(code: "ACCEPTANCE_TITLE_SYNC_FAILED")
+            }
+            publishJob = synchronized
+            writeProductionAcceptanceResult(
+                [
+                    "assetCount": synchronized.assetUploads?.count ?? 0,
+                    "internalPublication": false,
+                    "phase": synchronized.phase.rawValue,
+                    "readerLink": "present",
+                    "status": "pass",
+                    "stepCount": renamed.steps.count,
+                    "titleSynchronized": true,
+                ],
+                to: resultURL
+            )
+        } catch {
+            let persisted = (try? repository.listJobs())?.last
+            writeProductionAcceptanceResult(
+                [
+                    "code": persisted?.lastError?.code ?? "ACCEPTANCE_FAILED",
+                    "phase": persisted?.phase.rawValue ?? "not_started",
+                    "status": "fail",
+                    "stage": "private_draft",
+                ],
+                to: resultURL
+            )
+        }
+        NSApplication.shared.terminate(nil)
+    }
+
+    private func writeProductionAcceptanceResult(
+        _ result: [String: Any],
+        to url: URL
+    ) {
+        guard JSONSerialization.isValidJSONObject(result),
+              let data = try? JSONSerialization.data(
+                  withJSONObject: result,
+                  options: [.sortedKeys]
+              )
+        else { return }
+        try? data.write(to: url, options: .atomic)
     }
 
     var liveAtriumAvailable: Bool {
@@ -247,6 +554,28 @@ final class CaptureAppModel: ObservableObject {
 
     var atriumConfigured: Bool {
         localMockEnabled || productionSettings != nil
+    }
+
+    func openAtriumDraft() {
+        guard
+            let value = publishJob?.readerURL,
+            let url = URL(string: value),
+            url.scheme == "https",
+            url.host == atriumProductionOrigin.host,
+            url.port == nil,
+            url.user == nil,
+            url.password == nil,
+            url.query == nil,
+            url.fragment == nil,
+            url.path.range(
+                of: #"^/atrium/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/edit$"#,
+                options: .regularExpression
+            ) != nil
+        else {
+            statusCode = "ATRIUM_DRAFT_LINK_INVALID"
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     func signInToAtrium() {
@@ -551,11 +880,11 @@ final class CaptureAppModel: ObservableObject {
     }
 
     func retryPublish() {
-        guard let job = publishJob, job.lastError?.retryable == true else { return }
+        guard let job = publishJob, job.lastError != nil else { return }
         statusCode = "RETRYING_ATRIUM_PUBLISH"
         Task { @MainActor in
             do {
-                let resumed = try await publisher.resume(jobID: job.jobID)
+                let resumed = try await publisher.retry(jobID: job.jobID)
                 if session?.sessionID == resumed.sessionID {
                     publishJob = resumed
                     reloadActiveSessionFromRepository(sessionID: resumed.sessionID)

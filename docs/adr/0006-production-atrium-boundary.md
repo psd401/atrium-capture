@@ -13,7 +13,9 @@ application identifiers rather than credentials. Requiring each employee or
 device policy to supply those identifiers would turn an administrator detail into
 an avoidable end-user failure mode.
 
-The authored-asset initiation route does not accept an idempotency key and does not expose a uniqueness constraint over object, filename, and digest. Completion is idempotent once an asset is ready.
+The authored-asset initiation route now accepts an idempotency key and returns
+the same asset reservation with a refreshed upload request when that key is
+replayed. Completion is idempotent once an asset is ready.
 
 ## Decision
 
@@ -28,19 +30,44 @@ The authored-asset initiation route does not accept an idempotency key and does 
   user configures OAuth. Strict Chrome managed policy, MDM preferences, and local
   environment variables may override the public UUIDs for an approved test
   environment; invalid policy still fails closed. Neither UUID is a credential.
-- Browser tokens live in `chrome.storage.session` after it is restricted to trusted contexts. Mac tokens live in Keychain. Refresh-token rotation is serialized; content scripts, native messages, diagnostics, and logs receive no token.
+- Browser tokens live in `chrome.storage.local` after it is restricted to trusted
+  extension contexts. This supports unattended service-worker and browser
+  restarts on managed devices; sign-out/revocation clears the record. Mac tokens
+  live in Keychain. Refresh-token rotation is serialized; content scripts,
+  native messages, diagnostics, and logs receive no token.
 - Object creation is bodyless, tagged `atrium-capture`, explicitly private, and carries the immutable capture `sourceRef`. The client rejects a response that is not private or unexpectedly contains a current version.
-- Only flattened `publishable_local` image bytes enter the direct presigned S3 upload. The S3 request receives exactly the server-returned content type/checksum headers and never receives the Atrium bearer token.
+- Browser source provenance retains only normalized HTTP(S) origins. Literal
+  loopback, link-local, and private-network addresses (and `localhost`) are
+  omitted: they disclose workstation topology, have no durable reader value, and
+  can correctly trip production edge SSRF protections. Internal district DNS
+  names remain eligible when source-origin retention policy permits them.
+- Only flattened `publishable_local` image bytes enter the direct presigned S3
+  upload. The S3 request uses the server-returned content type and its
+  integrity-bound checksum. AWS may bind that checksum in the signed URL query
+  or in `X-Amz-SignedHeaders`; the clients omit a byte-identical query/header
+  duplicate because S3 rejects an extra unsigned `x-amz-*` header, and fail
+  closed if the values disagree or do not encode the reviewed derivative's
+  expected SHA-256. Each gateway independently recomputes SHA-256 from the
+  exact flattened bytes before any network request and rejects a caller/digest
+  mismatch. The Atrium bearer token never enters the S3 request. The
+  upload URL must use HTTPS and an AWS S3 service hostname; a different AWS
+  service hostname is rejected before image bytes are read.
 - Markdown uses only canonical `::atrium-asset{...}` directives. Version creation uses `If-Match: "none"`; internal publication is a separate user action bound to the exact returned version ETag.
-- Before reserving an asset, the gateway lists the object's assets and reuses a matching deterministic filename, digest, byte length, MIME type, and dimensions. It also completes a matching pending reservation to recover an ambiguous upload/completion response.
+- Before reserving an asset, the gateway lists the object's assets and reuses a
+  matching ready asset by deterministic filename, digest, byte length, MIME type,
+  and dimensions. Pending reservations are replayed through the documented
+  idempotent initiation route to obtain a fresh, short-lived upload request,
+  re-uploaded, and completed. This recovers process termination before either the
+  upload URL or completion receipt is durably recorded without creating a second
+  asset row.
 
 ## Consequences
 
-Private draft publication is locally complete and ready once the two public OAuth
-clients are registered. Employees only choose **Sign in to AI Studio** and
-complete the district login; client registration and UUID distribution are not
-part of their workflow. Production OIDC discovery and the unauthenticated content
-boundary are covered by a credential-free smoke command.
+Private draft publication is production-accepted from both clients. Employees
+only choose **Sign in to AI Studio** and complete the district login; client
+registration and UUID distribution are not part of their workflow. Production
+OIDC discovery and the unauthenticated content boundary are covered by
+credential-free smoke commands.
 
 The browser's token POST is a cross-origin request from the stable extension
 origin `chrome-extension://jldnpmcpimhabiphcglkbgmbffpoocpo`; it cannot use the
@@ -55,4 +82,7 @@ documented content route from the built extension worker; this is required
 because a Node fetch cannot reproduce Chrome's native-function receiver rules.
 The Mac `URLSession` exchange is not a browser CORS request.
 
-One server-side durability gap remains: if the process dies after Atrium commits asset initiation but before the client receives and durably records the one-time presigned URL, the client cannot upload to that reservation. While it is unexpired, a deterministic retry fails safely rather than creating another row; after expiry, a retry may create a replacement reservation and leave the expired row for server lifecycle cleanup. Strict no-duplicate-asset-row recovery for that exact interval requires Atrium to make initiation idempotent or return a replacement upload request for a deterministic reservation. The client does not work around this with a private host, guessed route, or unredacted upload.
+Atrium's idempotent asset-initiation contract closes the former reservation
+recovery gap: the stable per-asset key returns the same row with a replacement
+upload request. The client does not work around storage failures with a private
+host, guessed route, or unredacted upload.

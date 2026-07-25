@@ -1,6 +1,9 @@
 # Milestones
 
-Verification evidence is recorded in [verification.md](verification.md). M0 through M7 are locally complete; physical-device release acceptance remains in the Mac runbook. Live Atrium dependencies remain capability-gated as documented below.
+Verification evidence is recorded in [verification.md](verification.md). M0
+through M7 are locally complete. Production private-draft publishing is accepted
+from both clients with synthetic fixtures; physical-device release acceptance
+and managed distribution remain in the browser and Mac runbooks.
 
 ## M0 — Contracts and repository foundation
 
@@ -33,12 +36,20 @@ Exit gate: golden tests prove exported pixels contain no recoverable redacted co
 - Authorization Code + PKCE.
 - Collection picker or managed-default fallback.
 - Durable outbox and Atrium gateway.
-- Create private object, upload immutable assets, create Markdown version, and return Atrium reader link.
+- Create a private object, upload immutable assets, create a Markdown version, and return its private Atrium authoring link.
 - Explicit internal publication after review.
 
 Exit gate: network interruption at every phase resumes without duplicate content/assets/versions; private is the default.
 
-Production status: the documented OAuth, collection, content, version, authored-asset, and internal-publication clients are implemented and contract-tested. Both administrator-registered public client UUIDs are bundled. Authorization redirects, district login, and exact first-party no-consent behavior now work. Browser token exchange remains externally blocked because Atrium rejects the exact stable `chrome-extension://` origin before code validation. Atrium asset initiation still lacks idempotency, so the exact post-reservation/pre-response interval remains an external row-level deduplication gap; clients recover every later upload/completion interval safely.
+Production status: the documented OAuth, collection, content, version,
+authored-asset, title-update, and internal-publication clients are implemented
+and contract-tested. Both administrator-registered public client UUIDs are
+bundled. Authorization redirects, district login, exact first-party no-consent
+behavior, browser token exchange, idempotent asset initiation, direct S3 upload,
+completion, and version creation are live verified. The extension produced a
+six-image private draft; its exact title, instructions, authoring route, and
+loaded image elements were verified in Atrium. The signed Mac app produced a
+two-image private draft with one current version and a synchronized title.
 
 ## M4 — District browser pilot
 
@@ -48,13 +59,11 @@ Production status: the documented OAuth, collection, content, version, authored-
 
 Exit gate: pilot checklist, privacy review, rollback, and support diagnostics are approved.
 
-Dependency: operator-attended synthetic production draft acceptance plus
-idempotent/recoverable asset initiation before broad rollout.
-
-Local status: engineering-approved for synthetic/unpublished evaluation.
-Credential-free discovery/registration, token, and real extension-worker
-content-route smokes pass. The browser-native fetch receiver regression is fixed
-and covered; final image/version acceptance requires the operator login.
+Local status: engineering acceptance is complete. Credential-free
+discovery/registration, token, and real extension-worker content-route smokes
+pass, as does authenticated production private-draft acceptance with the
+committed synthetic fixture. Broad rollout still requires the district pilot
+checklist, Chrome managed deployment approval, and supported-device validation.
 
 ## M5 — Browser v1
 
@@ -63,7 +72,10 @@ and covered; final image/version acceptance requires the operator login.
 
 Exit gate: v1 release artifact passes automated and manual acceptance on district-supported Chrome/macOS combinations.
 
-Local status: the `1.0.0` unsigned artifact passes automated production-Chromium acceptance and has a district Chrome/macOS ring checklist. Signing, store upload, and managed deployment require explicit approval and remain unperformed.
+Local status: the `1.0.0` production artifact passes automated
+extension-loaded Chromium and authenticated Atrium acceptance and has a district
+Chrome/macOS ring checklist. Extension signing, store upload, and managed
+deployment require explicit approval and remain unperformed.
 
 ## M6 — Mac recorder companion
 
@@ -76,11 +88,13 @@ Exit gate: a Finder/System Settings/Office workflow produces the same valid Atri
 
 Production status: RFC 8252-style native redirects, production
 OAuth/refresh/revocation, Keychain storage, direct authored-asset upload,
-private drafts, and internal publication are implemented. The approved public
-native client UUID is bundled. District sign-in, registered callback, token
-exchange, Keychain persistence, connected UI state, and both native capture
-permissions are live verified on an Apple Development-signed build.
-Private-draft acceptance remains a synthetic operator check.
+private drafts, title synchronization, and internal publication are
+implemented. The approved public native client UUID is bundled. District
+sign-in, registered callback, token exchange, Keychain persistence, connected UI
+state, both native capture permissions, and a two-image private draft with a
+current version are live verified on an Apple Development-signed build. The
+acceptance resumed the same durable job after an upload failure and created no
+duplicate object or asset.
 
 ## M7 — Snipaste-style Mac tools
 

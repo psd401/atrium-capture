@@ -273,6 +273,22 @@ export class DurablePublisher {
     }
   }
 
+  /**
+   * Explicitly retries a job that previously stopped on a non-retryable
+   * response. Recovery resumes from durable remote identifiers and per-asset
+   * receipts, so an updated client can repair a response-contract mismatch
+   * without creating duplicate objects, assets, or versions.
+   */
+  async retry(jobId: string): Promise<AtriumCapturePublishJob> {
+    let job = await this.requireJob(jobId);
+    if (job.phase === Phase.NeedsAttention) {
+      const next = { ...job, phase: recoveryPhase(job) };
+      delete next.lastError;
+      job = await this.save(next);
+    }
+    return this.resume(job.jobId);
+  }
+
   async requestInternalPublication(jobId: string): Promise<AtriumCapturePublishJob> {
     let job = await this.requireJob(jobId);
     if (job.phase === Phase.Complete) {
@@ -464,6 +480,19 @@ export class DurablePublisher {
   }
 }
 
+function recoveryPhase(job: AtriumCapturePublishJob): Phase {
+  if (!job.contentObjectId) {
+    return Phase.CreatingObject;
+  }
+  if ((job.assetUploads ?? []).some((asset) => asset.state !== AssetUploadState.Ready)) {
+    return Phase.UploadingAssets;
+  }
+  if (!job.currentVersionId) {
+    return Phase.CreatingVersion;
+  }
+  return Phase.PublishingInternal;
+}
+
 export interface PkceAuthorizationConfig {
   authorizationEndpoint: string;
   clientId: string;
@@ -589,7 +618,7 @@ function captureSourceRef(session: AtriumCaptureSession): CaptureSourceRef {
             session.steps
               .map((step) => step.target?.browser?.origin)
               .filter((origin): origin is string => Boolean(origin))
-              .map(normalizeSourceOrigin)
+              .map(normalizeCaptureSourceOriginForPublication)
               .filter((origin): origin is string => Boolean(origin)),
           ),
         ].slice(0, 20);
@@ -604,15 +633,72 @@ function captureSourceRef(session: AtriumCaptureSession): CaptureSourceRef {
   };
 }
 
-function normalizeSourceOrigin(value: string): string | undefined {
+/**
+ * Retain web provenance without sending literal local-network targets across the
+ * production boundary. Apart from disclosing workstation topology, loopback and
+ * private-address literals are commonly rejected by edge SSRF protections.
+ * Internal district DNS names remain valid because they are meaningful origins
+ * and are not resolved by the capture client.
+ */
+export function normalizeCaptureSourceOriginForPublication(value: string): string | undefined {
   try {
     const url = new URL(value);
-    return (url.protocol === 'http:' || url.protocol === 'https:') && !url.username && !url.password
-      ? url.origin
-      : undefined;
+    if (
+      (url.protocol !== 'http:' && url.protocol !== 'https:') ||
+      url.username ||
+      url.password ||
+      isLocalNetworkHostLiteral(url.hostname)
+    ) {
+      return undefined;
+    }
+    return url.origin;
   } catch {
     return undefined;
   }
+}
+
+function isLocalNetworkHostLiteral(value: string): boolean {
+  const hostname = value.toLowerCase().replace(/^\[|\]$/g, '');
+  if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
+    return true;
+  }
+
+  const octets = hostname.split('.');
+  if (
+    octets.length === 4 &&
+    octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)
+  ) {
+    return isLocalIPv4(octets.map(Number));
+  }
+
+  const mappedIPv4 = /^::ffff:([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(hostname);
+  if (mappedIPv4) {
+    const high = Number.parseInt(mappedIPv4[1] ?? '', 16);
+    const low = Number.parseInt(mappedIPv4[2] ?? '', 16);
+    return isLocalIPv4([high >> 8, high & 0xff, low >> 8, low & 0xff]);
+  }
+
+  return (
+    hostname === '::' ||
+    hostname === '::1' ||
+    hostname.startsWith('fc') ||
+    hostname.startsWith('fd') ||
+    hostname.startsWith('fe8') ||
+    hostname.startsWith('fe9') ||
+    hostname.startsWith('fea') ||
+    hostname.startsWith('feb')
+  );
+}
+
+function isLocalIPv4([first = 0, second = 0]: number[]): boolean {
+  return (
+    first === 0 ||
+    first === 10 ||
+    first === 127 ||
+    (first === 169 && second === 254) ||
+    (first === 172 && second >= 16 && second <= 31) ||
+    (first === 192 && second === 168)
+  );
 }
 
 function normalizeError(error: unknown): LastError {

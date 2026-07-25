@@ -43,4 +43,15 @@ Atrium Capture handles local workflow semantics, raw screenshots, author edits, 
 
 ## Residual and external risk
 
-Production publication uses Atrium's documented OAuth, immutable content-asset, idempotent content/version/publication, and concurrency contracts. Approved public client UUIDs are bundled and are not credentials. Authorization, first-party login, token exchange, and real extension-worker content-route access pass for the exact stable `chrome-extension://jldnpmcpimhabiphcglkbgmbffpoocpo` origin and browser client; no wildcard origin or client-side proxy is acceptable. Asset initiation itself is not idempotent; after an ambiguous reservation response, the client recovers matching rows or waits for expiry rather than racing another reservation. ADR 0006 records that remaining external boundary. No substitute screenshot host is permitted.
+Production publication uses Atrium's documented OAuth, immutable content-asset,
+idempotent content/asset/version/publication, and concurrency contracts.
+Approved public client UUIDs are bundled and are not credentials.
+Authorization, first-party login, token exchange, real extension-worker route
+access, and private-draft publishing pass for the exact stable
+`chrome-extension://jldnpmcpimhabiphcglkbgmbffpoocpo` origin and browser client;
+no wildcard origin or client-side proxy is acceptable. A stable per-asset key
+replays an ambiguous reservation to the same row with a refreshed upload
+request. Both clients recompute the exact outgoing bytes' SHA-256, accept only
+HTTPS AWS S3 service hosts, validate the integrity-bound checksum transport,
+and never send the Atrium bearer token to storage. No substitute screenshot
+host is permitted.

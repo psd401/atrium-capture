@@ -66,7 +66,13 @@ The durable `PublishJob` advances through these resumable phases:
 4. Leave the result as a private draft by default.
 5. If the user explicitly selected internal publication, publish to the intranet destination.
 
-Every phase persists its remote IDs before continuing. Object, version, and publication retries reuse the same idempotency keys. Asset retries first recover by deterministic filename, digest, byte length, MIME type, and dimensions and never select a raw original. Atrium's non-idempotent reservation interval and safe client behavior are isolated in [ADR 0006](adr/0006-production-atrium-boundary.md).
+Every phase persists its remote IDs before continuing. Object, asset
+reservation, version, and publication retries reuse the same idempotency keys.
+Asset retries first recover by deterministic filename, digest, byte length, MIME
+type, and dimensions and never select a raw original. A pending reservation is
+replayed to obtain a fresh server-issued upload request; the same remote row is
+then uploaded and completed. The production recovery boundary is recorded in
+[ADR 0006](adr/0006-production-atrium-boundary.md).
 
 ## Technology choices
 

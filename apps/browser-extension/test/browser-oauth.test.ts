@@ -93,6 +93,21 @@ describe('trusted browser OAuth broker', () => {
     expect(() => parseTokenResponse({ access_token: 'synthetic' })).toThrow(
       'oauth_token_response_invalid',
     );
+    expect(() =>
+      parseTokenResponse({
+        access_token: 'synthetic\r\ninjected',
+        expires_in: 300,
+        token_type: 'Bearer',
+      }),
+    ).toThrow('oauth_token_response_invalid');
+    expect(() =>
+      parseTokenResponse({
+        access_token: 'synthetic',
+        expires_in: 300,
+        refresh_token: 'synthetic\ninjected',
+        token_type: 'Bearer',
+      }),
+    ).toThrow('oauth_token_response_invalid');
   });
 
   it('rejects an authorization response outside the exact Chrome callback', async () => {
@@ -357,5 +372,44 @@ describe('trusted browser OAuth broker', () => {
     expect(Object.keys(values)).toEqual(['atriumOAuthTokens']);
     values.atriumOAuthTokens = { accessToken: 'truncated' };
     await expect(store.load()).rejects.toThrow('oauth_token_store_invalid');
+    values.atriumOAuthTokens = {
+      accessToken: 'synthetic\r\ninjected',
+      clientId: 'synthetic-client',
+      expiresAt: 10_000,
+      tokenType: 'Bearer',
+    };
+    await expect(store.load()).rejects.toThrow('oauth_token_store_invalid');
+  });
+
+  it('fails closed before touching storage when trusted-context isolation is unavailable', async () => {
+    let reads = 0;
+    let writes = 0;
+    const store = new BrowserTrustedTokenStore(
+      {
+        async get() {
+          reads += 1;
+          return {};
+        },
+        async remove() {
+          writes += 1;
+        },
+        async set() {
+          writes += 1;
+        },
+      },
+      Promise.reject(new Error('synthetic access-level failure')),
+    );
+
+    await expect(store.load()).rejects.toThrow('oauth_token_store_unavailable');
+    await expect(
+      store.save({
+        accessToken: 'synthetic-secret-access',
+        clientId: 'synthetic-client',
+        expiresAt: 10_000,
+        tokenType: 'Bearer',
+      }),
+    ).rejects.toThrow('oauth_token_store_unavailable');
+    expect(reads).toBe(0);
+    expect(writes).toBe(0);
   });
 });

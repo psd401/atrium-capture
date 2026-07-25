@@ -46,7 +46,7 @@ final class ProductionNativeGatewayTests: XCTestCase {
             pngData: Data("synthetic-reviewed-image".utf8),
             pixelWidth: 1280,
             pixelHeight: 720,
-            sha256: String(repeating: "0", count: 64),
+            sha256: syntheticAssetDigestHex,
             idempotencyKey: "asset:synthetic-job"
         )
         let markdown = "# Synthetic\n\n"
@@ -90,7 +90,14 @@ final class ProductionNativeGatewayTests: XCTestCase {
         XCTAssertNil(upload.value(forHTTPHeaderField: "Authorization"))
         XCTAssertEqual(
             Set(upload.allHTTPHeaderFields?.keys.map { $0.lowercased() } ?? []),
-            Set(["content-type", "x-amz-checksum-sha256"])
+            Set(["content-type"])
+        )
+        let initiate = try XCTUnwrap(requests.first {
+            $0.url?.path.hasSuffix("/assets") == true && $0.httpMethod == "POST"
+        })
+        XCTAssertEqual(
+            initiate.value(forHTTPHeaderField: "Idempotency-Key"),
+            "asset:synthetic-job"
         )
         let versionRequest = try XCTUnwrap(requests.first { $0.url?.path.hasSuffix("/versions") == true })
         XCTAssertEqual(versionRequest.value(forHTTPHeaderField: "If-Match"), "\"none\"")
@@ -101,7 +108,7 @@ final class ProductionNativeGatewayTests: XCTestCase {
         )
         XCTAssertEqual(
             version.readerURL,
-            "https://aistudio.psd401.ai/c/synthetic-native-guide"
+            "https://aistudio.psd401.ai/atrium/\(objectID)/edit"
         )
     }
 
@@ -177,6 +184,57 @@ final class ProductionNativeGatewayTests: XCTestCase {
             XCTAssertTrue(failure.retryable)
         }
     }
+
+    func testNonJSONHTTPFailurePreservesStatusAndSupportRequestID() async throws {
+        let gateway = try ProductionNativeAtriumGateway(
+            transport: SyntheticNonJSONFailureTransport()
+        ) {
+            "synthetic-access-token"
+        }
+
+        do {
+            _ = try await gateway.createPrivateDraft(
+                title: "Synthetic forbidden guide",
+                sourceRef: NativeCaptureSourceRef(
+                    capturedAt: Date(timeIntervalSince1970: 1_753_387_200),
+                    clientVersion: "1.0.0",
+                    externalID: sessionID
+                ),
+                collectionID: nil,
+                idempotencyKey: "object:synthetic-forbidden"
+            )
+            XCTFail("Expected the synthetic HTML error response.")
+        } catch let failure as NativeGatewayFailure {
+            XCTAssertEqual(failure.code, "ATRIUM_HTTP_403")
+            XCTAssertEqual(failure.requestID, "req_synthetic_html")
+            XCTAssertFalse(failure.retryable)
+        }
+    }
+
+    func testUploadRejectsBytesThatDoNotMatchDeclaredDigestBeforeNetworkIO() async throws {
+        let transport = SyntheticAtriumTransport()
+        let gateway = try ProductionNativeAtriumGateway(transport: transport) {
+            "synthetic-access-token"
+        }
+
+        do {
+            _ = try await gateway.uploadPublishableAsset(
+                objectID: objectID,
+                localAssetID: localAssetID,
+                pngData: Data("synthetic-reviewed-image".utf8),
+                pixelWidth: 1280,
+                pixelHeight: 720,
+                sha256: String(repeating: "0", count: 64),
+                idempotencyKey: "asset:synthetic-mismatch"
+            )
+            XCTFail("Expected the digest mismatch to fail closed.")
+        } catch let failure as NativeGatewayFailure {
+            XCTAssertEqual(failure.code, "ASSET_SHA256_MISMATCH")
+            XCTAssertFalse(failure.retryable)
+        }
+        let requests = await transport.requests
+        XCTAssertTrue(requests.isEmpty)
+    }
 }
 
 private actor SyntheticFailureTransport: NativeHTTPTransport {
@@ -199,6 +257,22 @@ private actor SyntheticFailureTransport: NativeHTTPTransport {
             ]
         ))
         return (data, response)
+    }
+}
+
+private actor SyntheticNonJSONFailureTransport: NativeHTTPTransport {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse) {
+        let url = try XCTUnwrap(request.url)
+        let response = try XCTUnwrap(HTTPURLResponse(
+            url: url,
+            statusCode: 403,
+            httpVersion: "HTTP/1.1",
+            headerFields: [
+                "Content-Type": "text/html",
+                "X-Request-Id": "req_synthetic_html",
+            ]
+        ))
+        return (Data("<html>synthetic forbidden</html>".utf8), response)
     }
 }
 
@@ -228,10 +302,10 @@ private actor SyntheticAtriumTransport: NativeHTTPTransport {
                 "data": assetRecord(state: "pending").merging([
                     "upload": [
                         "method": "PUT",
-                        "url": "https://synthetic-bucket.s3.us-west-2.amazonaws.com/upload?signature=fake",
+                        "url": hoistedUploadURL,
                         "headers": [
                             "content-type": "image/png",
-                            "x-amz-checksum-sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+                            "x-amz-checksum-sha256": syntheticAssetDigestBase64,
                         ],
                         "expiresAt": "2026-07-24T20:15:00.000Z",
                     ],
@@ -291,7 +365,7 @@ private actor SyntheticAtriumTransport: NativeHTTPTransport {
             "filename": "atrium-capture-\(localAssetID).png",
             "contentType": "image/png",
             "byteLength": Data("synthetic-reviewed-image".utf8).count,
-            "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "sha256": syntheticAssetDigestBase64URL,
             "purpose": "capture_step",
             "state": state,
             "width": 1280,
@@ -309,4 +383,12 @@ private let objectID = "a1000000-0000-4000-8000-000000000001"
 private let localAssetID = "a3000000-0000-4000-8000-000000000001"
 private let assetID = "a2000000-0000-4000-8000-000000000001"
 private let versionID = "a4000000-0000-4000-8000-000000000001"
+private let hoistedUploadURL =
+    "https://synthetic-bucket.s3.us-west-2.amazonaws.com/upload"
+        + "?X-Amz-Checksum-Sha256=k3UW6sWEhEdP%2B3ulJIlxs2euQtJYwhvGpFRIDtvMWe8%3D"
+        + "&X-Amz-SignedHeaders=content-length%3Bhost&X-Amz-Signature=fake"
+private let syntheticAssetDigestHex =
+    "937516eac58484474ffb7ba5248971b367ae42d258c21bc6a454480edbcc59ef"
+private let syntheticAssetDigestBase64 = "k3UW6sWEhEdP+3ulJIlxs2euQtJYwhvGpFRIDtvMWe8="
+private let syntheticAssetDigestBase64URL = "k3UW6sWEhEdP-3ulJIlxs2euQtJYwhvGpFRIDtvMWe8"
 #endif
