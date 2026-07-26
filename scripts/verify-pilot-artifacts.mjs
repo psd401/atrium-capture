@@ -14,7 +14,11 @@ const appPath =
   process.env.ATRIUM_CAPTURE_MAC_APP_PATH ??
   path.join(repositoryRoot, 'dist/macos/Atrium Capture.app');
 const distributionMode = process.argv.includes('--distribution');
-const expectedExtensionId = 'jldnpmcpimhabiphcglkbgmbffpoocpo';
+const browserIdentity = await readJson(
+  path.join(repositoryRoot, 'config/browser-identity.json'),
+  'The committed browser identity is missing.',
+);
+const expectedExtensionId = browserIdentity.extensionId;
 const expectedBundleId = 'org.psd401.AtriumCapture';
 
 try {

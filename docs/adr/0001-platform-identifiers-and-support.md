@@ -1,6 +1,6 @@
 # ADR 0001: Platform identifiers and initial support floor
 
-- Status: accepted
+- Status: amended by ADR 0009
 - Date: 2026-07-22
 
 ## Context
@@ -9,9 +9,9 @@ Stable browser and native identifiers are prerequisites for OAuth redirect regis
 
 ## Decision
 
-- Chrome extension ID: `jldnpmcpimhabiphcglkbgmbffpoocpo`.
-- Chrome manifest public key: `MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAlTvrb5kWrnpWNisHiDz2FXYjwWQBbLgkJXHaMs2p4zv6OQwk3YeFX48spx/Wg1PgyXGVbqGi8xIGTq53/XbfLBLgsp5uIbC26YuIVEob5DpBXagBRikQ0igDN6NTKyQ20Sz6ynvM+u7Uw+pJnLm/crnvkjotxvAcArLC/3RJQVGcY3HqUSWTRTDbCumbSwfmiQAZfQ+zyV7bzKK6MvEWBdorcRNLWvKcv3OUiNqFWXjL1gNwrrwJSHD5jk6qLQVuTIKqjMY6Jkl3G+oaQr/Q+2FGkENiy478hLrBMfQFTol75ncsos7Bzck59UiZXY0BeNQ9oO7XQ0SonZgndb9FiQIDAQAB`.
-- Browser OAuth redirect: `https://jldnpmcpimhabiphcglkbgmbffpoocpo.chromiumapp.org/atrium`.
+- Chrome extension ID: `eomlblaiglafndhplfhilmdcaofhkkbj`.
+- Chrome manifest public key: `MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAksSbIbmfC3UWDB+TA+lbYyK8s/xGppbKSVPLSls82vmW7xqMz2gWkPR2yzRkgtq+/dvbggC/BebC9WqWnt7zg8649A5JntepAuidmQd3bjCXEFtBfGNuAVwGyI6mPnuMKrC0XMn2TTe/mAcTkmJJ/w3qAv78GcFkDS57xHE+GxnPolnu+UaWVV7b1QJpmw05NsLmC0XnSSxT5052A+BK2pb0/Uq5z7dQ+hzDumg1ZLDv+knZDRHcn5ZUx/S0xcYk+OOup1BSI+WrgNtiA1iBPnNLiHLhCQpNiYSLOx6EC8XqILNXl7Gan61Tw08cjgiBY9PTOl38nK7yMOi9LmzlXQIDAQAB`.
+- Browser OAuth redirect: `https://eomlblaiglafndhplfhilmdcaofhkkbj.chromiumapp.org/atrium`.
 - macOS bundle identifier: `org.psd401.AtriumCapture`.
 - Minimum macOS version: macOS 14 Sonoma.
 - Native OAuth callback: `org.psd401.atrium-capture:/oauth/callback`.
@@ -21,4 +21,10 @@ The committed Chrome value is only the public key. No extension signing private 
 
 ## Consequences
 
-The extension ID and OAuth redirects must not change after client registration. macOS 13 and older are outside the initial native support matrix. Atrium documents both application profiles and callbacks, and the registered non-secret UUIDs are bundled. Browser OAuth remains capability-gated until Atrium permits the exact stable `chrome-extension://jldnpmcpimhabiphcglkbgmbffpoocpo` token-request origin for that exact client.
+The Web Store-assigned extension ID and OAuth redirects must not change after
+the migration in ADR 0009. macOS 13 and older are outside the initial native
+support matrix. Atrium documents both application profiles and callbacks, and
+the registered non-secret UUIDs are bundled. Browser OAuth remains
+capability-gated until Atrium permits the exact stable
+`chrome-extension://eomlblaiglafndhplfhilmdcaofhkkbj` token-request origin for
+that exact client.

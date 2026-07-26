@@ -8,10 +8,19 @@ address, publisher address, or legal attestation without district approval.
 
 - **Name:** Atrium Capture
 - **Summary:** Record, review, redact, and publish private visual guides directly to PSD's Atrium workspace.
-- **Category:** Productivity
+- **Category:** Workflow & Planning
 - **Language:** English (United States)
 - **Visibility:** Private — Peninsula School District only
 - **Icon:** `apps/browser-extension/public/icons/128.png`
+- **Screenshots:** `docs/store-assets/browser-record-review.png` and
+  `docs/store-assets/browser-private-draft.png`
+- **Homepage:** `https://aistudio.psd401.ai/atrium`
+- **Support:** `https://www.psd401.net/20064_4`
+- **Privacy-policy source:** `docs/browser-extension-privacy-policy.md`
+
+The privacy policy must be published at a stable, unauthenticated HTTPS URL
+before its URL is entered in Chrome Web Store. A private GitHub repository URL
+does not satisfy this requirement.
 
 ### Detailed description
 
@@ -106,12 +115,32 @@ Before selecting **Submit for review**:
 1. Confirm the publisher is **Peninsula School District**.
 2. Confirm visibility is **Private** and limited to the PSD organization.
 3. Confirm the item ID is
-   `jldnpmcpimhabiphcglkbgmbffpoocpo`. If it differs, stop; do not submit or
+   `eomlblaiglafndhplfhilmdcaofhkkbj`. If it differs, stop; do not submit or
    silently change the production OAuth redirect.
-4. Confirm version `1.0.0` and the ZIP SHA-256 match
+4. Confirm version `1.0.1` and the ZIP SHA-256 match
    `apps/browser-extension/.output/browser-upload-manifest.json`.
 5. Use only synthetic screenshots for the listing.
-6. Have a district operator confirm the support contact, publisher address,
-   trader declaration, and privacy-policy URL.
+6. Confirm the saved trader/non-trader declaration, support contact, publisher
+   address, and privacy-policy URL still reflect the district's determination.
 7. After publication, record the non-secret private-store receipt and run
    `pnpm verify:pilot`.
+
+## Current private draft
+
+As of July 25, 2026:
+
+- the Peninsula School District publisher owns item
+  `eomlblaiglafndhplfhilmdcaofhkkbj`;
+- the accepted draft package is version `1.0.1`, matching local SHA-256
+  `c2ae5bab44f94f5756e8e397c021cadf6372fd151f9eb74530de66dcad6c81ef`;
+- the listing copy, Workflow & Planning category, US English language, icon,
+  two synthetic screenshots, support/homepage links, permission justifications,
+  conservative data disclosures, limited-use certifications, no-remote-code
+  declaration, reviewer instructions, and Private visibility are saved;
+- Chrome Web Store still requires verification of
+  `tsd-developers-psd@edtools.psd401.net` and a public privacy-policy URL before
+  submission; and
+- district-wide availability additionally requires domain publishing to be
+  enabled by a Google Workspace administrator or the publisher's organization
+  approval link to be approved by that administrator. Trusted-testers-only
+  Private visibility is not the 1,000-user distribution target.

@@ -2,14 +2,29 @@
 
 ## Release candidate
 
-The browser package version is `1.0.0`. `pnpm package:browser` builds the
+The browser package version is `1.0.1`. `pnpm package:browser` builds the
 production Manifest V3 extension, creates an unsigned Chrome ZIP under
 `apps/browser-extension/.output`, inspects its ZIP central directory, and writes
 `browser-upload-manifest.json` with the artifact byte size and SHA-256 digest.
 The manifest labels the ZIP as a Chrome Web Store upload and sets
 `distributionReady: false`; it is not a signed release.
 
-Package verification fails if the archive omits the manifest, worker, content script, side panel, or managed schema; changes the reviewed required permissions or the single optional `nativeMessaging` permission; or includes source maps, TypeScript, tests, fixtures, dependencies, environment files, or key material. The optional permission is requested only from the Mac-enrichment user gesture and is removed when enrichment is disabled. The release manifest records that telemetry is disabled and live Atrium uses the bundled approved public client.
+The archive is rebuilt from sorted production files with fixed entry timestamps
+and permissions. Package verification regenerates it independently and requires
+byte equality, so an unchanged source/build produces the same upload SHA-256.
+This makes the eventual signed-store receipt meaningful rather than tying it to
+one nondeterministic packaging run.
+
+Package verification fails if the archive omits the manifest, worker, content
+script, side panel, or managed schema; includes the development-only public
+`key`; changes the reviewed required permissions or the single optional
+`nativeMessaging` permission; or includes source maps, TypeScript, tests,
+fixtures, dependencies, environment files, or key material. The verifier
+independently derives the store item ID from the committed public key before
+writing the release manifest. The optional permission is requested only from
+the Mac-enrichment user gesture and is removed when enrichment is disabled. The
+release manifest records that telemetry is disabled and live Atrium uses the
+bundled approved public client.
 
 The manifest includes 16, 32, 48, and 128 pixel install icons, with 16 and 32
 pixel toolbar variants. They are exact mechanical derivatives of the original
@@ -19,8 +34,8 @@ checks that every PNG is present and has its declared dimensions.
 The approved distribution target is a **private PSD-only Chrome Web Store
 item**, promoted through district-managed Chrome rings. It must not be publicly
 listed, and this repository does not operate a private CRX update host. Store
-signing requires the authorized district publisher; credentials and signing
-custody remain outside the repository. See
+signing is performed by the verified Peninsula School District publisher;
+credentials and signing custody remain outside the repository. See
 [ADR 0008](adr/0008-private-psd-distribution.md) and the
 [private submission copy](browser-store-submission.md).
 
@@ -65,8 +80,8 @@ The receipt must use this non-secret shape:
   "distribution": "chrome_web_store_private",
   "visibility": "psd_only",
   "status": "published",
-  "extensionId": "jldnpmcpimhabiphcglkbgmbffpoocpo",
-  "version": "1.0.0",
+  "extensionId": "eomlblaiglafndhplfhilmdcaofhkkbj",
+  "version": "1.0.1",
   "uploadSha256": "<exact browser-upload-manifest sha256>"
 }
 ```
@@ -105,10 +120,14 @@ The manual ring uses only the repository's synthetic fixture. It must not record
 - [x] Obtain approval for private PSD-only publication; public listing is forbidden.
 - [x] Confirm all automated engineering gates pass.
 - [x] Record artifact filename, SHA-256, size, permissions, extension ID, and version.
-- [ ] Confirm the existing private store item owns extension ID `jldnpmcpimhabiphcglkbgmbffpoocpo`.
-- [ ] Review store description/screenshots/privacy disclosure with synthetic assets only.
+- [x] Confirm the existing private store item owns extension ID `eomlblaiglafndhplfhilmdcaofhkkbj`.
+- [x] Review store description/screenshots/privacy disclosure with synthetic assets only.
 - [ ] Keep publisher/signing credentials outside the repository and build logs.
 - [x] Register the immutable extension redirect and bundle its public UUID; managed policy is only an approved test-client override.
+- [ ] Publish the committed browser privacy policy at a stable public HTTPS URL.
+- [ ] Verify the publisher contact email.
+- [ ] Enable own-domain publishing or complete PSD organization approval; do not
+      use trusted testers as the district-wide distribution mechanism.
 - [ ] Publish the exact ZIP with private PSD-only visibility and record the matching receipt.
 - [ ] Run `pnpm verify:pilot`; do not call the upload ZIP release-ready.
 - [ ] Promote through the engineering/support/pilot rings in `browser-pilot-runbook.md`.

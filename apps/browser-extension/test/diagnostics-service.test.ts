@@ -45,7 +45,7 @@ describe('privacy-safe support diagnostics', () => {
       managed,
       publication,
       {
-        extensionId: 'jldnpmcpimhabiphcglkbgmbffpoocpo',
+        extensionId: 'eomlblaiglafndhplfhilmdcaofhkkbj',
         async platform() {
           return { arch: 'arm64', os: 'mac' };
         },

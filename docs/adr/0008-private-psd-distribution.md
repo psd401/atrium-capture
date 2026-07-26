@@ -25,7 +25,7 @@ must remain outside the repository.
 - Do not operate a private CRX update server. The Chrome Web Store owns browser
   signing and update delivery; PSD policy owns who can install the item.
 - Before upload, verify whether the private store item owns the committed
-  extension ID `jldnpmcpimhabiphcglkbgmbffpoocpo`. If it does not, stop and
+  extension ID `eomlblaiglafndhplfhilmdcaofhkkbj`. If it does not, stop and
   coordinate a versioned extension-ID and Atrium OAuth registration migration.
   Never generate a replacement signing key silently.
 - An Apple Development signature from an authorized developer is sufficient for

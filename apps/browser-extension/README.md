@@ -15,10 +15,13 @@ Responsibilities:
 Run `pnpm --filter @atrium-capture/browser-extension build` for the production extension and `pnpm test:extension` for the extension-loaded Chromium workflow and image goldens. Tests use only synthetic fixture pages and pixels. Live sign-in appears only when managed policy supplies an Atrium-issued public `browser_extension` client UUID.
 
 Run `pnpm package:browser` from the repository root for the verified, unsigned
-`1.0.0` Chrome Web Store upload ZIP and SHA-256 upload manifest. It is not an
-installable release. The approved distribution target is a private PSD-only
-Chrome Web Store item; `pnpm verify:pilot` fails closed until a matching signed
-store receipt exists.
+`1.0.1` Chrome Web Store upload ZIP and SHA-256 upload manifest. The package
+omits Chrome's forbidden upload-time `key`; development and test builds use the
+public key in `config/browser-identity.json` and therefore retain the
+store-assigned ID. The ZIP is not an installable release. The approved
+distribution target is the private PSD-only item
+`eomlblaiglafndhplfhilmdcaofhkkbj`; `pnpm verify:pilot` fails closed until a
+matching signed store receipt exists.
 
 The install/toolbar icons under `public/icons` are mechanically resized from the
 repository's original MIT-licensed Atrium Capture master described in

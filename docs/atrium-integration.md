@@ -45,7 +45,7 @@ Create two public clients at Atrium's administrator OAuth client screen. Select 
 
 | Client profile      | Exact redirect                                                    | Production configuration                      |
 | ------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
-| `browser_extension` | `https://jldnpmcpimhabiphcglkbgmbffpoocpo.chromiumapp.org/atrium` | Approved public UUID bundled in the extension |
+| `browser_extension` | `https://eomlblaiglafndhplfhilmdcaofhkkbj.chromiumapp.org/atrium` | Approved public UUID bundled in the extension |
 | `native`            | `org.psd401.atrium-capture:/oauth/callback`                       | Approved public UUID bundled in the Mac app   |
 
 The generated UUID is public application configuration, not a secret. Production

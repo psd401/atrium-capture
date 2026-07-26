@@ -3,11 +3,13 @@
 Atrium Capture records a workflow, turns meaningful actions into an editable visual guide, and saves the reviewed result as an Atrium draft. The first application is a Chrome extension; the same capture contract is designed for an immediate Mac companion phase.
 
 Browser v1 and the native Mac companion are locally buildable and tested. The
-browser build produces a verified, explicitly unsigned Chrome Web Store upload
-bundle; the installed local Mac pilot is Apple Development-signed with a stable
-bundle identity. Both contain the documented direct Atrium publisher and bundle
-their approved non-secret production OAuth client IDs, so employees only sign in
-with their district AI Studio account.
+district Chrome Web Store publisher owns the private browser item
+`eomlblaiglafndhplfhilmdcaofhkkbj`; the browser build produces a verified,
+explicitly unsigned upload bundle for that item. The installed local Mac pilot
+is Apple Development-signed with a stable bundle identity. Both contain the
+documented direct Atrium publisher and bundle their approved non-secret
+production OAuth client IDs, so employees only sign in with their district AI
+Studio account.
 
 ## Product boundary
 
@@ -30,7 +32,7 @@ with a current version and synchronized title. Final synthetic
 [training walkthroughs](docs/training-walkthroughs.md) were also submitted as
 private Atrium drafts and visually verified: five browser-extension steps and
 ten Mac-app steps, with every reviewed image loaded. The remaining release gates
-are private PSD-only Chrome Web Store signing and managed deployment, plus
+are final private PSD-only Chrome Web Store review/managed deployment and
 district Developer ID signing, notarization, and Mac MDM deployment.
 
 ## Repository map

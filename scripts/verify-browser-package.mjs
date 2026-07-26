@@ -3,13 +3,24 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { createBrowserArchive } from './browser-archive.mjs';
+
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const extensionRoot = path.join(repositoryRoot, 'apps/browser-extension');
 const outputRoot = path.join(extensionRoot, '.output');
 const productionOAuthClientId = 'ae781263-20c0-4b0c-8a34-8be01ab72fb1';
+const browserIdentity = JSON.parse(
+  await readFile(path.join(repositoryRoot, 'config/browser-identity.json'), 'utf8'),
+);
 const extensionPackage = JSON.parse(
   await readFile(path.join(extensionRoot, 'package.json'), 'utf8'),
 );
+const derivedExtensionId = deriveExtensionId(browserIdentity.publicKey);
+if (derivedExtensionId !== browserIdentity.extensionId) {
+  throw new Error(
+    `Browser public key derives ${derivedExtensionId}; expected ${browserIdentity.extensionId}.`,
+  );
+}
 const archiveCandidates = (await readdir(outputRoot)).filter(
   (name) => name.endsWith('-chrome.zip') && name.includes(extensionPackage.version),
 );
@@ -21,6 +32,13 @@ if (archiveCandidates.length !== 1) {
 
 const archiveName = archiveCandidates[0];
 const archiveBytes = await readFile(path.join(outputRoot, archiveName));
+const rebuiltArchive = await createBrowserArchive(repositoryRoot);
+if (
+  rebuiltArchive.archiveName !== archiveName ||
+  !rebuiltArchive.archiveBytes.equals(archiveBytes)
+) {
+  throw new Error('Browser archive is not reproducible from the reviewed build directory.');
+}
 const files = listZipEntries(archiveBytes);
 const expectedIcons = {
   16: 'icons/16.png',
@@ -62,6 +80,7 @@ const manifest = JSON.parse(
 if (
   manifest.manifest_version !== 3 ||
   manifest.version !== extensionPackage.version ||
+  manifest.key !== undefined ||
   manifest.storage?.managed_schema !== 'managed-storage-schema.json' ||
   manifest.host_permissions?.length !== 1 ||
   manifest.host_permissions[0] !== '<all_urls>'
@@ -109,7 +128,7 @@ const releaseManifest = {
   artifactKind: 'chrome_web_store_upload',
   bytes: archiveBytes.byteLength,
   distributionReady: false,
-  extensionId: 'jldnpmcpimhabiphcglkbgmbffpoocpo',
+  extensionId: browserIdentity.extensionId,
   files: files.length,
   manifestVersion: 3,
   privacy: {
@@ -168,4 +187,11 @@ function pngDimensions(bytes) {
     height: bytes.readUInt32BE(20),
     width: bytes.readUInt32BE(16),
   };
+}
+
+function deriveExtensionId(publicKey) {
+  const digest = createHash('sha256').update(Buffer.from(publicKey, 'base64')).digest('hex');
+  return [...digest.slice(0, 32)]
+    .map((nibble) => String.fromCharCode('a'.charCodeAt(0) + Number.parseInt(nibble, 16)))
+    .join('');
 }

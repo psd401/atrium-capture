@@ -1,5 +1,5 @@
 const origin = 'https://aistudio.psd401.ai';
-const extensionId = 'jldnpmcpimhabiphcglkbgmbffpoocpo';
+const extensionId = 'eomlblaiglafndhplfhilmdcaofhkkbj';
 const extensionOrigin = `chrome-extension://${extensionId}`;
 const clientId = 'ae781263-20c0-4b0c-8a34-8be01ab72fb1';
 const redirectUri = `https://${extensionId}.chromiumapp.org/atrium`;
