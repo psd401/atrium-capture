@@ -181,8 +181,15 @@ deployment action, not an implementation dependency.
   limited-use certifications, no-remote-code declaration, reviewer
   instructions, and Private visibility. Submission remains blocked by the
   publisher contact-email verification, a stable public URL for the committed
-  browser privacy policy, the production Atrium callback/origin migration, and
-  PSD domain-publishing approval.
+  browser privacy policy, and the production Atrium callback/origin migration.
+  Peninsula School District approved organization publishing on July 26, 2026;
+  the organization must still become selectable on the item Distribution page.
+- The July 26 production retest returns `invalid_redirect_uri` for the exact
+  authoritative callback and rejects the exact `chrome-extension://` token
+  origin. The native authorization request still returns HTTP 303, and the
+  built extension reaches all eight content routes with the expected
+  synthetic-token `401`. These bounded results isolate the remaining browser
+  blocker to the two OAuth registration values.
 - `pnpm package:browser`
   builds the production MV3 Chrome Web Store upload ZIP, validates required
   runtime/schema files and the exact reviewed permission set, rejects
