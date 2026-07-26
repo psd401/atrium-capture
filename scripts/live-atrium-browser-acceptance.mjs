@@ -9,7 +9,7 @@ const require = createRequire(new URL('../apps/browser-extension/package.json', 
 const { chromium, expect } = require('@playwright/test');
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const extensionId = 'jldnpmcpimhabiphcglkbgmbffpoocpo';
+const extensionId = 'eomlblaiglafndhplfhilmdcaofhkkbj';
 const extensionPath = path.join(repositoryRoot, 'apps/browser-extension/.output/chrome-mv3');
 const fixturePath = path.join(repositoryRoot, 'packages/test-fixtures/site');
 const browserPath = process.env.ATRIUM_CAPTURE_ACCEPTANCE_BROWSER_PATH;

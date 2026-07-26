@@ -29,7 +29,7 @@ const registeredClients = [
   {
     clientId: browserClientOverride ?? productionClientIds.browser_extension,
     profile: 'browser_extension',
-    redirectUri: 'https://jldnpmcpimhabiphcglkbgmbffpoocpo.chromiumapp.org/atrium',
+    redirectUri: 'https://eomlblaiglafndhplfhilmdcaofhkkbj.chromiumapp.org/atrium',
   },
   {
     clientId: macClientOverride ?? productionClientIds.native,

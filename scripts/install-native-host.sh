@@ -4,7 +4,7 @@ set -euo pipefail
 repository_root="${0:A:h:h}"
 app_path="${1:-$repository_root/dist/macos/Atrium Capture.app}"
 browser_name="${2:-chrome}"
-extension_id="${3:-jldnpmcpimhabiphcglkbgmbffpoocpo}"
+extension_id="${3:-eomlblaiglafndhplfhilmdcaofhkkbj}"
 helper_path="$app_path/Contents/Helpers/AtriumCaptureNativeHost"
 
 if [[ ! -x "$helper_path" ]]; then

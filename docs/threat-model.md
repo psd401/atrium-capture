@@ -48,7 +48,7 @@ idempotent content/asset/version/publication, and concurrency contracts.
 Approved public client UUIDs are bundled and are not credentials.
 Authorization, first-party login, token exchange, real extension-worker route
 access, and private-draft publishing pass for the exact stable
-`chrome-extension://jldnpmcpimhabiphcglkbgmbffpoocpo` origin and browser client;
+`chrome-extension://eomlblaiglafndhplfhilmdcaofhkkbj` origin and browser client;
 no wildcard origin or client-side proxy is acceptable. A stable per-asset key
 replays an ambiguous reservation to the same row with a refreshed upload
 request. Both clients recompute the exact outgoing bytes' SHA-256, accept only

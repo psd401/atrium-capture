@@ -21,7 +21,7 @@ replayed. Completion is idempotent once an asset is ready.
 
 - Both clients use only `https://aistudio.psd401.ai/api/v1` and endpoints returned by the same issuer's OIDC discovery.
 - Administrators register two public clients with no secret:
-  - `browser_extension` → `https://jldnpmcpimhabiphcglkbgmbffpoocpo.chromiumapp.org/atrium`
+  - `browser_extension` → `https://eomlblaiglafndhplfhilmdcaofhkkbj.chromiumapp.org/atrium`
   - `native` → `org.psd401.atrium-capture:/oauth/callback`
 - Requested scopes are `openid profile offline_access content:read content:create content:update content:publish_internal`.
 - Browser and native authorization requests include the Atrium issuer as the RFC
@@ -70,7 +70,7 @@ OIDC discovery and the unauthenticated content boundary are covered by
 credential-free smoke commands.
 
 The browser's token POST is a cross-origin request from the stable extension
-origin `chrome-extension://jldnpmcpimhabiphcglkbgmbffpoocpo`; it cannot use the
+origin `chrome-extension://eomlblaiglafndhplfhilmdcaofhkkbj`; it cannot use the
 HTTPS `chromiumapp.org` callback as its request origin and cannot suppress
 Chrome's `Origin` header. Atrium must therefore allow that exact origin only for
 the exact browser client. Wildcard CORS, a client-side proxy, a confidential

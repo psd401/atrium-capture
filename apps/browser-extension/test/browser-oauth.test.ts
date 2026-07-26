@@ -42,11 +42,11 @@ describe('trusted browser OAuth broker', () => {
       },
     };
     const identity = {
-      getRedirectURL: () => 'https://jldnpmcpimhabiphcglkbgmbffpoocpo.chromiumapp.org/atrium',
+      getRedirectURL: () => 'https://eomlblaiglafndhplfhilmdcaofhkkbj.chromiumapp.org/atrium',
       async launchWebAuthFlow(details: { interactive: boolean; url: string }) {
         authorizationUrl = details.url;
         const state = new URL(details.url).searchParams.get('state');
-        return `https://jldnpmcpimhabiphcglkbgmbffpoocpo.chromiumapp.org/atrium?code=synthetic-code&state=${state}`;
+        return `https://eomlblaiglafndhplfhilmdcaofhkkbj.chromiumapp.org/atrium?code=synthetic-code&state=${state}`;
       },
     };
     const broker = new BrowserOAuthBroker(identity, store, () => 1_000);

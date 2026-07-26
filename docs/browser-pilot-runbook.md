@@ -35,6 +35,12 @@ Checklist:
    `pnpm verify:pilot`. Add that store item through district Chrome Admin and
    `ExtensionSettings`; do not distribute the unpacked directory or create a
    public listing.
+   Before submission, a Google Workspace administrator must enable domain
+   publishing under **Devices → Chrome → Apps & extensions → Users & browsers →
+   Additional settings → Chrome Web Store permissions**, or approve the
+   publisher's organization-approval link. The Distribution page must name the
+   PSD organization; a trusted-testers-only private item is not the production
+   channel.
 4. Apply a versioned policy from `browser-managed-policy.md`, refresh `chrome://policy`, and export Support diagnostics.
 5. Use the bundled production client. Sign in to AI Studio, create one synthetic
    private draft, verify its title/instructions/images in the private Atrium

@@ -13,7 +13,7 @@ import {
   type Worker,
 } from '@playwright/test';
 
-const extensionId = 'jldnpmcpimhabiphcglkbgmbffpoocpo';
+const extensionId = 'eomlblaiglafndhplfhilmdcaofhkkbj';
 const extensionPath = path.resolve(import.meta.dirname, '../../.output/chrome-mv3');
 const fixturePath = path.resolve(import.meta.dirname, '../../../../packages/test-fixtures/site');
 

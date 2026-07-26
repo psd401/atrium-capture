@@ -19,6 +19,7 @@ Review date: 2026-07-24. Registry metadata was checked before the initial instal
 | Playwright                       |          1.61.1 | Apache-2.0 | Extension-loaded Chromium integration and service-worker restart tests                   |
 | fake-indexeddb                   |           6.2.5 | Apache-2.0 | Test-only IndexedDB implementation for deterministic recovery tests                      |
 | esbuild                          |          0.28.1 | MIT        | Patched browser-test bundler and WXT/Vite transitive resolution; development only        |
+| adm-zip                          |           0.6.0 | MIT        | Maintained build-only ZIP writer used to make store-upload archives byte-reproducible    |
 
 `quicktype-core` is used only during generation; generated files remain MIT-licensed project output. No dependency receives runtime capture data. A dependency upgrade requires re-running `pnpm licenses:check`, `pnpm security:audit`, all contract tests, and the affected application test suite.
 
@@ -31,7 +32,10 @@ WXT's development-only packaging graph includes a small number of dual-license e
 WXT 0.20.27's Firefox runner requested vulnerable historical ranges of
 `adm-zip`, `shell-quote`, `tmp`, and a notification-only `uuid` dependency.
 Root pnpm overrides select patched `adm-zip@0.6.0`, `tmp@0.2.7`, and
-`uuid@11.1.1`. No patched `shell-quote` release exists, so the Chrome-only
+`uuid@11.1.1`. The same current MIT-licensed `adm-zip` release is now a direct
+build-only dependency for deterministic Web Store archives; registry metadata
+was rechecked on 2026-07-25 and the security audit remains the release gate. No
+patched `shell-quote` release exists, so the Chrome-only
 workspace replaces the unused `fx-runner` package with a dependency-free,
 fail-closed local module; Firefox development is deliberately unavailable. A
 root `esbuild@0.28.1` override also closes the development-server advisory

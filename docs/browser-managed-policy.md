@@ -38,7 +38,7 @@ Use Chrome Browser Cloud Management or the district's existing MDM to install th
 
 Before a ring receives the policy:
 
-1. Confirm the installed extension ID is `jldnpmcpimhabiphcglkbgmbffpoocpo`.
+1. Confirm the installed extension ID is `eomlblaiglafndhplfhilmdcaofhkkbj`.
 2. Validate the configuration against the packaged `managed-storage-schema.json` and the bounds above.
 3. Refresh `chrome://policy` and confirm the keys have no validation errors.
 4. Confirm the bundled OAuth client is a public `browser_extension` profile with the exact immutable redirect from ADR 0001 and only the approved scopes.

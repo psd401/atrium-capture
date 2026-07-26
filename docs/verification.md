@@ -168,12 +168,26 @@ support diagnostic, rollback check, and authenticated synthetic image/version
 acceptance passes. District rollout remains an operational approval and managed
 deployment action, not an implementation dependency.
 
-## M5 — engineering complete; release gate open (2026-07-25)
+## M5 — private store item established; release gate open (2026-07-25)
 
-- Browser package and manifest versions are `1.0.0`. `pnpm package:browser`
+- The verified Peninsula School District Chrome Web Store publisher created
+  private draft item `eomlblaiglafndhplfhilmdcaofhkkbj`. Its unpublished
+  `1.0.0` bootstrap upload established the authoritative store public key. The
+  release candidate version is `1.0.1`; development/test manifests use that
+  public key and upload manifests omit it as required by Chrome Web Store.
+- Chrome Web Store accepted the exact `1.0.1` candidate. The saved draft now
+  contains the reviewed listing, original icon, two synthetic 1280×800
+  screenshots, permission justifications, conservative data disclosures,
+  limited-use certifications, no-remote-code declaration, reviewer
+  instructions, and Private visibility. Submission remains blocked by the
+  publisher contact-email verification, a stable public URL for the committed
+  browser privacy policy, the production Atrium callback/origin migration, and
+  PSD domain-publishing approval.
+- `pnpm package:browser`
   builds the production MV3 Chrome Web Store upload ZIP, validates required
   runtime/schema files and the exact reviewed permission set, rejects
-  source/test/fixture/map/environment/key material, and emits
+  source/test/fixture/map/environment material and upload-time manifest keys,
+  derives the expected item ID from the committed public key, and emits
   `browser-upload-manifest.json` with an artifact size/SHA-256, telemetry
   disabled, bundled public-client Atrium configuration, signing explicitly
   false, and distribution readiness explicitly false. The installed/store and

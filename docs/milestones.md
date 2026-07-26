@@ -79,12 +79,12 @@ checklist, Chrome managed deployment approval, and supported-device validation.
 
 Exit gate: v1 release artifact passes automated and manual acceptance on district-supported Chrome/macOS combinations.
 
-Current status: the `1.0.0` store-upload bundle passes automated
-extension-loaded Chromium and authenticated Atrium acceptance and has a district
-Chrome/macOS ring checklist. Private PSD-only Web Store publication is approved
-but still requires district publisher authentication, an extension-ID custody
-check, store signing, `pnpm verify:pilot`, and managed-ring acceptance. The
-unsigned ZIP is not a release artifact.
+Current status: the district publisher is verified and owns private draft item
+`eomlblaiglafndhplfhilmdcaofhkkbj`. The accepted unpublished `1.0.0` bootstrap
+established its authoritative ID and public key; the reviewed `1.0.1` candidate
+uses that identity in development while correctly omitting `key` from its store
+upload. Final private review, store signing, `pnpm verify:pilot`, and
+managed-ring acceptance remain. The unsigned ZIP is not a release artifact.
 
 ## M6 — Mac recorder companion
 

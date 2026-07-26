@@ -1,6 +1,6 @@
 {
   "name": "@atrium-capture/browser-extension",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "type": "module",
   "license": "MIT",
@@ -30,6 +30,6 @@
     "test": "vitest run",
     "test:extension": "pnpm build && playwright test",
     "typecheck": "pnpm --workspace-root messages:check && wxt prepare && tsc --noEmit",
-    "zip": "wxt zip -b chrome"
+    "zip": "ATRIUM_CAPTURE_STORE_UPLOAD=1 wxt build -b chrome && node ../../scripts/create-browser-archive.mjs"
   }
 }

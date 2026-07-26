@@ -8,7 +8,7 @@ const require = createRequire(new URL('../apps/browser-extension/package.json', 
 const { chromium } = require('@playwright/test');
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const extensionId = 'jldnpmcpimhabiphcglkbgmbffpoocpo';
+const extensionId = 'eomlblaiglafndhplfhilmdcaofhkkbj';
 const extensionPath = path.join(repositoryRoot, 'apps/browser-extension/.output/chrome-mv3');
 const userDataDirectory = await mkdtemp(path.join(tmpdir(), 'atrium-capture-boundary-'));
 const origin = 'https://aistudio.psd401.ai';
