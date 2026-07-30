@@ -67,6 +67,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Install Playwright browser
+        run: pnpm --filter @atrium-capture/browser-extension exec playwright install chromium
+
       - name: Run engineering gates
         run: |
           pnpm check
