@@ -5,6 +5,7 @@ repository_root="${0:A:h:h}"
 package_path="$repository_root/apps/macos"
 output_root="$repository_root/dist/macos"
 app_path="$output_root/Atrium Capture.app"
+architectures="${ATRIUM_CAPTURE_ARCHITECTURES:-}"
 
 if [[ -z "${SDKROOT:-}" && -d /Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk ]]; then
   export SDKROOT=/Library/Developer/CommandLineTools/SDKs/MacOSX15.4.sdk
@@ -12,8 +13,20 @@ fi
 export CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-/private/tmp/atrium-capture-clang-cache}"
 export SWIFTPM_MODULECACHE_OVERRIDE="${SWIFTPM_MODULECACHE_OVERRIDE:-/private/tmp/atrium-capture-swift-cache}"
 
-swift build --disable-sandbox --package-path "$package_path" -c release
-binary_path="$(swift build --disable-sandbox --package-path "$package_path" -c release --show-bin-path)"
+build_arguments=(--disable-sandbox --package-path "$package_path" -c release)
+if [[ -n "$architectures" ]]; then
+  for architecture in ${(z)architectures}; do
+    build_arguments+=(--arch "$architecture")
+  done
+fi
+
+swift build "${build_arguments[@]}"
+binary_path="$(swift build "${build_arguments[@]}" --show-bin-path)"
+# SwiftPM's multi-architecture backend can leave a linker signature that no
+# longer covers the lipo-combined binary. Apply a local signature before running
+# the verifier and native host; the bundled copies are signed again below.
+codesign --force --sign - "$binary_path/AtriumCaptureMacVerifier"
+codesign --force --sign - "$binary_path/AtriumCaptureNativeHost"
 "$binary_path/AtriumCaptureMacVerifier"
 node "$repository_root/scripts/verify-native-host.mjs" "$binary_path/AtriumCaptureNativeHost"
 
@@ -31,7 +44,16 @@ if [[ "$icon_file" != "AtriumCapture.icns" || ! -f "$app_path/Contents/Resources
 fi
 
 if [[ -n "${ATRIUM_CAPTURE_CODESIGN_IDENTITY:-}" ]]; then
-  codesign --force --deep --sign "$ATRIUM_CAPTURE_CODESIGN_IDENTITY" --options runtime "$app_path"
+  codesign_arguments=(
+    --force
+    --deep
+    --sign "$ATRIUM_CAPTURE_CODESIGN_IDENTITY"
+    --options runtime
+  )
+  if [[ "$ATRIUM_CAPTURE_CODESIGN_IDENTITY" == Developer\ ID\ Application:* ]]; then
+    codesign_arguments+=(--timestamp)
+  fi
+  codesign "${codesign_arguments[@]}" "$app_path"
   codesign --verify --deep --strict "$app_path"
 elif [[ "${ATRIUM_CAPTURE_ADHOC_SIGN:-1}" == "1" ]]; then
   codesign --force --deep --sign - --options runtime "$app_path"

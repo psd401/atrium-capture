@@ -181,8 +181,15 @@ deployment action, not an implementation dependency.
   limited-use certifications, no-remote-code declaration, reviewer
   instructions, and Private visibility. Submission remains blocked by the
   publisher contact-email verification, a stable public URL for the committed
-  browser privacy policy, the production Atrium callback/origin migration, and
-  PSD domain-publishing approval.
+  browser privacy policy, and the production Atrium callback/origin migration.
+  Peninsula School District approved organization publishing on July 26, 2026;
+  the organization must still become selectable on the item Distribution page.
+- The July 26 production retest returns `invalid_redirect_uri` for the exact
+  authoritative callback and rejects the exact `chrome-extension://` token
+  origin. The native authorization request still returns HTTP 303, and the
+  built extension reaches all eight content routes with the expected
+  synthetic-token `401`. These bounded results isolate the remaining browser
+  blocker to the two OAuth registration values.
 - `pnpm package:browser`
   builds the production MV3 Chrome Web Store upload ZIP, validates required
   runtime/schema files and the exact reviewed permission set, rejects
@@ -210,7 +217,7 @@ ring. Public listing is forbidden.
 ## M6 — complete (2026-07-25)
 
 - The Swift package now builds generated contracts, platform-neutral native core, macOS adapters, SwiftUI app, native host, and acceptance verifier. The actual AppKit/ScreenCaptureKit/Accessibility/AuthenticationServices/Security targets compile and link with the installed macOS 15.4 SDK under Swift 6 strict concurrency.
-- The Swift suite executes 58 tests on macOS across shared fixtures, recorder persistence/restart, duplicate merging, ordering, secure-field rejection, generic input intent, exact bridge validation, serialized screenshots, mandatory sensitive-step redaction, durable publishing, ambiguous-create and restart-phase title reconciliation, submitted-state race protection, saved-guide switching, file-backed outbox restart/raw-byte cleanup, terminal-outbox restoration, bounded production request-ID diagnostics, mixed-scale display geometry, pixel sampling, bounded pins, clipboard retention, production gateway configuration, exact upload-byte digest validation, sequential TCC prompting, interactive annotation placement, every renderer tool, four arrow directions, and the off-main AuthenticationServices callback.
+- The Swift suite executes 76 tests on macOS across shared fixtures, recorder persistence/restart, duplicate/input/scroll merging, ordered capture backlogs, retry and missing-image recovery, secure-field rejection, generic input intent, fixed capture diagnostics, display/window/region scope selection and geometry, exact bridge validation, serialized screenshots, mandatory sensitive-step redaction, durable publishing, ambiguous-create and restart-phase title reconciliation, submitted-state race protection, saved-guide switching, file-backed outbox restart/raw-byte cleanup, terminal-outbox restoration, bounded production request-ID diagnostics, mixed-scale display geometry, pixel sampling, bounded pins, clipboard retention, production gateway configuration, exact upload-byte digest validation, sequential TCC prompting, interactive annotation placement, every renderer tool, four arrow directions, and the off-main AuthenticationServices callback.
 - The shared `capture-session-macos-v1.json` validates against the same schema in AJV and decodes through generated TypeScript and Swift models. A recorder test normalizes synthetic Finder, System Settings, and Office events into one `surface: macos` contract without a value field.
 - Accessibility source inspection and tests enforce the value-free boundary: the adapter never asks for `kAXValueAttribute`; secure roles return no name and are rejected before ScreenCaptureKit. Rejected-event receipts survive restart, frames pass through an explicit serialized queue, and merged-event raw files are discarded rather than retained as unreferenced assets.
 - Native review uses the same generated crop/annotation/session types and renders each local screenshot directly in its step card. A live signed-app capture persisted 1512×982 PNG assets and the rebuilt review workspace exposed lazy-loaded 645×419 previews. The signed editor was then exercised with redaction, blur, mosaic, highlight, rectangle, arrow, text, crop, and undo. Tools use drag-to-place image coordinates, previews run through the production renderer, **Undo** remains beside **Done**, and arrows retain all four drag directions through the backward-compatible optional `arrowDirection` contract field. Input and otherwise flagged screenshot steps cannot be flattened, approved, or enqueued without an opaque redaction; mosaic does not satisfy the gate. The Core Graphics release verifier injects a synthetic metadata marker, replaces target pixels with opaque black, preserves neighboring pixels, and proves `tEXt`/`iTXt`/`zTXt`/`eXIf`/`tIME` are absent.

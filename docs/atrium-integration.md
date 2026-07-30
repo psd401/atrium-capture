@@ -70,11 +70,24 @@ may be skipped only when a valid AI Studio session already exists.
 
 ### Current production acceptance status
 
-As of 2026-07-25, production accepts both exact redirects and all seven scopes,
-returns real authorization redirects, performs district login, skips consent
-only for the two explicitly trusted first-party records, and accepts token
-exchange from the exact stable extension origin. Browser sign-in reaches the
-registered callback, exchanges the code, and reports `Connected to Atrium`.
+Authenticated production acceptance completed on July 25, 2026, before the
+browser client moved from its provisional development identity to the
+authoritative Chrome Web Store identity. Native authorization remains accepted:
+the exact native request returns an HTTP 303 authorization redirect.
+
+The July 26 post-deployment browser retest shows that the authoritative Store
+identity is not yet registered at both OAuth boundaries:
+
+- authorization returns `invalid_redirect_uri` for
+  `https://eomlblaiglafndhplfhilmdcaofhkkbj.chromiumapp.org/atrium`; and
+- token exchange returns an origin rejection for
+  `chrome-extension://eomlblaiglafndhplfhilmdcaofhkkbj`.
+
+The built extension worker still reaches all eight production content routes,
+which fail closed with the expected synthetic-token `401`. Browser installation,
+capture, review, and local recovery remain available, but browser AI Studio
+sign-in and publishing are blocked until those two exact registration values
+replace the provisional callback and origin.
 
 The first authenticated private-draft attempt exposed a client-only Chrome
 runtime defect: the production gateway stored native `fetch` as an object

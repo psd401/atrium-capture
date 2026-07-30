@@ -90,7 +90,7 @@ public enum MacPermissionCenter {
     }
 }
 
-public final class AccessibilitySemanticReader: @unchecked Sendable {
+public final class AccessibilitySemanticReader: NativeSemanticEventReading, @unchecked Sendable {
     public init() {}
 
     /// Reads roles, labels, geometry, and application context only. It deliberately
@@ -102,31 +102,58 @@ public final class AccessibilitySemanticReader: @unchecked Sendable {
         else { return nil }
 
         let applicationElement = AXUIElementCreateApplication(app.processIdentifier)
-        guard let focusedValue = attribute(applicationElement, kAXFocusedUIElementAttribute as CFString),
-              CFGetTypeID(focusedValue) == AXUIElementGetTypeID()
-        else {
+        let focused: AXUIElement? = {
+            guard let focusedValue = attribute(
+                applicationElement,
+                kAXFocusedUIElementAttribute as CFString
+            ),
+                CFGetTypeID(focusedValue) == AXUIElementGetTypeID()
+            else { return nil }
+            return (focusedValue as! AXUIElement)
+        }()
+
+        // Typing fails closed unless Accessibility identifies the exact focused
+        // control. Clicks, scrolling, and shortcuts can safely fall back to the
+        // frontmost app/window so a temporary AX gap does not lose the screenshot.
+        if action == .input, focused == nil {
             return nil
         }
-        let focused = focusedValue as! AXUIElement
-        let role = attribute(focused, kAXRoleAttribute as CFString) as? String
+        let role = focused.flatMap {
+            attribute($0, kAXRoleAttribute as CFString) as? String
+        }
+        let subrole = focused.flatMap {
+            attribute($0, kAXSubroleAttribute as CFString) as? String
+        }
 
         // Secure fields are represented only by their role so the core can reject
         // the event before any screenshot is requested.
-        let secure = (role ?? "").localizedCaseInsensitiveContains("secure")
+        let securityRole = [role, subrole].compactMap { $0 }.joined(separator: " ")
+        let secure = securityRole.localizedCaseInsensitiveContains("secure")
+            || securityRole.localizedCaseInsensitiveContains("password")
+        if action == .input, role == nil, subrole == nil {
+            return nil
+        }
         let name: String? = secure ? nil : (
-            attribute(focused, kAXTitleAttribute as CFString) as? String
-                ?? attribute(focused, kAXDescriptionAttribute as CFString) as? String
-                ?? attribute(focused, kAXHelpAttribute as CFString) as? String
+            focused.flatMap { attribute($0, kAXTitleAttribute as CFString) as? String }
+                ?? focused.flatMap { attribute($0, kAXDescriptionAttribute as CFString) as? String }
+                ?? focused.flatMap { attribute($0, kAXHelpAttribute as CFString) as? String }
         )
-        let windowValue = attribute(focused, kAXWindowAttribute as CFString)
+        let windowValue = focused.flatMap {
+            attribute($0, kAXWindowAttribute as CFString)
+        } ?? attribute(applicationElement, kAXFocusedWindowAttribute as CFString)
         let window: AXUIElement? = if let windowValue, CFGetTypeID(windowValue) == AXUIElementGetTypeID() {
             (windowValue as! AXUIElement)
         } else {
             nil
         }
         let windowTitle = window.flatMap { attribute($0, kAXTitleAttribute as CFString) as? String }
-        let position = axPoint(attribute(focused, kAXPositionAttribute as CFString))
-        let size = axSize(attribute(focused, kAXSizeAttribute as CFString))
+        let geometryElement = focused ?? window
+        let position = geometryElement.flatMap {
+            axPoint(attribute($0, kAXPositionAttribute as CFString))
+        }
+        let size = geometryElement.flatMap {
+            axSize(attribute($0, kAXSizeAttribute as CFString))
+        }
         let bounds: NativeRect? = if let position, let size {
             NativeRect(x: position.x, y: position.y, width: size.width, height: size.height)
         } else {
@@ -141,7 +168,7 @@ public final class AccessibilitySemanticReader: @unchecked Sendable {
             eventID: UUID().uuidString.lowercased(),
             occurredAt: occurredAt,
             action: action,
-            accessibilityRole: role,
+            accessibilityRole: subrole ?? role,
             accessibleName: name,
             bounds: bounds,
             appName: app.localizedName ?? "Application",
@@ -178,7 +205,7 @@ public enum MacPermissionCenter {
     }
 }
 
-public final class AccessibilitySemanticReader: @unchecked Sendable {
+public final class AccessibilitySemanticReader: NativeSemanticEventReading, @unchecked Sendable {
     public init() {}
     public func focusedEvent(action _: NativeCaptureAction, occurredAt _: Date = Date()) -> NativeSemanticEvent? { nil }
 }

@@ -6,7 +6,9 @@ Browser v1 and the native Mac companion are locally buildable and tested. The
 district Chrome Web Store publisher owns the private browser item
 `eomlblaiglafndhplfhilmdcaofhkkbj`; the browser build produces a verified,
 explicitly unsigned upload bundle for that item. The installed local Mac pilot
-is Apple Development-signed with a stable bundle identity. Both contain the
+is Apple Development-signed with a stable bundle identity. A tag-driven,
+fail-closed release workflow builds a universal notarized Mac installer for
+Jamf after Developer ID release credentials are supplied. Both contain the
 documented direct Atrium publisher and bundle their approved non-secret
 production OAuth client IDs, so employees only sign in with their district AI
 Studio account.
@@ -33,7 +35,7 @@ with a current version and synchronized title. Final synthetic
 private Atrium drafts and visually verified: five browser-extension steps and
 ten Mac-app steps, with every reviewed image loaded. The remaining release gates
 are final private PSD-only Chrome Web Store review/managed deployment and
-district Developer ID signing, notarization, and Mac MDM deployment.
+district Developer ID signing/notarization and Mac MDM ring acceptance.
 
 ## Repository map
 

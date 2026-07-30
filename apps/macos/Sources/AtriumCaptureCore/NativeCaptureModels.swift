@@ -123,11 +123,18 @@ public struct NativeCaptureRequest: Equatable, Sendable {
     public let eventID: String
     public let bounds: NativeRect?
     public let regionOnly: Bool
+    public let usesRecordingScope: Bool
 
-    public init(eventID: String, bounds: NativeRect?, regionOnly: Bool = false) {
+    public init(
+        eventID: String,
+        bounds: NativeRect?,
+        regionOnly: Bool = false,
+        usesRecordingScope: Bool = false
+    ) {
         self.eventID = eventID
         self.bounds = bounds
         self.regionOnly = regionOnly
+        self.usesRecordingScope = usesRecordingScope
     }
 }
 

@@ -140,6 +140,26 @@ public final class NativeRecorder: @unchecked Sendable {
         try transition(to: .recording, allowed: [.paused], now: now)
     }
 
+    /// Continues adding steps to an unpublished guide that is already under review.
+    /// Published/submitted guides must begin a new session instead.
+    @discardableResult
+    public func continueRecording(now: Date = Date()) throws -> AtriumCaptureSession {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let current = envelope else { throw NativeRecorderError.noSession }
+        guard current.session.state == .review || current.session.state == .publishable else {
+            throw NativeRecorderError.invalidState
+        }
+        let session = current.session.with(
+            policy: current.session.policy.with(reviewStatus: .inReview),
+            revision: current.session.revision + 1,
+            state: .recording,
+            updatedAt: now
+        )
+        try persist(NativeRecorderEnvelope(session: session, eventReceipts: current.eventReceipts))
+        return session
+    }
+
     @discardableResult
     public func stop(now: Date = Date()) throws -> AtriumCaptureSession {
         try transition(to: .review, allowed: [.recording, .paused], now: now)
@@ -244,11 +264,27 @@ public final class NativeRecorder: @unchecked Sendable {
             && steps.last?.action == .input
             && steps.last?.target?.macos?.bundleID == event.bundleID
             && steps.last?.target?.accessibleName == cleanName
+            && event.occurredAt.timeIntervalSince(steps.last?.occurredAt ?? .distantPast) >= 0
             && event.occurredAt.timeIntervalSince(steps.last?.occurredAt ?? .distantPast) <= 2
+        let shouldMergeScroll = event.action == .scroll
+            && steps.last?.action == .scroll
+            && steps.last?.target?.macos?.bundleID == event.bundleID
+            && event.occurredAt.timeIntervalSince(steps.last?.occurredAt ?? .distantPast) >= 0
+            && event.occurredAt.timeIntervalSince(steps.last?.occurredAt ?? .distantPast) <= 0.75
+        let shouldMerge = shouldMergeInput || shouldMergeScroll
 
         let result: NativeRecordDecision
-        if shouldMergeInput, let last = steps.last {
-            steps[steps.count - 1] = last.with(occurredAt: event.occurredAt)
+        if shouldMerge, let last = steps.last {
+            let screenshotAssetID: String?? = if last.screenshotAssetID == nil,
+                                                  let screenshot {
+                .some(screenshot.assetID)
+            } else {
+                nil
+            }
+            steps[steps.count - 1] = last.with(
+                occurredAt: event.occurredAt,
+                screenshotAssetID: screenshotAssetID
+            )
             result = .merged(stepID: last.stepID)
         } else {
             steps.append(step)
@@ -261,8 +297,10 @@ public final class NativeRecorder: @unchecked Sendable {
         }
 
         var assets = current.session.assets
-        if !shouldMergeInput,
-           let screenshot,
+        let mergedStepAdoptedScreenshot = shouldMerge
+            && steps.last?.screenshotAssetID == screenshot?.assetID
+        if let screenshot,
+           (!shouldMerge || mergedStepAdoptedScreenshot),
            !assets.contains(where: { $0.assetID == screenshot.assetID }) {
             assets.append(AssetElement(
                 annotations: [],

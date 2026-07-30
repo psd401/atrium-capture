@@ -1,12 +1,16 @@
 # Milestones
 
 Verification evidence is recorded in [verification.md](verification.md).
-Production private-draft publishing is accepted from both clients with
-synthetic fixtures. M0-M3 and M6 meet their exit gates; M4, M5, and M7 have
-complete locally automatable engineering work but remain open until their
-documented district pilot, signed distribution, and physical-device matrices
-pass. An unsigned upload ZIP or ad-hoc app is never counted as a release
-artifact.
+Production private-draft publishing was accepted from both clients with
+synthetic fixtures before the browser moved to its authoritative Chrome Web
+Store identity. The native registration still passes. The July 26 browser
+retest proves that the new exact callback and extension origin have not replaced
+the provisional registration, so browser sign-in/publishing is temporarily
+blocked while local capture/review and all production content routes remain
+available. M0-M3 and M6 meet their exit gates; M4, M5, and M7 have complete
+locally automatable engineering work but remain open until their documented
+district pilot, signed distribution, and physical-device matrices pass. An
+unsigned upload ZIP or ad-hoc app is never counted as a release artifact.
 
 ## M0 — Contracts and repository foundation
 
@@ -67,10 +71,12 @@ rendered first, middle, and final steps were visually inspected in Atrium.
 Exit gate: pilot checklist, privacy review, rollback, and support diagnostics are approved.
 
 Local status: engineering acceptance is complete. Credential-free
-discovery/registration, token, and real extension-worker content-route smokes
-pass, as does authenticated production private-draft acceptance with the
-committed synthetic fixture. Broad rollout still requires the district pilot
-checklist, Chrome managed deployment approval, and supported-device validation.
+discovery and real extension-worker content-route smokes pass. Authenticated
+production private-draft acceptance passed under the provisional browser
+identity; the authoritative Store callback and origin retest is currently
+blocked by exact server registration mismatches. Broad rollout still requires
+that correction, the district pilot checklist, Chrome managed deployment
+approval, and supported-device validation.
 
 ## M5 — Browser v1
 

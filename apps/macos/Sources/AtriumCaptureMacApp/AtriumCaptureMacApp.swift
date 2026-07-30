@@ -11,6 +11,22 @@ import SwiftUI
 
 @MainActor
 final class CaptureAppModel: ObservableObject {
+    private enum SyntheticRecordingScopeOverride {
+        case immediate(MacRecordingCaptureScope)
+        case window(title: String)
+    }
+
+    private static var captureClientVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+            ?? "development"
+    }
+
+    enum RecordingScopeChoice {
+        case display
+        case region
+        case window
+    }
+
     enum LaunchAtLoginState: Equatable {
         case disabled
         case enabled
@@ -33,6 +49,10 @@ final class CaptureAppModel: ObservableObject {
     @Published private(set) var pins: [PinnedCapture] = []
     @Published private(set) var atriumAuthentication: NativeAuthenticationStatus = .unconfigured
     @Published private(set) var launchAtLoginState: LaunchAtLoginState = .disabled
+    @Published private(set) var recordingTransitionInProgress = false
+    @Published private(set) var recordingScopeSelectionInProgress = false
+    @Published private(set) var captureDiagnostics = MacCaptureDiagnostics()
+    @Published var recordingScopeChooserPresented = false
     @Published var manualInstruction = ""
 
     private let recorder: NativeRecorder
@@ -45,8 +65,10 @@ final class CaptureAppModel: ObservableObject {
     private let defaultCollectionID: String?
     private let localMockEnabled: Bool
     private let capture: SerializedNativeCapture
+    private let frameSource: ScreenCaptureKitFrameSource
     private let reader: AccessibilitySemanticReader
     private let regionSelector: RegionSelectionController
+    private let recordingScopePicker = RecordingScopePicker()
     private let pinBoard: PinBoard
     private let pinWindows = PinnedImageWindowManager()
     private let clipboard = MacClipboardController()
@@ -88,7 +110,18 @@ final class CaptureAppModel: ObservableObject {
     }
 
     var canStartRecording: Bool {
-        session?.state != .recording && session?.state != .paused
+        !publicationStarting
+            && !recordingTransitionInProgress
+            && !recordingScopeSelectionInProgress
+            && session?.state != .recording
+            && session?.state != .paused
+    }
+
+    var recordingStartButtonTitle: String {
+        guard !currentGuideContentFrozen,
+              session?.state == .review || session?.state == .publishable
+        else { return "Start new recording" }
+        return session?.steps.isEmpty == true ? "Start recording" : "Continue recording"
     }
 
     var canQuickCapture: Bool {
@@ -146,7 +179,8 @@ final class CaptureAppModel: ObservableObject {
                 persistence: FileNativeRecorderPersistence(url: root.appendingPathComponent("recorder-state.json"))
             )
             let vault = NativeAssetVault(rootURL: root)
-            let capture = SerializedNativeCapture(source: ScreenCaptureKitFrameSource())
+            let frameSource = ScreenCaptureKitFrameSource()
+            let capture = SerializedNativeCapture(source: frameSource)
             let reader = AccessibilitySemanticReader()
             let pipeline = MacCapturePipeline(
                 recorder: recorder,
@@ -177,6 +211,7 @@ final class CaptureAppModel: ObservableObject {
             defaultCollectionID = productionSettings?.defaultCollectionID
             self.localMockEnabled = localMockEnabled
             self.capture = capture
+            self.frameSource = frameSource
             self.reader = reader
             regionSelector = RegionSelectionController(capture: capture)
             pinBoard = try PinBoard(
@@ -647,20 +682,127 @@ final class CaptureAppModel: ObservableObject {
             statusCode = "STOP_CURRENT_RECORDING_FIRST"
             return
         }
+        if let scopeOverride = syntheticRecordingScopeOverride {
+            switch scopeOverride {
+            case let .immediate(scope):
+                do {
+                    try beginRecording(scope: scope)
+                } catch {
+                    frameSource.setRecordingScope(.automatic)
+                    statusCode = "RECORDER_START_FAILED"
+                }
+            case let .window(title):
+                recordingScopeSelectionInProgress = true
+                statusCode = "CHOOSING_SYNTHETIC_WINDOW"
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    defer { recordingScopeSelectionInProgress = false }
+                    do {
+                        let scope = try await frameSource.syntheticWindowScope(
+                            exactWindowTitle: title
+                        )
+                        try beginRecording(scope: scope)
+                    } catch {
+                        frameSource.setRecordingScope(.automatic)
+                        statusCode = "RECORDER_START_FAILED"
+                    }
+                }
+            }
+            return
+        }
+        recordingScopeSelectionInProgress = true
+        recordingScopeChooserPresented = true
+        statusCode = "CHOOSE_RECORDING_SCOPE"
+    }
+
+    func chooseRecordingScope(_ choice: RecordingScopeChoice) {
+        guard recordingScopeSelectionInProgress else { return }
+        recordingScopeChooserPresented = false
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                frameSource.setRecordingScope(.automatic)
+                let scope = switch choice {
+                case .display:
+                    try await recordingScopePicker.select(.display)
+                case .window:
+                    try await recordingScopePicker.select(.window)
+                case .region:
+                    MacRecordingCaptureScope.region(try await regionSelector.selectRegion())
+                }
+                try beginRecording(scope: scope)
+            } catch RecordingScopePickerError.cancelled {
+                statusCode = "RECORDING_SCOPE_CANCELLED"
+            } catch RegionSelectionError.cancelled {
+                statusCode = "RECORDING_SCOPE_CANCELLED"
+            } catch {
+                frameSource.setRecordingScope(.automatic)
+                statusCode = "RECORDING_SCOPE_FAILED"
+            }
+            recordingScopeSelectionInProgress = false
+        }
+    }
+
+    func cancelRecordingScopeSelection() {
+        guard recordingScopeChooserPresented else { return }
+        recordingScopeChooserPresented = false
+        recordingScopeSelectionInProgress = false
+        statusCode = "READY"
+    }
+
+    private func beginRecording(scope: MacRecordingCaptureScope) throws {
+        frameSource.setRecordingScope(scope)
         do {
             try persistCurrentSession()
             screenshotImageCache.removeAll()
-            publishJob = nil
-            session = try recorder.start(
-                appVersion: "1.0.0",
-                osVersion: ProcessInfo.processInfo.operatingSystemVersionString
-            )
+            let canContinueCurrentGuide = !currentGuideContentFrozen
+                && (session?.state == .review || session?.state == .publishable)
+            if canContinueCurrentGuide {
+                session = try recorder.continueRecording()
+            } else {
+                publishJob = nil
+                session = try recorder.start(
+                    appVersion: Self.captureClientVersion,
+                    osVersion: ProcessInfo.processInfo.operatingSystemVersionString
+                )
+            }
             try persistCurrentSession()
             refreshGuides()
+            monitor.resetDiagnostics()
+            captureDiagnostics = monitor.diagnosticsSnapshot()
             monitor.start()
             statusCode = "RECORDING"
         } catch {
-            statusCode = "RECORDER_START_FAILED"
+            frameSource.setRecordingScope(.automatic)
+            throw error
+        }
+    }
+
+    /// Test automation can bypass macOS's protected sharing picker only when the
+    /// entire app is already running against an isolated local-mock data root.
+    /// Production and ordinary local launches always show the real scope chooser.
+    private var syntheticRecordingScopeOverride: SyntheticRecordingScopeOverride? {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["ATRIUM_CAPTURE_LOCAL_MOCK"] == "1",
+              let dataRoot = environment["ATRIUM_CAPTURE_DATA_ROOT"],
+              URL(fileURLWithPath: dataRoot).standardizedFileURL.path
+                .hasPrefix(FileManager.default.temporaryDirectory.standardizedFileURL.path)
+        else { return nil }
+        switch environment["ATRIUM_CAPTURE_TEST_RECORDING_SCOPE"] {
+        case "automatic":
+            return .immediate(.automatic)
+        case "region":
+            let quartzBounds = CGDisplayBounds(CGMainDisplayID())
+            return .immediate(.region(NativeRect(
+                x: quartzBounds.minX + quartzBounds.width * 0.2,
+                y: quartzBounds.minY + quartzBounds.height * 0.2,
+                width: quartzBounds.width * 0.6,
+                height: quartzBounds.height * 0.6
+            )))
+        case "window":
+            return .window(title: "Atrium Capture synthetic fixture")
+        default:
+            return nil
         }
     }
 
@@ -675,7 +817,7 @@ final class CaptureAppModel: ObservableObject {
             publishJob = nil
             _ = try recorder.start(
                 title: "Untitled guide",
-                appVersion: "1.0.0",
+                appVersion: Self.captureClientVersion,
                 osVersion: ProcessInfo.processInfo.operatingSystemVersionString
             )
             session = try recorder.stop()
@@ -710,12 +852,34 @@ final class CaptureAppModel: ObservableObject {
     }
 
     func pauseOrResume() {
+        guard !recordingTransitionInProgress else { return }
+        if session?.state == .recording {
+            recordingTransitionInProgress = true
+            monitor.stop()
+            statusCode = "FINISHING_CAPTURE"
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await monitor.waitForPendingCaptures()
+                defer { recordingTransitionInProgress = false }
+                captureDiagnostics = monitor.diagnosticsSnapshot()
+                do {
+                    session = try recorder.pause()
+                    try persistCurrentSession()
+                    refreshGuides()
+                    statusCode = "PAUSED"
+                } catch {
+                    if recorder.snapshot()?.state == .recording {
+                        monitor.start()
+                    }
+                    statusCode = "RECORDER_TRANSITION_FAILED"
+                }
+            }
+            return
+        }
         do {
-            if session?.state == .recording {
-                session = try recorder.pause()
-                statusCode = "PAUSED"
-            } else if session?.state == .paused {
+            if session?.state == .paused {
                 session = try recorder.resume()
+                monitor.start()
                 statusCode = "RECORDING"
             }
             try persistCurrentSession()
@@ -726,14 +890,29 @@ final class CaptureAppModel: ObservableObject {
     }
 
     func stop() {
-        do {
-            monitor.stop()
-            session = try recorder.stop()
-            try persistCurrentSession()
-            refreshGuides()
-            statusCode = "REVIEW_REQUIRED"
-        } catch {
-            statusCode = "RECORDER_STOP_FAILED"
+        guard !recordingTransitionInProgress,
+              session?.state == .recording || session?.state == .paused
+        else { return }
+        recordingTransitionInProgress = true
+        monitor.stop()
+        statusCode = "FINISHING_CAPTURE"
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await monitor.waitForPendingCaptures()
+            defer { recordingTransitionInProgress = false }
+            captureDiagnostics = monitor.diagnosticsSnapshot()
+            do {
+                session = try recorder.stop()
+                try persistCurrentSession()
+                refreshGuides()
+                frameSource.setRecordingScope(.automatic)
+                statusCode = "REVIEW_REQUIRED"
+            } catch {
+                if recorder.snapshot()?.state == .recording {
+                    monitor.start()
+                }
+                statusCode = "RECORDER_STOP_FAILED"
+            }
         }
     }
 
@@ -1354,7 +1533,7 @@ final class CaptureAppModel: ObservableObject {
             publishJob = nil
             targetSession = try recorder.start(
                 title: title,
-                appVersion: "1.0.0",
+                appVersion: Self.captureClientVersion,
                 osVersion: ProcessInfo.processInfo.operatingSystemVersionString
             )
         }
@@ -1380,16 +1559,25 @@ final class CaptureAppModel: ObservableObject {
     }
 
     private func handlePermissionChange() {
+        captureDiagnostics = monitor.diagnosticsSnapshot()
         let next = MacPermissionCenter.snapshot()
         guard next != permissions else { return }
         permissions = next
         if session?.state == .recording,
            (next.screenRecording != .granted || next.accessibility != .granted) {
+            guard !recordingTransitionInProgress else { return }
+            recordingTransitionInProgress = true
             monitor.stop()
-            session = try? recorder.pause()
-            try? persistCurrentSession()
-            refreshGuides()
-            statusCode = "PERMISSION_REVOKED_CAPTURE_PAUSED"
+            statusCode = "FINISHING_CAPTURE"
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                await monitor.waitForPendingCaptures()
+                defer { recordingTransitionInProgress = false }
+                session = try? recorder.pause()
+                try? persistCurrentSession()
+                refreshGuides()
+                statusCode = "PERMISSION_REVOKED_CAPTURE_PAUSED"
+            }
         }
     }
 
@@ -1530,12 +1718,14 @@ private struct AtriumCaptureMenuBarView: View {
             Button(model.session?.state == .paused ? "Resume Recording" : "Pause Recording") {
                 model.pauseOrResume()
             }
+            .disabled(model.recordingTransitionInProgress)
             Button("Stop and Review") {
                 model.stop()
                 showWorkspace()
             }
+            .disabled(model.recordingTransitionInProgress)
         } else {
-            Button("Start New Recording") {
+            Button(model.recordingStartButtonTitle) {
                 model.start()
                 showWorkspace()
             }

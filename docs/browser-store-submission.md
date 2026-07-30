@@ -127,7 +127,7 @@ Before selecting **Submit for review**:
 
 ## Current private draft
 
-As of July 25, 2026:
+As of July 26, 2026:
 
 - the Peninsula School District publisher owns item
   `eomlblaiglafndhplfhilmdcaofhkkbj`;
@@ -137,10 +137,16 @@ As of July 25, 2026:
   two synthetic screenshots, support/homepage links, permission justifications,
   conservative data disclosures, limited-use certifications, no-remote-code
   declaration, reviewer instructions, and Private visibility are saved;
-- Chrome Web Store still requires verification of
-  `tsd-developers-psd@edtools.psd401.net` and a public privacy-policy URL before
+- the publisher profile contains a stale, invalid contact address. Do not send
+  verification mail to it or copy it into release documentation. The dashboard
+  exposes no edit control, so replace it through Chrome Web Store support with
+  the district-owned `servicecentral@psd401.net` address before submission. A
+  support request containing the publisher ID, item ID, stale address, and
+  replacement address was submitted successfully on July 26, 2026 and is
+  awaiting Google's response;
+- Chrome Web Store still requires a public privacy-policy URL before
   submission; and
-- district-wide availability additionally requires domain publishing to be
-  enabled by a Google Workspace administrator or the publisher's organization
-  approval link to be approved by that administrator. Trusted-testers-only
-  Private visibility is not the 1,000-user distribution target.
+- Peninsula School District approved the publisher for organization publishing
+  on July 26, 2026. The item must still select that organization on its
+  Distribution page. Trusted-testers-only Private visibility is not the
+  1,000-user distribution target.

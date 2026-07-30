@@ -63,6 +63,105 @@ final class NativeRecorderTests: XCTestCase {
         if case .merged = merged {} else { XCTFail("Expected input merge") }
     }
 
+    func testMergedInputAdoptsFirstSuccessfulScreenshotAfterEarlierFailure() throws {
+        let recorder = try NativeRecorder(persistence: MemoryNativeRecorderPersistence())
+        _ = try recorder.start(appVersion: "1.0.0", osVersion: nil)
+        let first = makeEvent(
+            id: "input-without-image",
+            action: .input,
+            timestamp: 1_001,
+            name: "Synthetic label"
+        )
+        let recovered = makeEvent(
+            id: "input-with-recovered-image",
+            action: .input,
+            timestamp: 1_002,
+            name: "Synthetic label"
+        )
+        let recoveredAsset = makeAsset(id: "recovered-input-asset")
+
+        _ = try recorder.record(first)
+        XCTAssertEqual(
+            try recorder.record(recovered, screenshot: recoveredAsset),
+            .merged(stepID: recorder.snapshot()!.steps[0].stepID)
+        )
+
+        XCTAssertEqual(recorder.snapshot()?.steps.count, 1)
+        XCTAssertEqual(recorder.snapshot()?.steps[0].screenshotAssetID, recoveredAsset.assetID)
+        XCTAssertEqual(recorder.snapshot()?.assets.map(\.assetID), [recoveredAsset.assetID])
+    }
+
+    func testScrollWheelBurstMergesButSeparatedScrollsRemainDistinct() throws {
+        let recorder = try NativeRecorder(persistence: MemoryNativeRecorderPersistence())
+        _ = try recorder.start(appVersion: "1.0.0", osVersion: nil)
+        _ = try recorder.record(
+            makeEvent(id: "scroll-1", action: .scroll, timestamp: 1_001),
+            screenshot: makeAsset(id: "scroll-asset-1")
+        )
+        let merged = try recorder.record(
+            makeEvent(id: "scroll-2", action: .scroll, timestamp: 1_001.5)
+        )
+        _ = try recorder.record(
+            makeEvent(id: "scroll-3", action: .scroll, timestamp: 1_003),
+            screenshot: makeAsset(id: "scroll-asset-3")
+        )
+
+        if case .merged = merged {} else { XCTFail("Expected scroll burst merge") }
+        XCTAssertEqual(recorder.snapshot()?.steps.count, 2)
+        XCTAssertEqual(
+            recorder.snapshot()?.assets.map(\.assetID),
+            ["scroll-asset-1", "scroll-asset-3"]
+        )
+    }
+
+    func testContinueRecordingPreservesReviewedGuideAndReceiptHistory() throws {
+        let persistence = MemoryNativeRecorderPersistence()
+        let recorder = try NativeRecorder(persistence: persistence)
+        let started = try recorder.start(
+            sessionID: "10000000-0000-4000-8000-000000000023",
+            title: "Synthetic continued guide",
+            appVersion: "1.0.0",
+            osVersion: "synthetic",
+            now: Date(timeIntervalSince1970: 1_000)
+        )
+        let first = makeEvent(id: "continued-first", action: .click, timestamp: 1_001)
+        _ = try recorder.record(first, screenshot: makeAsset(id: "continued-asset-1"))
+        _ = try recorder.stop(now: Date(timeIntervalSince1970: 1_002))
+
+        let continued = try recorder.continueRecording(
+            now: Date(timeIntervalSince1970: 1_003)
+        )
+        XCTAssertEqual(continued.sessionID, started.sessionID)
+        XCTAssertEqual(continued.state, .recording)
+        XCTAssertEqual(continued.steps.count, 1)
+        XCTAssertEqual(continued.assets.count, 1)
+        XCTAssertEqual(try recorder.record(first), .duplicate)
+
+        _ = try recorder.record(
+            makeEvent(id: "continued-second", action: .click, timestamp: 1_004),
+            screenshot: makeAsset(id: "continued-asset-2")
+        )
+        let reviewed = try recorder.stop(now: Date(timeIntervalSince1970: 1_005))
+        XCTAssertEqual(reviewed.sessionID, started.sessionID)
+        XCTAssertEqual(reviewed.steps.count, 2)
+        XCTAssertEqual(reviewed.assets.count, 2)
+
+        let restarted = try NativeRecorder(persistence: persistence)
+        XCTAssertEqual(restarted.snapshot()?.sessionID, started.sessionID)
+        XCTAssertEqual(restarted.snapshot()?.steps.count, 2)
+    }
+
+    func testContinueRecordingRejectsSubmittedGuide() throws {
+        let recorder = try NativeRecorder(persistence: MemoryNativeRecorderPersistence())
+        _ = try recorder.start(appVersion: "1.0.0", osVersion: nil)
+        let reviewed = try recorder.stop()
+        try recorder.replaceReviewedSession(reviewed.with(state: .submitted))
+
+        XCTAssertThrowsError(try recorder.continueRecording()) { error in
+            XCTAssertEqual(error as? NativeRecorderError, .invalidState)
+        }
+    }
+
     func testTitleUpdatePreservesRecordedStepsAndReceiptDeduplication() throws {
         let recorder = try NativeRecorder(persistence: MemoryNativeRecorderPersistence())
         _ = try recorder.start(

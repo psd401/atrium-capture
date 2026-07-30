@@ -103,5 +103,5 @@ Material changes to capture, use, sharing, or retention practices require an
 updated policy and Chrome Web Store disclosure before release.
 
 Questions about this extension or policy may be directed to Peninsula School
-District Technology Services at
-`tsd-developers-psd@edtools.psd401.net`.
+District Technology Services at `servicecentral@psd401.net` or through the
+district's public support page: <https://www.psd401.net/20064_4>.
