@@ -27,6 +27,11 @@ Apple Development-signed and installed with a stable identity.
 - Private PSD-only Chrome Web Store signing and managed-ring distribution
 - Apple distribution signing, notarization, MDM packaging, and physical-device acceptance
 
+The macOS release workflow automates notarized installer builds when triggered by a
+version tag or manual dispatch. It requires Developer ID Application and Installer
+credentials in the CI environment and publishes a GitHub release only after successful
+notarization and Gatekeeper acceptance.
+
 Both public OAuth clients, idempotent authored-asset publication, and
 authenticated synthetic production-Atrium acceptance are live verified.
 `pnpm verify:pilot` remains intentionally red until a receipt matches the exact

@@ -22,9 +22,12 @@ unavailable.
 - Browser-extension and RFC 8252-style native redirects
 
 The clients use the documented AI Studio v1/OIDC routes and bundle the approved
-non-secret production public client UUIDs. Managed configuration can override a
-UUID only for an approved test client. The local HTTP mock still uses only the
-visibly non-production `/_mock/atrium-capture/v1` route.
+non-secret production public client UUIDs. The browser extension uses the
+store-assigned ID `eomlblaiglafndhplfhilmdcaofhkkbj` as its authoritative origin
+for OAuth redirects and extension URIs; see [ADR 0009](../../docs/adr/0009-chrome-web-store-authoritative-identity.md)
+for the migration rationale. Managed configuration can override a UUID only for
+an approved test client. The local HTTP mock still uses only the visibly
+non-production `/_mock/atrium-capture/v1` route.
 
 ## Durable phases
 
