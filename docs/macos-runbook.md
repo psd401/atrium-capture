@@ -68,11 +68,31 @@ reconciles later title edits through Atrium's documented metadata update route.
 Step and image content stays frozen once a draft job begins because it belongs to
 that durable version snapshot.
 
-Choose **New guide** for an empty review workspace or **Start new recording** to
-record immediately. Both preserve the current guide and its outbox; background
-recovery cannot replace the active workspace. Use **Open saved guide** to return
-to an earlier local guide. A quick capture appends to the current unpublished
-guide, or begins a new guide when the current one already has an Atrium job.
+Choose **New guide** for an empty review workspace. **Continue recording** adds
+new steps to the current unpublished guide without replacing its existing steps
+or images. A guide with an Atrium job is frozen, so **Start new recording**
+creates a separate guide instead. Starting or continuing first asks for one
+display, one window, or a fixed region; every screenshot in that recording keeps
+the selected scope. Background recovery cannot replace the active workspace.
+Use **Open saved guide** to return to an earlier local guide. A quick capture
+also appends to the current unpublished guide, or begins a new guide when the
+current one already has an Atrium job.
+
+While recording, the Recorder card shows retained image and queued-event counts.
+Screenshot capture is retried twice after the initial attempt. If all attempts
+fail, the semantic step is still saved without an image and the Recorder card
+shows a fixed diagnostic count without recording window titles, control names,
+or framework error details.
+
+For signed local stress automation only, launch with
+`ATRIUM_CAPTURE_LOCAL_MOCK=1`, an isolated absolute
+`ATRIUM_CAPTURE_DATA_ROOT`, and
+`ATRIUM_CAPTURE_TEST_RECORDING_SCOPE=automatic`, `region`, or `window`. Window
+mode resolves only a visible window whose title exactly equals the synthetic
+fixture title. The override is ignored unless local mock mode is enabled and its
+data root is inside the system temporary directory; ordinary and production
+launches always require the macOS display/window picker or the interactive
+region selector.
 
 Atrium Capture also remains available from its menu-bar item when the workspace
 window is closed. The menu can show the workspace, capture a region or focused
@@ -159,6 +179,60 @@ scripts/install-native-host.sh "dist/macos/Atrium Capture.app" chrome
 
 The installer writes a user-specific Chrome manifest with the stable extension ID and absolute helper path. It does not run during build. Use `chrome-for-testing` or `chromium` as the second argument for those documented locations. Disable enrichment in the side panel to remove the optional Chrome permission; remove the host manifest during rollback.
 
+The managed `.pkg` uses the stable `/Applications/Atrium Capture.app` path and
+installs the same metadata-only manifest for all users under
+`/Library/Google/Chrome/NativeMessagingHosts`. It carries no token, screenshot,
+user data, daemon, or privileged helper.
+
+## Jamf installer and GitHub release
+
+`pnpm package:mac` assembles a universal Apple silicon + Intel product archive:
+
+- `dist/macos/Atrium-Capture-<version>.pkg`;
+- the adjacent `.sha256` checksum; and
+- `dist/macos/macos-package-manifest.json`.
+
+The verifier inspects the package payload, stable identifiers and install
+paths, exact byte count, SHA-256 digest, both executable architectures, and the
+native host manifest. A local ad-hoc or Apple Development build remains useful
+for acceptance but is recorded as `distributionReady: false`.
+
+Prepare a future release on a short-lived branch with
+`pnpm release:prepare <major.minor.patch>`, review the version/build changes,
+and merge that branch through the ordinary protected-`main` pull request. Then
+run the **Release macOS installer** workflow from `main` with that version.
+The workflow repeats `pnpm check` and the high-severity audit, imports release
+credentials into an ephemeral keychain, signs the app and package, submits the
+package to Apple notarization, staples and validates the ticket, and asks
+Gatekeeper to assess the installer. Only after all gates pass does it create
+the annotated tag, upload all assets to a draft release, and publish the release
+for auto-provisioning. An exact `v<version>` tag pushed by a release operator
+uses the same fail-closed path. The workflow requires these repository Actions
+secrets:
+
+- `MACOS_DEVELOPER_ID_APPLICATION_P12` and
+  `MACOS_DEVELOPER_ID_APPLICATION_P12_PASSWORD`;
+- `MACOS_DEVELOPER_ID_INSTALLER_P12` and
+  `MACOS_DEVELOPER_ID_INSTALLER_P12_PASSWORD`;
+- `MACOS_BUILD_KEYCHAIN_PASSWORD`;
+- `MACOS_NOTARY_PRIVATE_KEY`;
+- `MACOS_NOTARY_KEY_ID`; and
+- `MACOS_NOTARY_ISSUER_ID`.
+
+The two P12 values are base64 encodings of the district Developer ID
+Application and Developer ID Installer certificates with their private keys.
+The notary values are an App Store Connect API key, key ID, and issuer ID.
+Credential material must never be committed, printed, attached to a release,
+or placed in the Jamf policy.
+
+Jamf auto-provisioning must accept only a release manifest with
+`distributionReady: true`, verify the `.pkg` against the adjacent SHA-256, and
+retain the GitHub tag/version as the package source version. The Self Service
+policy installs the package without collecting or uploading
+`~/Library/Application Support/AtriumCapture`. Promote it through engineering,
+support, and pilot rings before broad availability. Rollback installs the last
+approved package; it must not delete local unpublished guides.
+
 ## Live integration and release gates
 
 Normal builds include the documented production gateway and approved public
@@ -168,6 +242,13 @@ native client UUID. Employees do not configure it. MDM may supply:
 - `AtriumDefaultCollectionId`: optional documented collection UUID.
 
 For local synthetic testing, the equivalent public-only environment variables are `ATRIUM_CAPTURE_OAUTH_CLIENT_ID` and `ATRIUM_CAPTURE_DEFAULT_COLLECTION_ID`. Tokens remain in Keychain, are refreshed through the public-client rotation flow, and never enter native messaging or local diagnostics.
+
+AI Studio sign-in uses Apple's `ASWebAuthenticationSession` with shared browser
+state so district SSO can reuse the account already signed in to the browser.
+On macOS, the system sends that request to the default browser when it supports
+authentication sessions and falls back to Safari otherwise. Atrium Capture
+retains Apple's protected callback handling and validates the OAuth state and
+PKCE verifier before storing tokens in Keychain.
 
 Run `pnpm smoke:atrium` before authenticated acceptance. The Mac token request
 is a native `URLSession` request; browser token and extension-worker content
@@ -196,7 +277,7 @@ publication, writes no token/content identifier/image to its bounded result,
 and terminates itself. Success reports `ready_as_draft`, two assets, two steps,
 an authoring link, and synchronized title status.
 
-Repeat the physical capture-permission/device matrix above on the final
-district-signed pilot artifact. District notarization, MDM packaging, host
-installation, OAuth registration, and deployment require explicit authorization
-and credentials/configuration outside this repository.
+Repeat the physical capture-permission/device matrix above on the exact
+district-signed, notarized package attached to the GitHub release before Jamf
+broad-ring promotion. OAuth registration and deployment credentials remain
+outside this repository.

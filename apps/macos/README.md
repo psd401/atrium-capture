@@ -10,6 +10,21 @@ scripts/build-macos-app.sh
 
 The script builds the release executables, runs the native pixel/metadata verifier, exercises the metadata-only native host, assembles `dist/macos/Atrium Capture.app`, validates its plist, and applies an ad-hoc local signature. It does not notarize, upload, install a native host, or deploy anything.
 
+Build the universal Apple silicon + Intel installer from the repository root:
+
+```sh
+pnpm package:mac
+```
+
+This produces `dist/macos/Atrium-Capture-<version>.pkg`, its SHA-256 file, and
+`macos-package-manifest.json`. A local build may contain an ad-hoc or Apple
+Development-signed app and is deliberately marked `distributionReady: false`.
+The tag release workflow requires Developer ID Application and Installer
+identities, Apple notarization, a stapled ticket, and Gatekeeper acceptance
+before it publishes a GitHub release. The package installs the app at
+`/Applications/Atrium Capture.app` and the metadata-only Chrome host manifest
+at the system-managed native messaging location.
+
 Swift Package products:
 
 - `AtriumCaptureContracts`: generated contract models and the shared JSON codec.
