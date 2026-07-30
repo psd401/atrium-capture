@@ -37,24 +37,32 @@ jobs:
           cache: pnpm
 
       - name: Resolve and verify release ref
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
         run: |
-          git fetch origin main
+          git fetch origin main --tags
+          tag_exists=false
           if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
-            version="${{ inputs.version }}"
+            version="$REQUESTED_VERSION"
             if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
               echo "Version must use major.minor.patch." >&2
               exit 1
             fi
             release_tag="v$version"
-            if git rev-parse "$release_tag" >/dev/null 2>&1; then
-              echo "Tag $release_tag already exists." >&2
-              exit 1
+            if git show-ref --verify --quiet "refs/tags/$release_tag"; then
+              if [ "$(git rev-list -n 1 "$release_tag")" != "$GITHUB_SHA" ]; then
+                echo "Tag $release_tag already points at a different commit." >&2
+                exit 1
+              fi
+              tag_exists=true
             fi
           else
             release_tag="$GITHUB_REF_NAME"
+            tag_exists=true
           fi
           git merge-base --is-ancestor "$GITHUB_SHA" origin/main
           echo "ATRIUM_RELEASE_TAG=$release_tag" >> "$GITHUB_ENV"
+          echo "ATRIUM_RELEASE_TAG_EXISTS=$tag_exists" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -128,7 +136,9 @@ jobs:
             scripts/build-macos-pkg.sh
 
       - name: Create release tag after verification
-        if: github.event_name == 'workflow_dispatch'
+        if: >-
+          github.event_name == 'workflow_dispatch' &&
+          env.ATRIUM_RELEASE_TAG_EXISTS != 'true'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
