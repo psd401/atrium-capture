@@ -47,6 +47,12 @@ struct AtriumCaptureWorkspaceView: View {
         .background(AtriumCaptureTheme.canvas)
         .tint(AtriumCaptureTheme.evergreen)
         .frame(minWidth: 920, minHeight: 620)
+        .sheet(isPresented: $model.recordingScopeChooserPresented) {
+            RecordingScopeChooser(
+                onCancel: model.cancelRecordingScopeSelection,
+                onSelect: model.chooseRecordingScope
+            )
+        }
         .onAppear {
             guideTitleDraft = model.session?.title ?? ""
             DispatchQueue.main.async {
@@ -128,7 +134,7 @@ struct AtriumCaptureWorkspaceView: View {
     private var recordingCard: some View {
         sectionCard(title: "Recorder", systemImage: "record.circle") {
             LazyVGrid(columns: sidebarControlColumns, alignment: .leading, spacing: 8) {
-                Button("Start new recording") { model.start() }
+                Button(model.recordingStartButtonTitle) { model.start() }
                     .buttonStyle(AtriumPrimaryButtonStyle())
                     .disabled(!model.canStartRecording)
                 Button("New guide") { model.newGuide() }
@@ -139,15 +145,56 @@ struct AtriumCaptureWorkspaceView: View {
                 }
                 .buttonStyle(AtriumSecondaryButtonStyle())
                 .disabled(
-                    model.session?.state != .recording
-                        && model.session?.state != .paused
+                    model.recordingTransitionInProgress
+                        || (
+                            model.session?.state != .recording
+                                && model.session?.state != .paused
+                        )
                 )
                 Button("Stop") { model.stop() }
                     .buttonStyle(AtriumSecondaryButtonStyle())
                     .disabled(
-                        model.session?.state != .recording
-                            && model.session?.state != .paused
+                        model.recordingTransitionInProgress
+                            || (
+                                model.session?.state != .recording
+                                    && model.session?.state != .paused
+                            )
                     )
+            }
+
+            if model.session?.state == .recording || model.recordingTransitionInProgress {
+                let diagnostics = model.captureDiagnostics
+                HStack(spacing: 8) {
+                    Label(
+                        "\(diagnostics.capturedImages) images captured",
+                        systemImage: "photo.on.rectangle"
+                    )
+                    if diagnostics.pendingEvents > 0 {
+                        Text("• \(diagnostics.pendingEvents) queued")
+                    }
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AtriumCaptureTheme.inkSoft)
+            }
+
+            if model.captureDiagnostics.screenshotFailures > 0 {
+                Label(
+                    "\(model.captureDiagnostics.screenshotFailures) "
+                        + "steps were saved without an image after capture failed.",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AtriumCaptureTheme.danger)
+            }
+
+            if model.captureDiagnostics.semanticSkips > 0 {
+                Label(
+                    "\(model.captureDiagnostics.semanticSkips) interactions could not "
+                        + "be identified and were skipped.",
+                    systemImage: "eye.slash"
+                )
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(AtriumCaptureTheme.inkSoft)
             }
 
             if model.guides.count > 1 {
@@ -288,7 +335,8 @@ struct AtriumCaptureWorkspaceView: View {
             if model.atriumConfigured && model.atriumAuthentication == .signedOut {
                 VStack(alignment: .leading, spacing: 8) {
                     Text(
-                        "Sign in with your district AI Studio account. You will return here automatically."
+                        "Sign in with your district AI Studio account in your browser. "
+                            + "You will return here automatically."
                     )
                         .font(.system(size: 11))
                         .foregroundStyle(AtriumCaptureTheme.inkSoft)
@@ -821,6 +869,91 @@ struct AtriumCaptureWorkspaceView: View {
                 word.prefix(1).uppercased() + word.dropFirst().lowercased()
             }
             .joined(separator: " ")
+    }
+}
+
+private struct RecordingScopeChooser: View {
+    let onCancel: () -> Void
+    let onSelect: (CaptureAppModel.RecordingScopeChoice) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Choose what this recording captures")
+                    .font(.system(size: 21, weight: .bold))
+                    .foregroundStyle(AtriumCaptureTheme.ink)
+                Text("Every recorded step will use this same screenshot scope.")
+                    .font(.system(size: 13))
+                    .foregroundStyle(AtriumCaptureTheme.inkSoft)
+            }
+
+            scopeButton(
+                title: "Entire screen",
+                detail: "Choose one display and capture it for every step.",
+                systemImage: "display",
+                choice: .display
+            )
+            scopeButton(
+                title: "Window",
+                detail: "Choose one app window; other windows stay out of the screenshots.",
+                systemImage: "macwindow",
+                choice: .window
+            )
+            scopeButton(
+                title: "Region",
+                detail: "Drag a fixed area that will be reused throughout the recording.",
+                systemImage: "viewfinder",
+                choice: .region
+            )
+
+            HStack {
+                Spacer()
+                Button("Cancel", action: onCancel)
+                    .buttonStyle(AtriumSecondaryButtonStyle())
+            }
+        }
+        .padding(24)
+        .frame(width: 470)
+        .background(AtriumCaptureTheme.canvas)
+        .interactiveDismissDisabled()
+    }
+
+    private func scopeButton(
+        title: String,
+        detail: String,
+        systemImage: String,
+        choice: CaptureAppModel.RecordingScopeChoice
+    ) -> some View {
+        Button {
+            onSelect(choice)
+        } label: {
+            HStack(alignment: .top, spacing: 14) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 22, weight: .semibold))
+                    .foregroundStyle(AtriumCaptureTheme.evergreen)
+                    .frame(width: 34)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(AtriumCaptureTheme.ink)
+                    Text(detail)
+                        .font(.system(size: 12))
+                        .foregroundStyle(AtriumCaptureTheme.inkSoft)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(AtriumCaptureTheme.muted)
+            }
+            .padding(14)
+            .background(AtriumCaptureTheme.panel)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(AtriumCaptureTheme.border, lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 

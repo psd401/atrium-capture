@@ -447,7 +447,9 @@ public final class NativeOAuthSession: NSObject, ASWebAuthenticationPresentation
                 completionHandler: Self.authorizationCallback(continuation: continuation)
             )
             webSession.presentationContextProvider = self
-            webSession.prefersEphemeralWebBrowserSession = true
+            // Reuse the browser's normal session so district SSO and the user's
+            // expected Google account are available during sign-in.
+            webSession.prefersEphemeralWebBrowserSession = false
             session = webSession
             guard webSession.start() else {
                 continuation.resume(throwing: URLError(.cannotLoadFromNetwork))
