@@ -19,6 +19,11 @@ A serialized frame queue prevents overlapping ScreenCaptureKit calls.
 Reprocessed receipts and merged events cannot leave duplicate or unreferenced
 publishable assets.
 
+The `RecordingScopePicker` presents a native `SCContentSharingPicker` to select
+display or window scope before capture begins. The picker excludes the app's own
+window and prevents mode switching during an active recording. This hardens the
+workflow boundary and ensures explicit user intent before ScreenCaptureKit starts.
+
 Region and focused-element quick captures append to the current unpublished
 guide. The title and manual steps remain editable through preparation; adding
 content reopens privacy review. Once a durable Atrium job exists, step/image

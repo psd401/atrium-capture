@@ -16,9 +16,12 @@ private Atrium draft. It is an independent MIT-licensed implementation.
 The Chrome extension and native macOS app build and pass their shared contract,
 recovery, privacy, publication, and image-golden tests. Live production Atrium
 authentication and private-draft publishing are accepted with synthetic data.
-The remaining release gates are private PSD-only Chrome Web Store signing and
-managed-ring acceptance, plus district Developer ID/notarized Mac distribution
-and the documented physical-device matrix.
+The district Chrome Web Store publisher owns the private browser item
+`eomlblaiglafndhplfhilmdcaofhkkbj`; production Atrium must update its registrations
+from the provisional callback/origin to the authoritative identity documented in
+[ADR 0009](https://github.com/psd401/atrium-capture/blob/main/docs/adr/0009-chrome-web-store-authoritative-identity.md).
+The remaining release gates are private PSD-only Chrome Web Store review/managed-ring
+acceptance and district Developer ID/notarized Mac distribution.
 
 ## Repository map
 

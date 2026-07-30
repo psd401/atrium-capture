@@ -60,3 +60,5 @@ the server's remaining non-idempotent initiation interval.
 - [`docs/adr/0004-native-runtime-and-overlay-boundaries.md`](../../docs/adr/0004-native-runtime-and-overlay-boundaries.md)
 - [`docs/adr/0005-atrium-aligned-visual-language.md`](../../docs/adr/0005-atrium-aligned-visual-language.md) — cross-platform presentation tokens that feel at home beside Atrium without bundling assets
 - [`docs/adr/0006-production-atrium-boundary.md`](../../docs/adr/0006-production-atrium-boundary.md)
+- [`docs/adr/0007-active-guides-and-title-synchronization.md`](../../docs/adr/0007-active-guides-and-title-synchronization.md)
+- [`docs/adr/0009-chrome-web-store-authoritative-identity.md`](../../docs/adr/0009-chrome-web-store-authoritative-identity.md) — store-assigned extension ID is the authoritative origin for OAuth redirect URLs
