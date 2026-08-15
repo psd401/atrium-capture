@@ -1,9 +1,3 @@
----
-type: Documentation Index
-title: 'macOS'
-description: 'Files and subdirectories in macOS.'
----
-
 # Files
 
 - [Native macOS Recorder](native-recorder.md) - SwiftUI and AppKit combine ScreenCaptureKit pixels with value-free Accessibility semantics in the shared CaptureSession contract.

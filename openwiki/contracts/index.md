@@ -1,9 +1,3 @@
----
-type: Documentation Index
-title: 'Contracts'
-description: 'Files and subdirectories in Contracts.'
----
-
 # Files
 
 - [Atrium Publication Boundary](atrium-publication.md) - Browser and native clients share a capability-gated gateway contract and durable private-by-default publication algorithm.
