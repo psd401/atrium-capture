@@ -1,9 +1,3 @@
----
-type: Documentation Index
-title: 'Operations'
-description: 'Files and subdirectories in Operations.'
----
-
 # Files
 
 - [Development and Verification](development-and-verification.md) - Commands and evidence required to validate contracts, browser workflows, native workflows, privacy, packaging, licenses, and dependencies.
