@@ -123,6 +123,29 @@ struct AtriumCaptureWorkspaceView: View {
                 }
             }
             .buttonStyle(AtriumSecondaryButtonStyle())
+
+            DisclosureGroup("Already enabled in System Settings?") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(
+                        "macOS ties capture access to an app's code-signing identity. If this card remains, remove every older Atrium Capture entry from both privacy lists, add this exact copy, then quit Atrium Capture from its menu-bar menu and reopen it."
+                    )
+                    .font(.system(size: 11))
+                    .foregroundStyle(AtriumCaptureTheme.inkSoft)
+
+                    Text(model.currentAppPath)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(AtriumCaptureTheme.muted)
+                        .textSelection(.enabled)
+
+                    Button("Show this copy in Finder") {
+                        model.revealCurrentAppInFinder()
+                    }
+                    .buttonStyle(AtriumSecondaryButtonStyle())
+                }
+                .padding(.top, 6)
+            }
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(AtriumCaptureTheme.ink)
         }
     }
 
@@ -833,7 +856,7 @@ struct AtriumCaptureWorkspaceView: View {
         case .denied:
             "Blocked"
         case .notDetermined:
-            "Approval needed"
+            "Not active for this copy"
         }
     }
 

@@ -29,6 +29,10 @@ scripts/build-macos-app.sh
 
 `pnpm check` runs the combined engineering gate. It deliberately does not claim
 that an unsigned browser upload or ad-hoc Mac build is ready for users.
+The default Mac build is named **Atrium Capture Local** and uses
+`org.psd401.AtriumCapture.Local`, preventing an ad-hoc build from stealing or
+appearing to share the production app's Screen Recording and Accessibility
+grants.
 `pnpm verify:pilot` additionally requires a signed, published, private PSD-only
 Chrome Web Store receipt matching the exact upload SHA-256 and a stable
 Apple-signed Mac app. `pnpm verify:distribution` additionally requires a

@@ -2,6 +2,32 @@
 
 This file records reproducible local evidence for milestone exit gates. A milestone is listed as complete only after its stated gate passes; planned CI or source inspection alone is not counted as runtime evidence.
 
+## macOS permission-identity regression — locally remediated (2026-08-16)
+
+- The published v1.0.1 payload used non-district Developer ID team `B75Z23JPJ4`;
+  v1.0.2 correctly moved to district team `87DL7L9GU6`. The bundle ID stayed
+  constant, but the designated requirement changed, so macOS retained a visibly
+  enabled v1.0.1 privacy row that could not authorize v1.0.2.
+- The failure was amplified by a same-name, same-bundle-ID ad-hoc app under
+  `dist/macos` and by installing over a still-running process. The production
+  v1.0.2 artifact itself byte-matched the installed payload and passed strict
+  Developer ID, notarization, and Gatekeeper verification.
+- The stale Atrium-only Screen Recording and Accessibility entries were reset;
+  the old process was fully quit, the ad-hoc LaunchServices registration was
+  removed, and the verified district-signed app was relaunched.
+- Default local builds now use the visibly separate
+  `org.psd401.AtriumCapture.Local` identity and cannot occupy the production
+  privacy row. Production-ID assembly fails without a stable Apple signer.
+- The package definition now restricts installation to the local system,
+  disables bundle relocation, and declares that Atrium Capture must quit before
+  replacement. The final-package verifier
+  extracts the payload and checks the exact version, build, bundle ID,
+  architectures, district team, app signature, app notarization ticket,
+  Gatekeeper result, install domains, and must-quit rule.
+- Permission tests cover every probe combination and prove each refresh rereads
+  both live probes rather than caching a denial. The complete Mac suite passes
+  80 tests with zero failures; the release app/local-build verifier also passes.
+
 ## Production Atrium private-draft acceptance — pass (2026-07-25)
 
 - Audited current AI Studio `dev` merge `d4d6fb87`; its OIDC, content, collection, capture provenance, authored-asset, version, and publication contracts remain behind the same gateway boundary. No AI Studio source or production asset was copied.
@@ -217,7 +243,7 @@ ring. Public listing is forbidden.
 ## M6 — complete (2026-07-25)
 
 - The Swift package now builds generated contracts, platform-neutral native core, macOS adapters, SwiftUI app, native host, and acceptance verifier. The actual AppKit/ScreenCaptureKit/Accessibility/AuthenticationServices/Security targets compile and link with the installed macOS 15.4 SDK under Swift 6 strict concurrency.
-- The Swift suite executes 76 tests on macOS across shared fixtures, recorder persistence/restart, duplicate/input/scroll merging, ordered capture backlogs, retry and missing-image recovery, secure-field rejection, generic input intent, fixed capture diagnostics, display/window/region scope selection and geometry, exact bridge validation, serialized screenshots, mandatory sensitive-step redaction, durable publishing, ambiguous-create and restart-phase title reconciliation, submitted-state race protection, saved-guide switching, file-backed outbox restart/raw-byte cleanup, terminal-outbox restoration, bounded production request-ID diagnostics, mixed-scale display geometry, pixel sampling, bounded pins, clipboard retention, production gateway configuration, exact upload-byte digest validation, sequential TCC prompting, interactive annotation placement, every renderer tool, four arrow directions, and the off-main AuthenticationServices callback.
+- At the M6 gate, the Swift suite executed 76 tests on macOS across shared fixtures, recorder persistence/restart, duplicate/input/scroll merging, ordered capture backlogs, retry and missing-image recovery, secure-field rejection, generic input intent, fixed capture diagnostics, display/window/region scope selection and geometry, exact bridge validation, serialized screenshots, mandatory sensitive-step redaction, durable publishing, ambiguous-create and restart-phase title reconciliation, submitted-state race protection, saved-guide switching, file-backed outbox restart/raw-byte cleanup, terminal-outbox restoration, bounded production request-ID diagnostics, mixed-scale display geometry, pixel sampling, bounded pins, clipboard retention, production gateway configuration, exact upload-byte digest validation, sequential TCC prompting, interactive annotation placement, every renderer tool, four arrow directions, and the off-main AuthenticationServices callback.
 - The shared `capture-session-macos-v1.json` validates against the same schema in AJV and decodes through generated TypeScript and Swift models. A recorder test normalizes synthetic Finder, System Settings, and Office events into one `surface: macos` contract without a value field.
 - Accessibility source inspection and tests enforce the value-free boundary: the adapter never asks for `kAXValueAttribute`; secure roles return no name and are rejected before ScreenCaptureKit. Rejected-event receipts survive restart, frames pass through an explicit serialized queue, and merged-event raw files are discarded rather than retained as unreferenced assets.
 - Native review uses the same generated crop/annotation/session types and renders each local screenshot directly in its step card. A live signed-app capture persisted 1512×982 PNG assets and the rebuilt review workspace exposed lazy-loaded 645×419 previews. The signed editor was then exercised with redaction, blur, mosaic, highlight, rectangle, arrow, text, crop, and undo. Tools use drag-to-place image coordinates, previews run through the production renderer, **Undo** remains beside **Done**, and arrows retain all four drag directions through the backward-compatible optional `arrowDirection` contract field. Input and otherwise flagged screenshot steps cannot be flattened, approved, or enqueued without an opaque redaction; mosaic does not satisfy the gate. The Core Graphics release verifier injects a synthetic metadata marker, replaces target pixels with opaque black, preserves neighboring pixels, and proves `tEXt`/`iTXt`/`zTXt`/`eXIf`/`tIME` are absent.

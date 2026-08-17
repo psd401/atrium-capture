@@ -8,20 +8,29 @@ Build and verify the application bundle from the repository root:
 scripts/build-macos-app.sh
 ```
 
-The script builds the release executables, runs the native pixel/metadata verifier, exercises the metadata-only native host, assembles `dist/macos/Atrium Capture.app`, validates its plist, and applies an ad-hoc local signature. It does not notarize, upload, install a native host, or deploy anything.
+The script builds the release executables, runs the native pixel/metadata verifier, exercises the metadata-only native host, assembles `dist/macos/Atrium Capture Local.app`, validates its plist, and defaults to an ad-hoc local signature. The local app uses the distinct `org.psd401.AtriumCapture.Local` identity so development builds cannot impersonate the production app in macOS privacy settings. It does not notarize, upload, install a native host, or deploy anything.
+
+If a legacy `dist/macos/Atrium Capture.app` is still present, the local build
+stops with a cleanup message instead of silently leaving an ambiguous
+production-named copy beside the local app.
 
 Build the universal Apple silicon + Intel installer from the repository root:
 
 ```sh
-pnpm package:mac
+ATRIUM_CAPTURE_CODESIGN_IDENTITY="Apple Development: Approved Developer" \
+  pnpm package:mac
 ```
 
 This produces `dist/macos/Atrium-Capture-<version>.pkg`, its SHA-256 file, and
-`macos-package-manifest.json`. A local build may contain an ad-hoc or Apple
-Development-signed app and is deliberately marked `distributionReady: false`.
+`macos-package-manifest.json`. Package assembly requires a stable Apple signing
+identity; an Apple Development-signed package is deliberately marked
+`distributionReady: false`, and an ad-hoc production-identity package is
+rejected.
 The tag release workflow requires Developer ID Application and Installer
 identities, Apple notarization, a stapled ticket, and Gatekeeper acceptance
-before it publishes a GitHub release. The package installs the app at
+before it publishes a GitHub release. The package declares that a running copy
+must close, allows only a system-domain installation, disables bundle
+relocation, and installs the app at
 `/Applications/Atrium Capture.app` and the metadata-only Chrome host manifest
 at the system-managed native messaging location.
 

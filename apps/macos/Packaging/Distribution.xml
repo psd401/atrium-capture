@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+  <title>Atrium Capture</title>
+  <domains enable_anywhere="false" enable_currentUserHome="false" enable_localSystem="true"/>
+  <options customize="never" require-scripts="false" hostArchitectures="arm64,x86_64"/>
+  <choices-outline>
+    <line choice="default">
+      <line choice="org.psd401.AtriumCapture.pkg"/>
+    </line>
+  </choices-outline>
+  <choice id="default"/>
+  <choice id="org.psd401.AtriumCapture.pkg" visible="false">
+    <pkg-ref id="org.psd401.AtriumCapture.pkg"/>
+  </choice>
+  <pkg-ref id="org.psd401.AtriumCapture.pkg">
+    <must-close>
+      <app id="org.psd401.AtriumCapture"/>
+    </must-close>
+  </pkg-ref>
+  <pkg-ref id="org.psd401.AtriumCapture.pkg">AtriumCapture-component.pkg</pkg-ref>
+</installer-gui-script>

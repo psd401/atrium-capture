@@ -37,9 +37,19 @@ public enum MacPermissionCenter {
         kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
 
     public static func snapshot() -> NativePermissionSnapshot {
+        snapshot(
+            screenRecordingProbe: { CGPreflightScreenCaptureAccess() },
+            accessibilityProbe: { AXIsProcessTrusted() }
+        )
+    }
+
+    static func snapshot(
+        screenRecordingProbe: () -> Bool,
+        accessibilityProbe: () -> Bool
+    ) -> NativePermissionSnapshot {
         NativePermissionSnapshot(
-            screenRecording: CGPreflightScreenCaptureAccess() ? .granted : .notDetermined,
-            accessibility: AXIsProcessTrusted() ? .granted : .notDetermined
+            screenRecording: screenRecordingProbe() ? .granted : .notDetermined,
+            accessibility: accessibilityProbe() ? .granted : .notDetermined
         )
     }
 
@@ -62,6 +72,28 @@ public enum MacPermissionCenter {
             return .accessibility
         }
         return nil
+    }
+
+    public static func becameReady(
+        from previous: NativePermissionSnapshot,
+        to current: NativePermissionSnapshot
+    ) -> Bool {
+        let wasReady = previous.screenRecording == .granted
+            && previous.accessibility == .granted
+        let isReady = current.screenRecording == .granted
+            && current.accessibility == .granted
+        return !wasReady && isReady
+    }
+
+    public static func lostReadiness(
+        from previous: NativePermissionSnapshot,
+        to current: NativePermissionSnapshot
+    ) -> Bool {
+        let wasReady = previous.screenRecording == .granted
+            && previous.accessibility == .granted
+        let isReady = current.screenRecording == .granted
+            && current.accessibility == .granted
+        return wasReady && !isReady
     }
 
     @discardableResult

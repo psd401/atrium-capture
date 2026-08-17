@@ -2,7 +2,11 @@
 set -euo pipefail
 
 repository_root="${0:A:h:h}"
-app_path="${1:-$repository_root/dist/macos/Atrium Capture.app}"
+if (( $# < 1 )) || [[ -z "$1" ]]; then
+  echo "Usage: $0 <app-path> [chrome|chrome-for-testing|chromium] [extension-id]" >&2
+  exit 64
+fi
+app_path="${1:A}"
 browser_name="${2:-chrome}"
 extension_id="${3:-eomlblaiglafndhplfhilmdcaofhkkbj}"
 helper_path="$app_path/Contents/Helpers/AtriumCaptureNativeHost"

@@ -19,7 +19,11 @@ docker run --rm -v "$PWD:/workspace" -w /workspace swift:6.0-bookworm \
 scripts/build-macos-app.sh
 ```
 
-`scripts/build-macos-app.sh` produces the ignored `dist/macos/Atrium Capture.app`. Before assembling it, the script:
+`scripts/build-macos-app.sh` produces the ignored
+`dist/macos/Atrium Capture Local.app`. The local bundle has a distinct display
+name and bundle ID `org.psd401.AtriumCapture.Local`; it cannot
+collide with the production app's macOS privacy grants. Before assembling it,
+the script:
 
 1. compiles every native product in release mode;
 2. runs a Core Graphics golden that verifies opaque replacement pixels and absence of forbidden PNG metadata chunks;
@@ -30,18 +34,32 @@ scripts/build-macos-app.sh
    `ATRIUM_CAPTURE_CODESIGN_IDENTITY` is supplied, otherwise an ad-hoc local
    hardened-runtime signature unless `ATRIUM_CAPTURE_ADHOC_SIGN=0`.
 
+The local build refuses to proceed while a legacy
+`dist/macos/Atrium Capture.app` exists, making the old same-name production-ID
+artifact an explicit cleanup step instead of leaving it available for accidental
+launch.
+
 The local Command Line Tools installation may expose a default SDK whose Swift module version differs from its compiler. The build script selects the installed macOS 15.4 SDK when present. CI uses `macos-15` with full Xcode, runs XCTest, then assembles the app.
 
 An ad-hoc signature is suitable for build verification but not durable macOS
-privacy authorization: rebuilding changes its code identity. System Settings can
-therefore retain an older Atrium Capture entry while the new local binary still
-needs approval. For interactive acceptance, use a stable Apple Development or
-district identity:
+privacy authorization: rebuilding changes its code identity. The separate local
+bundle ID and name make that churn visible and keep it out of the production
+permission row. For repeated interactive local acceptance, use a stable Apple
+Development identity:
 
 ```sh
 ATRIUM_CAPTURE_CODESIGN_IDENTITY="Apple Development: Approved Developer" \
   scripts/build-macos-app.sh
-open "dist/macos/Atrium Capture.app"
+open "dist/macos/Atrium Capture Local.app"
+```
+
+Only an intentional pilot/release build may use the production identity. Run it
+on an isolated acceptance Mac with no other Atrium Capture copy:
+
+```sh
+ATRIUM_CAPTURE_CODESIGN_IDENTITY="Apple Development: Approved Developer" \
+ATRIUM_CAPTURE_PRODUCTION_BUNDLE=1 \
+  scripts/build-macos-app.sh
 ```
 
 The usage description in `Info.plist` explains the request; it does not grant the
@@ -51,6 +69,35 @@ cannot supersede one TCC prompt with the next: approve Screen Recording first,
 reopen if requested, then choose **Grant Accessibility**. After both grants are
 effective, the Capture Access card disappears; revoking either grant makes it
 reappear and pauses an active recording.
+
+If System Settings shows Atrium Capture enabled while the app says **Not active
+for this copy**, macOS authorized a different code-signing identity. Reinstall
+the signed package into the system domain so the district-signed app is at
+`/Applications/Atrium Capture.app`; do not manually relocate an arbitrary copy.
+Use **Show this copy in Finder** in the permission card to verify the exact app.
+Remove older same-named rows from both privacy panes, quit Atrium Capture from
+its menu-bar menu, reopen that exact app, grant Screen Recording first,
+quit/reopen if requested, and then grant Accessibility.
+
+Support may use this targeted fallback after confirming the app path and signing
+team and quitting Atrium Capture from its menu-bar menu. It resets the production
+bundle's two decisions without touching other apps, so the employee must approve
+both again. A stale path-keyed ad-hoc row may still require manual removal:
+
+```sh
+tccutil reset ScreenCapture org.psd401.AtriumCapture
+tccutil reset Accessibility org.psd401.AtriumCapture
+```
+
+Do not automate those resets in the app or an installer. If macOS does not show
+or honor a new Screen Recording request after an old row was removed, restart
+the Mac before the acceptance test.
+
+The v1.0.1 installer was signed by non-district team `B75Z23JPJ4`; v1.0.2 corrected
+the production signer to district team `87DL7L9GU6`. Because those designated
+requirements differ, macOS cannot carry a v1.0.1 privacy grant into v1.0.2 even
+though both rows display as Atrium Capture. This is a one-time reauthorization;
+the package verifier rejects any future district release whose team ID drifts.
 
 ## Guide composition and app lifecycle
 
@@ -174,10 +221,15 @@ Automated tests cover mixed positive/negative display origins, independent X/Y s
 The extension declares `nativeMessaging` as an optional permission and requests it only when the user selects **Enable Mac enrichment**. Install the host only for a local/district-managed test:
 
 ```sh
-scripts/install-native-host.sh "dist/macos/Atrium Capture.app" chrome
+scripts/install-native-host.sh "dist/macos/Atrium Capture Local.app" chrome
 ```
 
-The installer writes a user-specific Chrome manifest with the stable extension ID and absolute helper path. It does not run during build. Use `chrome-for-testing` or `chromium` as the second argument for those documented locations. Disable enrichment in the side panel to remove the optional Chrome permission; remove the host manifest during rollback.
+The app path is required; the installer resolves it to an absolute path before
+writing a user-specific Chrome manifest with the stable extension ID. It does
+not run during build. Use `chrome-for-testing` or `chromium` as the second
+argument for those documented locations. Disable enrichment in the side panel
+to remove the optional Chrome permission; remove the host manifest during
+rollback.
 
 The managed `.pkg` uses the stable `/Applications/Atrium Capture.app` path and
 installs the same metadata-only manifest for all users under
@@ -192,10 +244,15 @@ user data, daemon, or privileged helper.
 - the adjacent `.sha256` checksum; and
 - `dist/macos/macos-package-manifest.json`.
 
-The verifier inspects the package payload, stable identifiers and install
-paths, exact byte count, SHA-256 digest, both executable architectures, and the
-native host manifest. A local ad-hoc or Apple Development build remains useful
-for acceptance but is recorded as `distributionReady: false`.
+The verifier extracts the final package payload and validates its exact app
+version, build, bundle ID, architectures, manifest-matching signing team, and
+stable Apple signature. It also requires a root-only install domain, disables
+bundle relocation, checks the stable app/native-host paths, and requires
+installer metadata declaring that Atrium Capture must close before replacement.
+For a distribution-ready package it additionally requires the district team,
+notarization tickets, and Gatekeeper acceptance. An Apple Development package
+remains useful for acceptance but is recorded as `distributionReady: false`;
+ad-hoc package assembly is rejected.
 
 Prepare a future release on a short-lived branch with
 `pnpm release:prepare <major.minor.patch>`, review the version/build changes,
