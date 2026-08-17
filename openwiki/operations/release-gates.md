@@ -31,8 +31,10 @@ The macOS release workflow automates notarized installer builds when triggered b
 version tag or manual dispatch. It requires Developer ID Application and Installer
 credentials in the CI environment, notarizes and staples the app bundle before
 packaging, and publishes a GitHub release only after successful installer notarization
-and Gatekeeper acceptance. The build enforces the expected PSD signing team via
-ATRIUM_CAPTURE_EXPECTED_TEAM_ID to prevent misissued certificates.
+and Gatekeeper acceptance. The package verifier enforces the district signing team
+(`87DL7L9GU6`), rejects bundle relocation, requires system-domain installation,
+validates the must-quit rule, and confirms matching app version, build, bundle ID,
+and architectures against the manifest.
 
 Both public OAuth clients, idempotent authored-asset publication, and
 authenticated synthetic production-Atrium acceptance are live verified.
