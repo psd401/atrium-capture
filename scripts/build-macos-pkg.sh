@@ -5,6 +5,8 @@ repository_root="${0:A:h:h}"
 output_root="$repository_root/dist/macos"
 app_path="$output_root/Atrium Capture.app"
 info_plist="$repository_root/apps/macos/App/Info.plist"
+distribution_path="$repository_root/apps/macos/Packaging/Distribution.xml"
+component_plist_path="$repository_root/apps/macos/Packaging/Components.plist"
 package_identifier="org.psd401.AtriumCapture.pkg"
 bundle_identifier="org.psd401.AtriumCapture"
 extension_id="eomlblaiglafndhplfhilmdcaofhkkbj"
@@ -83,6 +85,12 @@ if [[ "$require_distribution" != "0" && "$require_distribution" != "1" ]]; then
   echo "ATRIUM_CAPTURE_REQUIRE_DISTRIBUTION must be 0 or 1." >&2
   exit 1
 fi
+if [[ "$app_identity" != Apple\ Development:* \
+  && "$app_identity" != Developer\ ID\ Application:* ]]; then
+  echo "Mac package assembly requires a stable Apple Development or Developer ID Application identity." >&2
+  echo "Ad-hoc packages must not reuse Atrium Capture's production bundle identity." >&2
+  exit 1
+fi
 if [[ "$require_distribution" == "1" ]]; then
   if [[ "$app_identity" != Developer\ ID\ Application:* ]]; then
     echo "A Developer ID Application identity is required for distribution." >&2
@@ -99,14 +107,10 @@ if [[ "$require_distribution" == "1" ]]; then
 fi
 
 release_architectures="${ATRIUM_CAPTURE_ARCHITECTURES:-arm64 x86_64}"
-if [[ -n "$app_identity" ]]; then
-  ATRIUM_CAPTURE_ARCHITECTURES="$release_architectures" \
+ATRIUM_CAPTURE_ARCHITECTURES="$release_architectures" \
   ATRIUM_CAPTURE_CODESIGN_IDENTITY="$app_identity" \
-    "$repository_root/scripts/build-macos-app.sh"
-else
-  ATRIUM_CAPTURE_ARCHITECTURES="$release_architectures" \
-    "$repository_root/scripts/build-macos-app.sh"
-fi
+  ATRIUM_CAPTURE_PRODUCTION_BUNDLE=1 \
+  "$repository_root/scripts/build-macos-app.sh"
 
 codesign --verify --deep --strict "$app_path"
 for executable in \
@@ -176,6 +180,7 @@ xattr -cr "$payload_root"
 
 pkgbuild \
   --root "$payload_root" \
+  --component-plist "$component_plist_path" \
   --identifier "$package_identifier" \
   --version "$version" \
   --install-location / \
@@ -183,11 +188,15 @@ pkgbuild \
 
 if [[ -n "$installer_identity" ]]; then
   productbuild \
-    --package "$component_path" \
+    --distribution "$distribution_path" \
+    --package-path "$temporary_root" \
     --sign "$installer_identity" \
     "$unsigned_product_path"
 else
-  productbuild --package "$component_path" "$unsigned_product_path"
+  productbuild \
+    --distribution "$distribution_path" \
+    --package-path "$temporary_root" \
+    "$unsigned_product_path"
 fi
 
 installer_signature="unsigned"

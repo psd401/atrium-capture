@@ -141,6 +141,10 @@ final class CaptureAppModel: ObservableObject {
         launchAtLoginState != .unavailable
     }
 
+    var currentAppPath: String {
+        (Bundle.main.bundleURL.path as NSString).abbreviatingWithTildeInPath
+    }
+
     var publishFailureGuidance: String? {
         guard let job = publishJob, let failure = job.lastError else { return nil }
         if failure.code == "TITLE_UPDATE_FAILED" {
@@ -670,6 +674,10 @@ final class CaptureAppModel: ObservableObject {
 
     func openAccessibilitySettings() {
         MacPermissionCenter.openSettings(.accessibility)
+    }
+
+    func revealCurrentAppInFinder() {
+        NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL])
     }
 
     func start() {
@@ -1561,8 +1569,13 @@ final class CaptureAppModel: ObservableObject {
     private func handlePermissionChange() {
         captureDiagnostics = monitor.diagnosticsSnapshot()
         let next = MacPermissionCenter.snapshot()
-        guard next != permissions else { return }
+        let previous = permissions
+        guard next != previous else { return }
         permissions = next
+        if MacPermissionCenter.becameReady(from: previous, to: next) {
+            statusCode = "CAPTURE_ACCESS_READY"
+            return
+        }
         if session?.state == .recording,
            (next.screenRecording != .granted || next.accessibility != .granted) {
             guard !recordingTransitionInProgress else { return }
@@ -1578,6 +1591,8 @@ final class CaptureAppModel: ObservableObject {
                 refreshGuides()
                 statusCode = "PERMISSION_REVOKED_CAPTURE_PAUSED"
             }
+        } else if MacPermissionCenter.lostReadiness(from: previous, to: next) {
+            statusCode = "CAPTURE_PERMISSIONS_REQUIRED"
         }
     }
 

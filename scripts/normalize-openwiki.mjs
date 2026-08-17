@@ -23,6 +23,16 @@ function normalizeMacOSIndex(value) {
   const titlePattern = /^title:\s*(?:"Macos"|'Macos'|Macos|"macOS"|'macOS'|macOS)\s*$/m;
   const descriptionPattern =
     /^description:\s*(?:"Files and subdirectories in (?:Macos|macOS)\."|'Files and subdirectories in (?:Macos|macOS)\.'|Files and subdirectories in (?:Macos|macOS)\.)\s*$/m;
+  const generatedDirectoryLines = value.trimEnd().split('\n');
+  const isGeneratedDirectoryIndex =
+    generatedDirectoryLines.length >= 3 &&
+    generatedDirectoryLines[0] === '# Files' &&
+    generatedDirectoryLines[1] === '' &&
+    generatedDirectoryLines.slice(2).every((line) => line.startsWith('- ') && line.length > 2);
+
+  if (isGeneratedDirectoryIndex && !value.includes('Macos')) {
+    return value;
+  }
 
   if (!titlePattern.test(value) || !descriptionPattern.test(value)) {
     throw new Error('openwiki_macos_index_shape_unexpected');
