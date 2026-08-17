@@ -37,9 +37,14 @@ decoded output pixels and metadata chunks. Native tests decode the same fixtures
 and verify recorder recovery, privacy review, durable publication, display
 geometry, pins, and bridge rejection.
 
-The macOS build runs real Apple-framework verifiers and produces either a
-stable-signed app when `ATRIUM_CAPTURE_CODESIGN_IDENTITY` is supplied or an
-ad-hoc build-only artifact. It does not notarize, install, upload, or deploy.
+The macOS build runs real Apple-framework verifiers and produces a
+`dist/macos/Atrium Capture Local.app` with bundle ID
+`org.psd401.AtriumCapture.Local`. The distinct local identity prevents
+development builds from impersonating the production app in macOS privacy
+settings. A stable Apple identity via `ATRIUM_CAPTURE_CODESIGN_IDENTITY`
+keeps the same local identity; production bundle `org.psd401.AtriumCapture`
+requires explicit `ATRIUM_CAPTURE_PRODUCTION_BUNDLE=1` plus a stable signer.
+Legacy `dist/macos/Atrium Capture.app` artifacts fail the build until removed.
 
 The three production smokes verify OIDC/client registration, browser token
 CORS, and every extension-worker content route without credentials.

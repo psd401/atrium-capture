@@ -50,4 +50,34 @@ can show the workspace, initiate capture, and control recording. Start at login
 uses the user-controlled `SMAppService.mainApp` login item and introduces no
 background daemon or privileged helper.
 
+## Permission identity
+
+macOS ties Screen Recording and Accessibility decisions to the app's code-signing
+identity, not just its bundle ID. The default local build uses bundle
+`org.psd401.AtriumCapture.Local` and display name "Atrium Capture Local" so
+development artifacts cannot impersonate the production app in System Settings.
+Legacy same-named local builds are rejected during assembly to prevent accidental
+confusion with the signed production app.
+
+`MacPermissionCenter.snapshot()` queries both permissions through
+`CGPreflightScreenCaptureAccess()` and `AXIsProcessTrusted()`. The injectable
+overload allows tests to verify probe behavior without TCC interaction.
+Transition predicates `becameReady(from:to:)` and `lostReadiness(from:to:)`
+detect the exact edge when both permissions become granted or when either is
+revoked during an active session.
+
+The workspace permission card shows the app path and a Finder-reveal action.
+When System Settings shows Atrium Capture enabled but the app reports
+**Not active for this copy**, the user must remove older entries from both
+privacy lists after verifying the exact app location.
+
 See [`docs/macos-runbook.md`](../../docs/macos-runbook.md).
+
+## Source map
+
+| Path | Responsibility |
+| --- | --- |
+| `Sources/AtriumCaptureMacPlatform/MacPermissionsAndAccessibility.swift` | Permission snapshot, transition predicates, request sequencing |
+| `Sources/AtriumCaptureMacApp/AtriumCaptureMacApp.swift` | `CaptureAppModel` status handling, permission change observer |
+| `Sources/AtriumCaptureMacApp/AtriumCaptureWorkspaceView.swift` | Permission card UI, identity guidance disclosure |
+| `Tests/AtriumCaptureMacPlatformTests/MacPermissionCenterTests.swift` | Probe injection, transition, and sequencing tests |
