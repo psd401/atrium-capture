@@ -7,7 +7,7 @@ const version = process.argv[2];
 const requestedBuild = process.argv[3];
 
 if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) {
-  throw new Error('Usage: pnpm release:prepare <major.minor.patch> [build-number]');
+  throw new Error('Usage: bun run release:prepare <major.minor.patch> [build-number]');
 }
 
 const packagePaths = [

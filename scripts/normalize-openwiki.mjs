@@ -12,7 +12,7 @@ const normalized = normalizeMacOSIndex(source);
 if (normalized === source) {
   console.log('OpenWiki canonical terms are current.');
 } else if (checkOnly) {
-  console.error('OpenWiki canonical terms are stale. Run pnpm openwiki:normalize.');
+  console.error('OpenWiki canonical terms are stale. Run bun run openwiki:normalize.');
   process.exitCode = 1;
 } else {
   await writeFile(macOSIndexPath, normalized);

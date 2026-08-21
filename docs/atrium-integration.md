@@ -95,7 +95,7 @@ property and invoked it with the gateway as its receiver. Chrome rejects that
 illegal invocation before network I/O, while Node's injected contract transport
 does not. The gateway now calls a receiver-neutral wrapper, the regression test
 requires an unbound transport call, and
-`pnpm smoke:atrium:browser-content` proves the built extension worker reaches
+`bun run smoke:atrium:browser-content` proves the built extension worker reaches
 all eight documented content routes. API requests have a 30-second deadline and
 direct asset uploads have a 120-second deadline so a durable outbox phase cannot
 wait indefinitely.
@@ -154,7 +154,7 @@ records the recovery boundary.
 Credential-free production boundary check:
 
 ```sh
-pnpm smoke:atrium
+bun run smoke:atrium
 ```
 
 It verifies the exact issuer/endpoints, S256, required scopes, and the structured unauthenticated `401` from collection discovery. It does not send capture content or credentials.
@@ -163,7 +163,7 @@ The production public IDs are bundled. To verify that Atrium accepts every
 required OIDC and content scope without signing in:
 
 ```sh
-pnpm smoke:atrium
+bun run smoke:atrium
 ```
 
 This check starts each authorization request with a synthetic PKCE
@@ -177,7 +177,7 @@ separately approved test-client pair.
 Probe the browser-specific token boundary without credentials:
 
 ```sh
-pnpm smoke:atrium:browser-token
+bun run smoke:atrium:browser-token
 ```
 
 It submits a deliberately invalid synthetic code with the exact extension
@@ -188,7 +188,7 @@ token, or prints the server's raw description.
 Probe the actual built service worker without credentials:
 
 ```sh
-pnpm smoke:atrium:browser-content
+bun run smoke:atrium:browser-content
 ```
 
 It exercises collection discovery, object creation, title update, asset

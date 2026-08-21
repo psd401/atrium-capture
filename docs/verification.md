@@ -31,9 +31,9 @@ This file records reproducible local evidence for milestone exit gates. A milest
 ## Production Atrium private-draft acceptance — pass (2026-07-25)
 
 - Audited current AI Studio `dev` merge `d4d6fb87`; its OIDC, content, collection, capture provenance, authored-asset, version, and publication contracts remain behind the same gateway boundary. No AI Studio source or production asset was copied.
-- `pnpm smoke:atrium` verifies the deployed issuer, authorization/token/revocation endpoints, S256, required content scopes, both bundled public-client registrations, and a structured fail-closed `401` from production collection discovery without sending a credential or capture. Each exact callback/scope request must produce a real HTTP 3xx authorization redirect without completing sign-in or printing the IDs. The two documented environment variables override both bundled IDs together only for separately approved test clients.
-- `pnpm smoke:atrium:browser-token` sends an intentionally invalid synthetic code with the exact stable extension origin. Production reaches code validation and returns `invalid_grant`. No authorization, credential, capture, or token is involved.
-- `pnpm smoke:atrium:browser-content` loads the production build in Chromium and proves all eight gateway routes are reachable from the real extension worker with a synthetic invalid token. Each returns the bounded `401 INVALID_TOKEN` envelope.
+- `bun run smoke:atrium` verifies the deployed issuer, authorization/token/revocation endpoints, S256, required content scopes, both bundled public-client registrations, and a structured fail-closed `401` from production collection discovery without sending a credential or capture. Each exact callback/scope request must produce a real HTTP 3xx authorization redirect without completing sign-in or printing the IDs. The two documented environment variables override both bundled IDs together only for separately approved test clients.
+- `bun run smoke:atrium:browser-token` sends an intentionally invalid synthetic code with the exact stable extension origin. Production reaches code validation and returns `invalid_grant`. No authorization, credential, capture, or token is involved.
+- `bun run smoke:atrium:browser-content` loads the production build in Chromium and proves all eight gateway routes are reachable from the real extension worker with a synthetic invalid token. Each returns the bounded `401 INVALID_TOKEN` envelope.
 - The production native app completed district login, returned through `org.psd401.atrium-capture:/oauth/callback`, exchanged the code, persisted the token set in Keychain, displayed `Atrium Signed In` / `Connected to Atrium`, and remained running. The first callback exposed a Swift actor-isolation trap because AuthenticationServices completed on Safari's XPC queue; the callback bridge is now nonisolated and a background-queue regression test passes.
 - The production extension accepted the committed six-step synthetic fixture. It
   survived a service-worker restart, omitted ordinary typed and password
@@ -60,7 +60,7 @@ no-consent behavior also complete. The strict preflight now exercises both bundl
 public clients by default:
 
 ```sh
-pnpm smoke:atrium
+bun run smoke:atrium
 ```
 
 It returns:
@@ -80,8 +80,8 @@ fixture, build the extension and run it in a fresh visible Playwright Chromium
 profile:
 
 ```sh
-pnpm --filter @atrium-capture/browser-extension build
-pnpm acceptance:atrium:browser
+bun run --filter '@atrium-capture/browser-extension' build
+bun run acceptance:atrium:browser
 ```
 
 The runner automates recording, typed-value/password exclusion checks, privacy
@@ -130,22 +130,22 @@ indefinite or opaque acceptance failure.
 
 ## M0 — complete (2026-07-22)
 
-- `pnpm contracts:check`: all three Draft 2020-12 schemas compile with strict AJV settings and the shared capture-session, native-bridge, and publish-job fixtures validate.
-- `pnpm test`: TypeScript tests load the generated contract types, verify metadata-only bridge content, and prove the input fixture contains intent rather than a typed value.
+- `bun run contracts:check`: all three Draft 2020-12 schemas compile with strict AJV settings and the shared capture-session, native-bridge, and publish-job fixtures validate.
+- `bun run test`: TypeScript tests load the generated contract types, verify metadata-only bridge content, and prove the input fixture contains intent rather than a typed value.
 - `swift test --package-path apps/macos` in the official `swift:6.0-bookworm` environment: Swift 6 compiles the generated models and all three XCTest fixture decodes pass (3 tests, 0 failures).
 - `swiftc -frontend -parse`: the installed Apple Swift 6.3.3 parser accepts generated and test sources. Direct local XCTest execution is unavailable on this workstation because Command Line Tools contains a 6.3.3 compiler with a 6.3.2 SDK and no full Xcode; the container supplies independent compile/decode evidence rather than weakening the gate.
-- `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, generation freshness, and `git diff --check` pass.
-- `pnpm licenses:check` accepts only the reviewed license groups. `pnpm security:audit` reports no known vulnerabilities.
+- `bun run format:check`, `bun run lint`, `bun run typecheck`, generation freshness, and `git diff --check` pass.
+- `bun run licenses:check` accepts only the reviewed license groups. `bun run security:audit` reports no known vulnerabilities.
 - Synthetic fixture site, threat model, immutable platform identifiers, OAuth registration plan, dependency review, and CI workflows are committed.
 
 Exit-gate conclusion: the identical `capture-session-v1.json` fixture validates in TypeScript and decodes through generated Swift `Codable` models. Platform code has no second handwritten contract model.
 
 ## M1 — complete (2026-07-22)
 
-- `pnpm test`: capture-core tests cover state transitions, event ordering, duplicate merging, input-intent generation, and serialization; privacy tests prove password classification never reads a value and sensitive autocomplete tokens are denied; IndexedDB tests prove acknowledged-event replay is idempotent after repository restart.
-- `pnpm messages:check`: the content-script message schema is compiled ahead of time into a deterministic standalone validator. The production worker contains no runtime AJV compiler or CSP-forbidden dynamic code generation.
-- `pnpm build`: WXT produces a Chrome Manifest V3 extension with a fixed extension ID, service worker, HTTP/HTTPS content script, and React side panel.
-- `pnpm test:extension`: bundled Chromium loads that production extension at its 420-pixel side-panel width and records a synthetic multi-page click/input/select/shortcut/submit/navigation workflow. The test force-stops all service workers, reloads the panel, proves recording resumes without horizontal overflow, confirms acknowledged steps occur exactly once, verifies screenshots persist, and asserts neither the synthetic ordinary input literal nor password literal appears in the stored session.
+- `bun run test`: capture-core tests cover state transitions, event ordering, duplicate merging, input-intent generation, and serialization; privacy tests prove password classification never reads a value and sensitive autocomplete tokens are denied; IndexedDB tests prove acknowledged-event replay is idempotent after repository restart.
+- `bun run messages:check`: the content-script message schema is compiled ahead of time into a deterministic standalone validator. The production worker contains no runtime AJV compiler or CSP-forbidden dynamic code generation.
+- `bun run build`: WXT produces a Chrome Manifest V3 extension with a fixed extension ID, service worker, HTTP/HTTPS content script, and React side panel.
+- `bun run test:extension`: bundled Chromium loads that production extension at its 420-pixel side-panel width and records a synthetic multi-page click/input/select/shortcut/submit/navigation workflow. The test force-stops all service workers, reloads the panel, proves recording resumes without horizontal overflow, confirms acknowledged steps occur exactly once, verifies screenshots persist, and asserts neither the synthetic ordinary input literal nor password literal appears in the stored session.
 - The service worker owns and serializes commands, screenshots, IndexedDB transactions, and receipts. An event is acknowledged only after its session revision, screenshot association, and receipt commit together.
 - The side panel exposes start, pause, resume, stop, live steps, recording state, and a persistent typed-value/password privacy notice. `<all_urls>` is limited to Chrome's cross-origin `captureVisibleTab` requirement; observation remains user-started and policy/state gated.
 
@@ -156,7 +156,7 @@ Exit-gate conclusion: the production extension-loaded workflow survives a forced
 - Editor-model tests cover instruction edits, reorder, delete, adjacent merge, manual insertion, crop, annotation mutation, automated input-region scaling, review state, and approval gating. Mosaic does not satisfy a flagged secret; only a covering opaque redaction does.
 - IndexedDB/editor-service tests prove command replay is idempotent across repository restart, version-one databases migrate without losing recorder state, and finalization atomically stores a publishable derivative, tombstones/deletes the raw asset, replaces the step reference, and advances the reviewed session.
 - The production side panel exposes crop, zoom, arrow, rectangle, text, highlight, blur, mosaic, redaction, instruction editing, insertion, reorder, merge, delete, per-step approval, automated sensitive-region suggestions, and a mandatory all-step privacy gate.
-- `pnpm test:extension` exercises the real side-panel review flow after the forced worker restart: it applies a suggested opaque redaction to every screenshot-bearing input step, approves every clear step, finalizes images, observes only publishable/deleted asset states, and confirms raw source bytes were deleted.
+- `bun run test:extension` exercises the real side-panel review flow after the forced worker restart: it applies a suggested opaque redaction to every screenshot-bearing input step, approves every clear step, finalizes images, observes only publishable/deleted asset states, and confirms raw source bytes were deleted.
 - The browser image golden injects a synthetic PNG `tEXt` metadata marker, renders crop and all annotation classes, places opaque redaction last, re-encodes PNG, and decodes the output. All 12 covered pixels equal `[17, 24, 39, 255]`; the source marker and `tEXt`/`iTXt`/`zTXt`/`eXIf`/`tIME` chunks are absent.
 - [ADR 0002](adr/0002-flattening-and-raw-retention.md) records the irreversible image boundary and safest-default `delete_after_flatten` retention policy.
 
@@ -170,7 +170,7 @@ Exit-gate conclusion: golden and lifecycle tests prove redacted source pixels an
 - Publisher tests inject a connection loss after remote commit at private-object creation, each asset upload, version creation, and internal publication. Every retry ends with exactly one object, one copy of each asset, and one version; visibility stays private until the separate internal-publication action.
 - IndexedDB version 3 stores the durable outbox. A browser-service test closes the repository after a committed-but-unacknowledged object creation, opens a new repository instance, resumes the job, and obtains one private draft and authoring link without selecting the retained raw sentinel.
 - The side panel provides contextual next-step guidance, a collection picker/managed-default indication, phase/error status, safe retry, private-draft link, and explicit internal-publication action. It exposes **Sign in to AI Studio** from the trusted extension context using the bundled production public client ID; managed policy can only override it for approved testing.
-- `pnpm typecheck`, `pnpm contracts:check`, `pnpm messages:check`, package/unit tests, the localhost HTTP integration test, production WXT build, and extension-loaded Chromium workflow pass. Swift 6 decodes the new ready-draft fixture in the official container.
+- `bun run typecheck`, `bun run contracts:check`, `bun run messages:check`, package/unit tests, the localhost HTTP integration test, production WXT build, and extension-loaded Chromium workflow pass. Swift 6 decodes the new ready-draft fixture in the official container.
 - [ADR 0003](adr/0003-durable-atrium-publication.md) records persistence-before-I/O, idempotency, private-default, raw-asset exclusion, PKCE, and the no-invented-route decision.
 
 Exit-gate conclusion: every publication phase recovers from a post-commit
@@ -216,7 +216,7 @@ deployment action, not an implementation dependency.
   built extension reaches all eight content routes with the expected
   synthetic-token `401`. These bounded results isolate the remaining browser
   blocker to the two OAuth registration values.
-- `pnpm package:browser`
+- `bun run package:browser`
   builds the production MV3 Chrome Web Store upload ZIP, validates required
   runtime/schema files and the exact reviewed permission set, rejects
   source/test/fixture/map/environment material and upload-time manifest keys,
@@ -237,7 +237,7 @@ Exit-gate conclusion: every locally buildable Browser v1 implementation,
 hardening, package, health, documentation, automated acceptance, and
 authenticated private-draft gate passes. The M5 release exit gate remains open:
 the exact upload must be signed and published as a private PSD-only Chrome Web
-Store item, pass `pnpm verify:pilot`, and complete the supported-device managed
+Store item, pass `bun run verify:pilot`, and complete the supported-device managed
 ring. Public listing is forbidden.
 
 ## M6 — complete (2026-07-25)
@@ -316,12 +316,12 @@ Exit-gate conclusion: native overlay behavior is implemented and automatically v
   both privacy panes, hides the entire permission card after both grants, and
   exposes **Sign in to AI Studio** using the bundled public client.
 - The original Mac app icon was generated without an input image, production asset, third-party logo, font, or trademark. Its transparent 1024×1024 master remains recognizable at the 16-point Retina representation; the derived `.icns` is declared by `CFBundleIconFile`, copied into the bundle, and covered by a fail-closed build check.
-- `pnpm check` passes formatting, OpenWiki normalization, lint, strict typechecking, generated contract/message freshness, five shared fixture validations, 109 TypeScript tests, production builds, the real extension worker/panel restart workflow, the irreversible redaction golden, extension packaging, 58 Swift tests, and the dependency-license allowlist.
+- `bun run check` passes formatting, OpenWiki normalization, lint, strict typechecking, generated contract/message freshness, five shared fixture validations, 109 TypeScript tests, production builds, the real extension worker/panel restart workflow, the irreversible redaction golden, extension packaging, 58 Swift tests, and the dependency-license allowlist.
 - `scripts/build-macos-app.sh` compiles the production SwiftUI workspace, runs
   the native redaction, production-gateway, pin, and bridge verifiers, validates
   the plist, produces the app bundle, and verifies its configured signature.
   The current pilot bundle passes strict verification under the Apple
-  Development team identity. `pnpm security:audit` reports no known
+  Development team identity. `bun run security:audit` reports no known
   vulnerabilities.
 - GitHub CI and the automatic Claude review pass on PR #11. The review reported no code findings; its sole workflow annotation identified the deprecated Node 20-based checkout v4 action, so every workflow now pins the verified official checkout v7.0.1 commit.
 - [ADR 0005](adr/0005-atrium-aligned-visual-language.md) records the cross-platform presentation roles, privacy hierarchy, accessibility requirements, and no-production-asset boundary.

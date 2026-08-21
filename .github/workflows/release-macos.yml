@@ -27,14 +27,11 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.2
-
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       - name: Resolve and verify release ref
         env:
@@ -72,15 +69,15 @@ jobs:
           echo "ATRIUM_RELEASE_TAG_EXISTS=$tag_exists" >> "$GITHUB_ENV"
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Install Playwright browser
-        run: pnpm --filter @atrium-capture/browser-extension exec playwright install chromium
+        run: bunx playwright install chromium
 
       - name: Run engineering gates
         run: |
-          pnpm check
-          pnpm security:audit
+          bun run check
+          bun run security:audit
 
       - name: Import Developer ID certificates
         env:

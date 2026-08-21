@@ -78,7 +78,7 @@ then uploaded and completed. The production recovery boundary is recorded in
 
 - Browser: WXT, React, TypeScript, Manifest V3, Chrome Side Panel, IndexedDB.
 - Mac: Swift, SwiftUI, AppKit, ScreenCaptureKit, Accessibility, Core Graphics, Keychain, AuthenticationServices.
-- Workspace: pnpm monorepo for TypeScript; Xcode/Swift Package Manager for native code.
+- Workspace: Bun workspaces monorepo for TypeScript; Xcode/Swift Package Manager for native code.
 - Testing: Vitest/unit tests, extension-loaded Playwright, JSON Schema contract fixtures, Swift XCTest, and image goldens.
 
 ## Product visual language

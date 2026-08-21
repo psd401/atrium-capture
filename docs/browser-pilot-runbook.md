@@ -32,7 +32,7 @@ Checklist:
 2. For engineering evaluation, load `apps/browser-extension/.output/chrome-mv3` unpacked into a dedicated synthetic Chrome profile.
 3. For a managed ring, publish the exact verified ZIP as a private PSD-only
    Chrome Web Store item, record its signed receipt, and run
-   `pnpm verify:pilot`. Add that store item through district Chrome Admin and
+   `bun run verify:pilot`. Add that store item through district Chrome Admin and
    `ExtensionSettings`; do not distribute the unpacked directory or create a
    public listing.
    Before submission, a Google Workspace administrator must enable domain
@@ -47,7 +47,7 @@ Checklist:
    editor and verify the separate internal-publication action remains explicit.
    Retain no production screenshots. Set `atriumOAuthClientId` only when
    deliberately testing a separately approved client.
-   `pnpm acceptance:atrium:browser` performs this operator-attended flow in a
+   `bun run acceptance:atrium:browser` performs this operator-attended flow in a
    disposable visible Playwright Chromium profile using only the committed
    synthetic fixture; add
    `ATRIUM_CAPTURE_ACCEPTANCE_PUBLISH_INTERNAL=1` only with explicit approval
@@ -55,9 +55,9 @@ Checklist:
 6. During review, rename the guide in the side-panel header and verify the new title survives a service-worker restart. Rename it again after a private draft is ready and confirm Atrium receives the new title. The outbox preserves the original create title for ambiguous retries and reconciles the latest title through the documented metadata update.
 7. Choose **New guide** while an older durable outbox job exists. Confirm the older guide remains in **Saved guides**, background recovery does not replace the active guide, and either guide can be reopened after a service-worker restart.
 
-Before asking an operator to sign in, run `pnpm smoke:atrium`,
-`pnpm smoke:atrium:browser-token`, and
-`pnpm smoke:atrium:browser-content`. Do not repeat operator login while any
+Before asking an operator to sign in, run `bun run smoke:atrium`,
+`bun run smoke:atrium:browser-token`, and
+`bun run smoke:atrium:browser-content`. Do not repeat operator login while any
 credential-free gate fails. The third command executes every content route from
 the built extension worker and catches browser-only gateway/network defects.
 

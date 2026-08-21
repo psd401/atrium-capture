@@ -38,8 +38,8 @@ and architectures against the manifest.
 
 Both public OAuth clients, idempotent authored-asset publication, and
 authenticated synthetic production-Atrium acceptance are live verified.
-`pnpm verify:pilot` remains intentionally red until a receipt matches the exact
-signed, published, PSD-only store item. `pnpm verify:distribution` also requires
+`bun run verify:pilot` remains intentionally red until a receipt matches the exact
+signed, published, PSD-only store item. `bun run verify:distribution` also requires
 a Developer ID Application signature accepted by Gatekeeper.
 
 Unavailable live capabilities fail closed and do not disable local recording or

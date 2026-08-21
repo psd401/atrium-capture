@@ -75,9 +75,9 @@ HTTPS `chromiumapp.org` callback as its request origin and cannot suppress
 Chrome's `Origin` header. Atrium must therefore allow that exact origin only for
 the exact browser client. Wildcard CORS, a client-side proxy, a confidential
 secret, or an alternate screenshot host would weaken the reviewed boundary and
-are rejected. `pnpm smoke:atrium:browser-token` now proves production reaches
+are rejected. `bun run smoke:atrium:browser-token` now proves production reaches
 synthetic code validation and returns `invalid_grant` without authorization or
-credentials. `pnpm smoke:atrium:browser-content` separately executes every
+credentials. `bun run smoke:atrium:browser-content` separately executes every
 documented content route from the built extension worker; this is required
 because a Node fetch cannot reproduce Chrome's native-function receiver rules.
 The Mac `URLSession` exchange is not a browser CORS request.

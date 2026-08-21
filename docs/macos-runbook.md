@@ -238,7 +238,7 @@ user data, daemon, or privileged helper.
 
 ## Jamf installer and GitHub release
 
-`pnpm package:mac` assembles a universal Apple silicon + Intel product archive:
+`bun run package:mac` assembles a universal Apple silicon + Intel product archive:
 
 - `dist/macos/Atrium-Capture-<version>.pkg`;
 - the adjacent `.sha256` checksum; and
@@ -255,10 +255,10 @@ remains useful for acceptance but is recorded as `distributionReady: false`;
 ad-hoc package assembly is rejected.
 
 Prepare a future release on a short-lived branch with
-`pnpm release:prepare <major.minor.patch>`, review the version/build changes,
+`bun run release:prepare <major.minor.patch>`, review the version/build changes,
 and merge that branch through the ordinary protected-`main` pull request. Then
 run the **Release macOS installer** workflow from `main` with that version.
-The workflow repeats `pnpm check` and the high-severity audit, imports release
+The workflow repeats `bun run check` and the high-severity audit, imports release
 credentials into an ephemeral keychain, signs the app and package, submits the
 package to Apple notarization, staples and validates the ticket, and asks
 Gatekeeper to assess the installer. Only after all gates pass does it create
@@ -307,7 +307,7 @@ authentication sessions and falls back to Safari otherwise. Atrium Capture
 retains Apple's protected callback handling and validates the OAuth state and
 PKCE verifier before storing tokens in Keychain.
 
-Run `pnpm smoke:atrium` before authenticated acceptance. The Mac token request
+Run `bun run smoke:atrium` before authenticated acceptance. The Mac token request
 is a native `URLSession` request; browser token and extension-worker content
 boundaries have their own credential-free probes. District sign-in and
 callback/token persistence are live verified on an Apple Development-signed
