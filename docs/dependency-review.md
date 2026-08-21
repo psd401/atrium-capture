@@ -42,7 +42,7 @@ root `esbuild@0.28.1` override also closes the development-server advisory
 inherited through Vite. On 2026-07-24, registry advisory
 `GHSA-mh99-v99m-4gvg` affected every resolved historical `brace-expansion`
 range through ESLint/minimatch and WXT's development runner. The root override
-now selects MIT-licensed `brace-expansion@5.0.8`, which provides both ESM and
+now selects MIT-licensed `brace-expansion@5.0.9`, which provides both ESM and
 CommonJS exports and supports the repository's Node 24 baseline. The complete
 lint/build/test/package/license gate and `bun run security:audit` pass against that
 resolution. None of these build-only packages is present in the production

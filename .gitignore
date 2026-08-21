@@ -3,6 +3,7 @@
 .env.*
 !.env.example
 .output/
+.pnpm-store/
 .swiftpm/
 .turbo/
 .wxt/

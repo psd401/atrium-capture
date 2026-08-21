@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, realpathSync, existsSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 const allowedLicenses = new Set([
   '0BSD',
@@ -30,10 +31,6 @@ const reviewedExpressions = new Set([
 // scan of every installed third-party package under node_modules, including nested
 // installs. First-party workspace packages (symlinked from inside the repository)
 // are excluded, matching the previous report's scope.
-const repoRoot = resolve(import.meta.dirname, '..');
-const licensesByExpression = new Map();
-const seen = new Set();
-
 function licenseOf(pkg) {
   if (typeof pkg.license === 'string') return pkg.license;
   if (pkg.license && typeof pkg.license.type === 'string') return pkg.license.type;
@@ -45,60 +42,98 @@ function licenseOf(pkg) {
   return 'Unknown';
 }
 
-function isFirstParty(dir) {
-  const real = realpathSync(dir);
-  return real.startsWith(repoRoot + sep) && !real.includes(`${sep}node_modules${sep}`);
-}
+export function collectInstalledLicenses(repoRoot) {
+  const realRepoRoot = realpathSync(repoRoot);
+  if (existsSync(join(realRepoRoot, 'node_modules', '.pnpm'))) {
+    throw new Error(
+      'pnpm-managed node_modules detected; remove it and run bun install before checking licenses.',
+    );
+  }
+  const licensesByExpression = new Map();
+  const seen = new Set();
+  const scannedNodeModules = new Set();
 
-function scan(nodeModulesDir) {
-  if (!existsSync(nodeModulesDir)) return;
-  for (const entry of readdirSync(nodeModulesDir, { withFileTypes: true })) {
-    if (entry.name.startsWith('.')) continue;
-    const entryPath = join(nodeModulesDir, entry.name);
-    const packageDirs = entry.name.startsWith('@')
-      ? readdirSync(entryPath, { withFileTypes: true })
-          .filter((e) => !e.name.startsWith('.'))
-          .map((e) => join(entryPath, e.name))
-      : [entryPath];
-    for (const packageDir of packageDirs) {
-      const manifestPath = join(packageDir, 'package.json');
-      if (!existsSync(manifestPath)) continue;
-      let pkg;
-      try {
-        pkg = JSON.parse(readFileSync(manifestPath, 'utf8'));
-      } catch {
-        continue;
+  function isFirstParty(dir) {
+    const real = realpathSync(dir);
+    return real.startsWith(realRepoRoot + sep) && !real.includes(`${sep}node_modules${sep}`);
+  }
+
+  function scan(nodeModulesDir) {
+    if (!existsSync(nodeModulesDir)) return;
+    const realNodeModulesDir = realpathSync(nodeModulesDir);
+    if (scannedNodeModules.has(realNodeModulesDir)) return;
+    scannedNodeModules.add(realNodeModulesDir);
+
+    for (const entry of readdirSync(nodeModulesDir, { withFileTypes: true })) {
+      if (entry.name.startsWith('.')) continue;
+      const entryPath = join(nodeModulesDir, entry.name);
+      const packageDirs = entry.name.startsWith('@')
+        ? readdirSync(entryPath, { withFileTypes: true })
+            .filter((e) => !e.name.startsWith('.'))
+            .map((e) => join(entryPath, e.name))
+        : [entryPath];
+      for (const packageDir of packageDirs) {
+        const manifestPath = join(packageDir, 'package.json');
+        if (!existsSync(manifestPath)) continue;
+
+        let pkg;
+        try {
+          pkg = JSON.parse(readFileSync(manifestPath, 'utf8'));
+        } catch (error) {
+          throw new Error(`Unable to parse installed package manifest ${manifestPath}`, {
+            cause: error,
+          });
+        }
+        if (!pkg.name || !pkg.version) {
+          throw new Error(`Installed package manifest lacks a name or version: ${manifestPath}`);
+        }
+
+        if (!isFirstParty(packageDir)) {
+          const id = `${pkg.name}@${pkg.version}`;
+          if (!seen.has(id)) {
+            seen.add(id);
+            const expression = licenseOf(pkg);
+            if (!licensesByExpression.has(expression)) licensesByExpression.set(expression, []);
+            licensesByExpression.get(expression).push(id);
+          }
+        }
+
+        // A duplicate package or first-party workspace may still contain a distinct nested
+        // dependency tree, so always traverse it even when its own license is already known.
+        scan(join(packageDir, 'node_modules'));
       }
-      if (!pkg.name || isFirstParty(packageDir)) continue;
-      const id = `${pkg.name}@${pkg.version}`;
-      if (seen.has(id)) continue;
-      seen.add(id);
-      const expression = licenseOf(pkg);
-      if (!licensesByExpression.has(expression)) licensesByExpression.set(expression, []);
-      licensesByExpression.get(expression).push(id);
-      scan(join(packageDir, 'node_modules'));
     }
   }
+
+  scan(join(repoRoot, 'node_modules'));
+  return { licensesByExpression, packageCount: seen.size };
 }
 
-scan(join(repoRoot, 'node_modules'));
+function main() {
+  const repoRoot = resolve(import.meta.dirname, '..');
+  const { licensesByExpression, packageCount } = collectInstalledLicenses(repoRoot);
 
-if (seen.size === 0) {
-  throw new Error('No installed packages found; run bun install first.');
+  if (packageCount === 0) {
+    throw new Error('No installed packages found; run bun install first.');
+  }
+
+  const licenses = [...licensesByExpression.keys()];
+  const disallowed = licenses.filter(
+    (license) => !allowedLicenses.has(license) && !reviewedExpressions.has(license),
+  );
+
+  if (disallowed.length > 0) {
+    const detail = disallowed
+      .map((license) => `${license}: ${licensesByExpression.get(license).join(', ')}`)
+      .join('\n');
+    throw new Error(`Unreviewed dependency licenses:\n${detail}`);
+  }
+
+  console.log(
+    `Dependency licenses are within the reviewed allowlist (${licenses.length} groups, ${packageCount} packages).`,
+  );
 }
 
-const licenses = [...licensesByExpression.keys()];
-const disallowed = licenses.filter(
-  (license) => !allowedLicenses.has(license) && !reviewedExpressions.has(license),
-);
-
-if (disallowed.length > 0) {
-  const detail = disallowed
-    .map((license) => `${license}: ${licensesByExpression.get(license).join(', ')}`)
-    .join('\n');
-  throw new Error(`Unreviewed dependency licenses:\n${detail}`);
+if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+  main();
 }
-
-console.log(
-  `Dependency licenses are within the reviewed allowlist (${licenses.length} groups, ${seen.size} packages).`,
-);

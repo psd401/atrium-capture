@@ -18,7 +18,7 @@ Build the universal Apple silicon + Intel installer from the repository root:
 
 ```sh
 ATRIUM_CAPTURE_CODESIGN_IDENTITY="Apple Development: Approved Developer" \
-  pnpm package:mac
+  bun run package:mac
 ```
 
 This produces `dist/macos/Atrium-Capture-<version>.pkg`, its SHA-256 file, and
