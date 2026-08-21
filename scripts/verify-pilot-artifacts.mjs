@@ -24,7 +24,7 @@ const expectedBundleId = 'org.psd401.AtriumCapture';
 try {
   const upload = await readJson(
     uploadManifestPath,
-    'Run `pnpm package:browser` before the pilot gate.',
+    'Run `bun run package:browser` before the pilot gate.',
   );
   if (
     upload.artifactKind !== 'chrome_web_store_upload' ||

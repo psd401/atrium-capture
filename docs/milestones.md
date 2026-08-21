@@ -89,7 +89,7 @@ Current status: the district publisher is verified and owns private draft item
 `eomlblaiglafndhplfhilmdcaofhkkbj`. The accepted unpublished `1.0.0` bootstrap
 established its authoritative ID and public key; the reviewed `1.0.1` candidate
 uses that identity in development while correctly omitting `key` from its store
-upload. Final private review, store signing, `pnpm verify:pilot`, and
+upload. Final private review, store signing, `bun run verify:pilot`, and
 managed-ring acceptance remain. The unsigned ZIP is not a release artifact.
 
 ## M6 — Mac recorder companion

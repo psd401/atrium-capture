@@ -41,7 +41,9 @@ if (checkOnly) {
     readFile(declarationPath, 'utf8').catch(() => ''),
   ]);
   if (existing !== generated || existingDeclaration !== declaration) {
-    throw new Error('Generated extension message validator is stale. Run pnpm messages:generate.');
+    throw new Error(
+      'Generated extension message validator is stale. Run bun run messages:generate.',
+    );
   }
 } else {
   await mkdir(path.dirname(outputPath), { recursive: true });

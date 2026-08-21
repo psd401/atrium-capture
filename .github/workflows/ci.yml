@@ -13,27 +13,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9.15.2
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm format:check
-      - run: pnpm openwiki:check
-      - run: pnpm lint
-      - run: pnpm typecheck
-      - run: pnpm contracts:check
-      - run: pnpm messages:check
-      - run: pnpm test
-      - run: pnpm build
-      - run: pnpm --filter @atrium-capture/browser-extension exec playwright install --with-deps chromium
-      - run: pnpm test:extension
-      - run: pnpm package:browser
-      - run: pnpm licenses:check
-      - run: pnpm security:audit
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - run: bun install --frozen-lockfile
+      - run: bun run format:check
+      - run: bun run openwiki:check
+      - run: bun run lint
+      - run: bun run typecheck
+      - run: bun run contracts:check
+      - run: bun run messages:check
+      - run: bun run test
+      - run: bun run build
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:extension
+      - run: bun run package:browser
+      - run: bun run licenses:check
+      - run: bun run security:audit
 
   swift-contracts:
     runs-on: macos-15
@@ -71,7 +68,7 @@ jobs:
           if [ "$status" = "200" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           elif [ "$status" = "403" ] && [ "$REPOSITORY_PRIVATE" = "true" ]; then
-            echo "::notice::Dependency review requires GitHub Advanced Security for this private repository; pnpm audit and the license allowlist remain required."
+            echo "::notice::Dependency review requires GitHub Advanced Security for this private repository; bun audit and the license allowlist remain required."
             echo "available=false" >> "$GITHUB_OUTPUT"
           else
             echo "Unexpected dependency review API response: HTTP $status" >&2

@@ -27,7 +27,7 @@ must not create a second normalized data model.
 Run:
 
 ```sh
-pnpm contracts:check
-pnpm test
-pnpm swift:test
+bun run contracts:check
+bun run test
+bun run swift:test
 ```

@@ -123,7 +123,7 @@ Before selecting **Submit for review**:
 6. Confirm the saved trader/non-trader declaration, support contact, publisher
    address, and privacy-policy URL still reflect the district's determination.
 7. After publication, record the non-secret private-store receipt and run
-   `pnpm verify:pilot`.
+   `bun run verify:pilot`.
 
 ## Current private draft
 

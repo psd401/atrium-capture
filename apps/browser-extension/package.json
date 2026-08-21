@@ -24,12 +24,12 @@
     "wxt": "0.20.27"
   },
   "scripts": {
-    "build": "pnpm --workspace-root messages:check && wxt build -b chrome",
+    "build": "bun run --cwd ../.. messages:check && wxt build -b chrome",
     "dev": "wxt -b chrome",
     "postinstall": "wxt prepare",
     "test": "vitest run",
-    "test:extension": "pnpm build && playwright test",
-    "typecheck": "pnpm --workspace-root messages:check && wxt prepare && tsc --noEmit",
+    "test:extension": "bun run build && playwright test",
+    "typecheck": "bun run --cwd ../.. messages:check && wxt prepare && tsc --noEmit",
     "zip": "ATRIUM_CAPTURE_STORE_UPLOAD=1 wxt build -b chrome && node ../../scripts/create-browser-archive.mjs"
   }
 }

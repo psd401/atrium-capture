@@ -32,10 +32,10 @@ must remain outside the repository.
   a local pilot installed at a stable path. Broad managed Mac distribution
   requires the district's Developer ID Application identity, notarization, and
   MDM promotion.
-- `pnpm check` proves engineering quality but does not claim release readiness.
-  `pnpm verify:pilot` additionally requires a receipt matching the exact signed,
+- `bun run check` proves engineering quality but does not claim release readiness.
+  `bun run verify:pilot` additionally requires a receipt matching the exact signed,
   published, PSD-only store item and a stable Apple-signed Mac app.
-  `pnpm verify:distribution` further requires a Developer ID signature accepted
+  `bun run verify:distribution` further requires a Developer ID signature accepted
   by Gatekeeper.
 
 ## Consequences

@@ -2,49 +2,49 @@
 
 ## Prerequisites
 
-- Node.js 24 or newer and Corepack/pnpm 9.15.2.
+- Node.js 24 or newer and Bun 1.2 or newer.
 - Swift 6 with an SDK from the same Xcode or Command Line Tools release. Native UI milestones require full Xcode.
 - District signing, OAuth registration, and Atrium credentials are not required for local capture or mock-gateway tests.
 
-Install exact dependencies with `pnpm install --frozen-lockfile`. The repository-local pnpm store avoids reliance on user-level writable caches.
+Install exact dependencies with `bun install --frozen-lockfile`.
 
 ## Quality gates
 
 Run these from the repository root:
 
 ```sh
-pnpm format:check
-pnpm lint
-pnpm typecheck
-pnpm contracts:check
-pnpm messages:check
-pnpm test
-pnpm build
-pnpm test:extension
-pnpm licenses:check
-pnpm security:audit
+bun run format:check
+bun run lint
+bun run typecheck
+bun run contracts:check
+bun run messages:check
+bun run test
+bun run build
+bun run test:extension
+bun run licenses:check
+bun run security:audit
 swift test --package-path apps/macos
 scripts/build-macos-app.sh
 ```
 
-`pnpm check` runs the combined engineering gate. It deliberately does not claim
+`bun run check` runs the combined engineering gate. It deliberately does not claim
 that an unsigned browser upload or ad-hoc Mac build is ready for users.
 The default Mac build is named **Atrium Capture Local** and uses
 `org.psd401.AtriumCapture.Local`, preventing an ad-hoc build from stealing or
 appearing to share the production app's Screen Recording and Accessibility
 grants.
-`pnpm verify:pilot` additionally requires a signed, published, private PSD-only
+`bun run verify:pilot` additionally requires a signed, published, private PSD-only
 Chrome Web Store receipt matching the exact upload SHA-256 and a stable
-Apple-signed Mac app. `pnpm verify:distribution` additionally requires a
+Apple-signed Mac app. `bun run verify:distribution` additionally requires a
 Developer ID Application signature accepted by Gatekeeper.
 
-`pnpm contracts:generate` updates both generated TypeScript and Swift models. Never edit either generated file directly. Contract fixtures under `packages/test-fixtures/fixtures` are decoded by both platforms.
+`bun run contracts:generate` updates both generated TypeScript and Swift models. Never edit either generated file directly. Contract fixtures under `packages/test-fixtures/fixtures` are decoded by both platforms.
 
-`pnpm messages:generate` compiles the extension trust-boundary JSON Schema into a committed standalone validator. Runtime AJV compilation is intentionally forbidden because Manifest V3 disallows dynamic code generation. Install bundled Chromium once with `pnpm --filter @atrium-capture/browser-extension exec playwright install chromium`; the browser suite launches the production MV3 build in a persistent profile and runs the synthetic restart/review workflow plus byte-level image goldens.
+`bun run messages:generate` compiles the extension trust-boundary JSON Schema into a committed standalone validator. Runtime AJV compilation is intentionally forbidden because Manifest V3 disallows dynamic code generation. Install bundled Chromium once with `bunx playwright install chromium`; the browser suite launches the production MV3 build in a persistent profile and runs the synthetic restart/review workflow plus byte-level image goldens.
 
-The Atrium client integration test binds a loopback-only synthetic server on an ephemeral port. It exposes only `/_mock/atrium-capture/v1`. Production-gateway tests inject documented v1 responses and assert exact private/source/asset/ETag behavior without credentials. Run `pnpm exec vitest run packages/atrium-client/test` for both boundaries. `pnpm smoke:atrium` is an optional read-only network check of production OIDC discovery, the unauthenticated content boundary, and both bundled public-client registrations. It verifies their exact redirects and required scopes without entering sign-in or handling a secret. The documented environment variables may override both bundled UUIDs together when checking separately approved test clients. `pnpm smoke:atrium:browser-token` sends a deliberately invalid synthetic authorization code with the real extension origin; production must reach code validation and return `invalid_grant`.
+The Atrium client integration test binds a loopback-only synthetic server on an ephemeral port. It exposes only `/_mock/atrium-capture/v1`. Production-gateway tests inject documented v1 responses and assert exact private/source/asset/ETag behavior without credentials. Run `bunx vitest run packages/atrium-client/test` for both boundaries. `bun run smoke:atrium` is an optional read-only network check of production OIDC discovery, the unauthenticated content boundary, and both bundled public-client registrations. It verifies their exact redirects and required scopes without entering sign-in or handling a secret. The documented environment variables may override both bundled UUIDs together when checking separately approved test clients. `bun run smoke:atrium:browser-token` sends a deliberately invalid synthetic authorization code with the real extension origin; production must reach code validation and return `invalid_grant`.
 
-`pnpm smoke:atrium:browser-content` loads the production extension in headless
+`bun run smoke:atrium:browser-content` loads the production extension in headless
 Chromium and sends a synthetic invalid bearer token to every content route used
 by the gateway. Every route must be reachable from the real service-worker
 context and return the bounded `401 INVALID_TOKEN` envelope. This specifically
@@ -52,7 +52,7 @@ guards native browser-function receiver behavior that Node-only contract tests
 cannot reproduce. Run all three credential-free smokes before asking an
 operator to complete production login.
 
-`pnpm package:browser` creates and inspects the unsigned Browser v1 store-upload
+`bun run package:browser` creates and inspects the unsigned Browser v1 store-upload
 ZIP, then writes `browser-upload-manifest.json` under the ignored `.output`
 directory. Packaging never signs, uploads, or deploys. Follow
 [browser-v1-release.md](browser-v1-release.md) for private PSD-only store

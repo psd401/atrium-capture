@@ -2,7 +2,7 @@
 
 ## Release candidate
 
-The browser package version is `1.0.1`. `pnpm package:browser` builds the
+The browser package version is `1.0.1`. `bun run package:browser` builds the
 production Manifest V3 extension, creates an unsigned Chrome ZIP under
 `apps/browser-extension/.output`, inspects its ZIP central directory, and writes
 `browser-upload-manifest.json` with the artifact byte size and SHA-256 digest.
@@ -44,18 +44,18 @@ credentials and signing custody remain outside the repository. See
 Run from a clean checkout at the candidate commit:
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm format:check
-pnpm lint
-pnpm typecheck
-pnpm contracts:check
-pnpm messages:check
-pnpm test
-pnpm build
-pnpm test:extension
-pnpm package:browser
-pnpm licenses:check
-pnpm security:audit
+bun install --frozen-lockfile
+bun run format:check
+bun run lint
+bun run typecheck
+bun run contracts:check
+bun run messages:check
+bun run test
+bun run build
+bun run test:extension
+bun run package:browser
+bun run licenses:check
+bun run security:audit
 ```
 
 Run `swift test --package-path apps/macos` with a matched Swift compiler/SDK as
@@ -68,7 +68,7 @@ store result in the ignored
 `apps/browser-extension/.output/browser-distribution-receipt.json` and run:
 
 ```sh
-pnpm verify:pilot
+bun run verify:pilot
 ```
 
 The receipt must use this non-secret shape:
@@ -87,7 +87,7 @@ The receipt must use this non-secret shape:
 ```
 
 The pilot gate also requires a stable Apple-signed Mac app. The stricter
-`pnpm verify:distribution` requires a Developer ID Application signature
+`bun run verify:distribution` requires a Developer ID Application signature
 accepted by Gatekeeper.
 
 ## Supported browser matrix
@@ -129,7 +129,7 @@ The manual ring uses only the repository's synthetic fixture. It must not record
 - [ ] Enable own-domain publishing or complete PSD organization approval; do not
       use trusted testers as the district-wide distribution mechanism.
 - [ ] Publish the exact ZIP with private PSD-only visibility and record the matching receipt.
-- [ ] Run `pnpm verify:pilot`; do not call the upload ZIP release-ready.
+- [ ] Run `bun run verify:pilot`; do not call the upload ZIP release-ready.
 - [ ] Promote through the engineering/support/pilot rings in `browser-pilot-runbook.md`.
 - [ ] Exercise rollback before broad promotion.
 - [ ] Retain the signed artifact and its approval record; do not retain captured guide data.

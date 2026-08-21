@@ -8,26 +8,13 @@
   "engines": {
     "node": ">=24"
   },
-  "packageManager": "pnpm@9.15.2",
-  "pnpm": {
-    "overrides": {
-      "adm-zip": "0.6.0",
-      "brace-expansion": "5.0.9",
-      "esbuild": "0.28.1",
-      "fast-uri": "3.1.5",
-      "fx-runner": "link:packages/fx-runner-disabled",
-      "nanoid": "3.3.18",
-      "tmp": "0.2.7",
-      "uuid": "11.1.1"
-    }
-  },
   "scripts": {
-    "build": "pnpm --recursive --if-present build",
+    "build": "bun run --filter '@atrium-capture/*' build",
     "build:mac": "scripts/build-macos-app.sh",
     "package:mac": "scripts/build-macos-pkg.sh",
     "acceptance:atrium:browser": "node scripts/live-atrium-browser-acceptance.mjs",
-    "check": "pnpm format:check && pnpm openwiki:check && pnpm lint && pnpm typecheck && pnpm contracts:check && pnpm messages:check && pnpm test && pnpm build && pnpm test:extension && pnpm package:browser && pnpm swift:test && pnpm licenses:check",
-    "contracts:check": "pnpm contracts:generate --check && pnpm contracts:validate",
+    "check": "bun run format:check && bun run openwiki:check && bun run lint && bun run typecheck && bun run contracts:check && bun run messages:check && bun run test && bun run build && bun run test:extension && bun run package:browser && bun run swift:test && bun run licenses:check",
+    "contracts:check": "bun run contracts:generate --check && bun run contracts:validate",
     "contracts:generate": "node scripts/generate-contracts.mjs",
     "contracts:validate": "node scripts/validate-contracts.mjs",
     "format": "prettier --write .",
@@ -38,16 +25,16 @@
     "messages:generate": "node scripts/generate-extension-message-validator.mjs",
     "openwiki:check": "node scripts/normalize-openwiki.mjs --check",
     "openwiki:normalize": "node scripts/normalize-openwiki.mjs",
-    "package:browser": "pnpm --filter @atrium-capture/browser-extension zip && node scripts/verify-browser-package.mjs",
-    "security:audit": "pnpm audit --audit-level high",
+    "package:browser": "bun run --filter '@atrium-capture/browser-extension' zip && node scripts/verify-browser-package.mjs",
+    "security:audit": "bun audit --audit-level=high",
     "release:prepare": "node scripts/set-release-version.mjs",
     "smoke:atrium": "node scripts/verify-atrium-production-boundary.mjs",
     "smoke:atrium:browser-content": "node scripts/verify-atrium-browser-content-boundary.mjs",
     "smoke:atrium:browser-token": "node scripts/verify-atrium-browser-token-boundary.mjs",
     "swift:test": "scripts/test-swift.sh",
     "test": "vitest run",
-    "test:extension": "pnpm --filter @atrium-capture/browser-extension test:extension",
-    "typecheck": "pnpm --recursive --if-present typecheck",
+    "test:extension": "bun run --filter '@atrium-capture/browser-extension' test:extension",
+    "typecheck": "bun run --filter '@atrium-capture/*' typecheck",
     "verify:distribution": "node scripts/verify-pilot-artifacts.mjs --distribution",
     "verify:mac-package": "node scripts/verify-macos-package.mjs",
     "verify:pilot": "node scripts/verify-pilot-artifacts.mjs"
@@ -65,5 +52,23 @@
     "typescript": "6.0.3",
     "typescript-eslint": "8.65.0",
     "vitest": "4.1.10"
-  }
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "overrides": {
+    "adm-zip": "0.6.0",
+    "brace-expansion": "5.0.9",
+    "esbuild": "0.28.1",
+    "fast-uri": "3.1.5",
+    "fx-runner": "file:packages/fx-runner-disabled",
+    "nanoid": "3.3.18",
+    "tmp": "0.2.7",
+    "uuid": "11.1.1"
+  },
+  "trustedDependencies": [
+    "@atrium-capture/browser-extension",
+    "esbuild"
+  ]
 }

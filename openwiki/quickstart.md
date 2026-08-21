@@ -50,11 +50,11 @@ acceptance and district Developer ID/notarized Mac distribution.
 ## Development
 
 ```sh
-pnpm install --frozen-lockfile
-pnpm check
-pnpm security:audit
-pnpm build:mac
-pnpm verify:pilot
+bun install --frozen-lockfile
+bun run check
+bun run security:audit
+bun run build:mac
+bun run verify:pilot
 ```
 
 The final command is intentionally fail-closed until the exact browser upload

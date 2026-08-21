@@ -21,7 +21,7 @@ Review date: 2026-07-24. Registry metadata was checked before the initial instal
 | esbuild                          |          0.28.1 | MIT        | Patched browser-test bundler and WXT/Vite transitive resolution; development only        |
 | adm-zip                          |           0.6.0 | MIT        | Maintained build-only ZIP writer used to make store-upload archives byte-reproducible    |
 
-`quicktype-core` is used only during generation; generated files remain MIT-licensed project output. No dependency receives runtime capture data. A dependency upgrade requires re-running `pnpm licenses:check`, `pnpm security:audit`, all contract tests, and the affected application test suite.
+`quicktype-core` is used only during generation; generated files remain MIT-licensed project output. No dependency receives runtime capture data. A dependency upgrade requires re-running `bun run licenses:check`, `bun run security:audit`, all contract tests, and the affected application test suite.
 
 GitHub workflows pin the official MIT-licensed `actions/checkout` v7.0.1 commit (`3d3c42e5aac5ba805825da76410c181273ba90b1`). This Node 24-compatible release is active and unarchived; it replaces the mutable Node 20-based v4 reference that GitHub deprecated.
 
@@ -31,7 +31,7 @@ WXT's development-only packaging graph includes a small number of dual-license e
 
 WXT 0.20.27's Firefox runner requested vulnerable historical ranges of
 `adm-zip`, `shell-quote`, `tmp`, and a notification-only `uuid` dependency.
-Root pnpm overrides select patched `adm-zip@0.6.0`, `tmp@0.2.7`, and
+Root package.json overrides select patched `adm-zip@0.6.0`, `tmp@0.2.7`, and
 `uuid@11.1.1`. The same current MIT-licensed `adm-zip` release is now a direct
 build-only dependency for deterministic Web Store archives; registry metadata
 was rechecked on 2026-07-25 and the security audit remains the release gate. No
@@ -42,8 +42,8 @@ root `esbuild@0.28.1` override also closes the development-server advisory
 inherited through Vite. On 2026-07-24, registry advisory
 `GHSA-mh99-v99m-4gvg` affected every resolved historical `brace-expansion`
 range through ESLint/minimatch and WXT's development runner. The root override
-now selects MIT-licensed `brace-expansion@5.0.8`, which provides both ESM and
+now selects MIT-licensed `brace-expansion@5.0.9`, which provides both ESM and
 CommonJS exports and supports the repository's Node 24 baseline. The complete
-lint/build/test/package/license gate and `pnpm security:audit` pass against that
+lint/build/test/package/license gate and `bun run security:audit` pass against that
 resolution. None of these build-only packages is present in the production
 extension bundle.
