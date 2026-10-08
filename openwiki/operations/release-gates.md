@@ -20,7 +20,7 @@ Apple Development-signed and installed with a stable identity.
 - Durable private-default publication against local and production-contract gateways
 - Managed browser policy, safe diagnostics, data deletion, and rollback
 - Native recording, permission degradation, region capture, pins, and mixed-display geometry
-- Dependency license allowlist and high-severity audit
+- [Dependency license allowlist](development-and-verification.md#license-gate) and high-severity audit
 
 ## External or operator gates
 

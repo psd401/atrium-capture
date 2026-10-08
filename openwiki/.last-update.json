@@ -1,8 +1,8 @@
 {
-  "updatedAt": "2026-08-17T03:33:48.755Z",
+  "updatedAt": "2026-10-08T20:42:32.176Z",
   "command": "update",
-  "gitHead": "778b99355ef5580d3fe6ecadbe7fa30a0d74ad1b",
-  "model": "zai.glm-5",
+  "gitHead": "aa7ca73cca3db4b253a9fe29df6b245449b4f72a",
+  "model": "us.anthropic.claude-haiku-5-5",
   "status": "complete",
   "language": "en"
 }

@@ -51,5 +51,79 @@ CORS, and every extension-worker content route without credentials.
 Authenticated acceptance uses the bundled clients and synthetic content; both
 browser and native private-draft paths are live verified.
 
+## Workspace and dependency management
+
+The repository is a single bun workspace. The root `package.json` declares
+`workspaces` for `apps/*` and `packages/*`, and the root `overrides` and
+`trustedDependencies` fields replace the former pnpm configuration. `bun.lock`
+is the committed lockfile; CI and release installs use `bun install --frozen-lockfile`.
+The repository does not pin a Bun version: `package.json` has no `packageManager`
+field and the CI setup step does not specify one, so Bun 1.2+ is the documented floor.
+
+Workspace-wide scripts fan out with `bun run --filter '@atrium-capture/*'`
+(for example `build` and `typecheck`). The browser extension calls back to the
+root with `bun run --cwd ../..` to run `messages:check` before building.
+
+The root `overrides` pin several transitive versions. The `fx-runner` override
+points to `packages/fx-runner-disabled`, a dependency-free module that fails
+closed. It exists because WXT's Firefox launcher path pulls in a `shell-quote`
+release with unpatched advisories. Chrome builds and extension tests never call
+it, so the override must not be removed until a Firefox target is actually
+scheduled (see the [quickstart backlog](../quickstart.md#backlog)).
+
+### License gate
+
+`scripts/check-licenses.mjs` (`bun run licenses:check`) does not use a package
+manager report. It walks every installed package manifest under `node_modules`,
+including nested trees, and skips first-party workspace packages that are
+symlinked from inside the repository. It then checks each license expression
+against an allowlist and reports unreviewed licenses with the affected packages.
+It fails closed in three cases: a malformed installed manifest, a package
+without a name or version, and a pnpm-managed `node_modules/.pnpm` tree. The
+last case tells the operator to remove `node_modules` and run `bun install`.
+
+`scripts/check-licenses.test.ts` is collected by the root `vitest run`. It covers
+nested duplicate scanning, third-party packages under workspaces, malformed
+manifests, and the pnpm guard. Run it narrowly with
+`bunx vitest run scripts/check-licenses.test.ts` when editing the scanner.
+
+### Security audit and Dependabot
+
+`bun run security:audit` runs `bun audit --audit-level=high` and is part of
+`bun run check` and the release workflow. In CI, the GitHub dependency-review
+step is conditional on the repository's Advanced Security availability. When
+that step is skipped, the bun audit and license allowlist remain the required
+dependency checks.
+
+`.github/dependabot.yml` tracks the `github-actions` and `bun` ecosystems weekly.
+Minor and patch bun updates are grouped. Major updates are ignored by default,
+and TypeScript majors are ignored explicitly. Dependabot alerts are not suppressed
+by these ignore rules. The bun ecosystem does not produce security-update pull
+requests, so security alerts must be tracked separately.
+
+### CI and release wiring
+
+`.github/workflows/ci.yml` runs each gate as a separate step after installing
+Node 24 and `oven-sh/setup-bun`. Extension browser tests need
+`bunx playwright install --with-deps chromium` first. The macOS release workflow
+(`.github/workflows/release-macos.yml`) uses the same bun setup, installs
+Chromium with `bunx playwright install chromium`, and then runs `bun run check`
+and `bun run security:audit` before signing.
+
+Focused validation for dependency or tooling changes:
+
+```sh
+bun install --frozen-lockfile
+bun run licenses:check
+bunx vitest run scripts/check-licenses.test.ts
+bun run security:audit
+```
+
+Running `bun run licenses:check` after a `bun install` is the cheapest proof that
+the installed tree satisfies the allowlist. `bun run check` is conditional: run it
+when a change affects multiple gates, the workspace graph, or the CI step order.
+
 CI is defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 Detailed evidence is in [`docs/verification.md`](../../docs/verification.md).
+Gate ordering and dependency-review behavior are also reflected in the
+[release gates](release-gates.md).
