@@ -1,0 +1,10 @@
+# gitleaks baseline: historical findings reviewed 2026-10-09 (Hagel). One fingerprint per line.
+# New findings are NOT covered: anything not listed here still fails security-scan.
+#
+# False positives: OAuth client IDs (public identifiers for PKCE public clients) in live-gateway.ts,
+# verify-browser-package.mjs and ProductionNativeAtriumGateway.swift, and the Chrome manifest public key in docs/adr.
+64d2dcb1d5699a0dfb0d2848e0fad0f250447572:apps/macos/Sources/AtriumCaptureMacPlatform/ProductionNativeAtriumGateway.swift:generic-api-key:7
+64d2dcb1d5699a0dfb0d2848e0fad0f250447572:packages/atrium-client/src/live-gateway.ts:generic-api-key:16
+64d2dcb1d5699a0dfb0d2848e0fad0f250447572:scripts/verify-browser-package.mjs:generic-api-key:9
+b2ed3abe13ef2b045ef2bdcb1c99ddaed0af96b7:docs/adr/0001-platform-identifiers-and-support.md:generic-api-key:13
+e43fa497c3451e4bb0e96f686a755a4a9b52ef2c:docs/adr/0001-platform-identifiers-and-support.md:generic-api-key:13
