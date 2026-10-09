@@ -110,6 +110,17 @@ Node 24 and `oven-sh/setup-bun`. Extension browser tests need
 Chromium with `bunx playwright install chromium`, and then runs `bun run check`
 and `bun run security:audit` before signing.
 
+`.github/workflows/security-scan.yml` is a thin caller of the organization's
+reusable security scan (`PSD401/.github/.github/workflows/reusable-security-scan.yml`).
+It runs on pull requests, pushes to `main`, a Monday 09:00 UTC schedule, and manual
+dispatch. The scan runs gitleaks over the full git history (findings are redacted in
+the log) and zizmor, which fails on high-severity workflow issues. Dependency review
+runs on pull requests only in public repositories. The caller grants `contents: read`
+only and passes no secrets. The reusable workflow is referenced at `@main` on purpose
+so central bumps propagate; that reference is marked as an intentional zizmor
+exception. The check is advisory until the organization's `psd-standard` ruleset moves
+from `evaluate` to `active`.
+
 Focused validation for dependency or tooling changes:
 
 ```sh
