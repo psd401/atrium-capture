@@ -106,9 +106,10 @@ requests, so security alerts must be tracked separately.
 `.github/workflows/ci.yml` runs each gate as a separate step after installing
 Node 24 and `oven-sh/setup-bun`. Extension browser tests need
 `bunx playwright install --with-deps chromium` first. The macOS release workflow
-(`.github/workflows/release-macos.yml`) uses the same bun setup, installs
-Chromium with `bunx playwright install chromium`, and then runs `bun run check`
-and `bun run security:audit` before signing.
+(`.github/workflows/release-macos.yml`) uses the same bun setup with the dependency
+cache disabled (`no-cache: true`), installs Chromium with `bunx playwright install chromium`,
+and then runs `bun run check` and `bun run security:audit` before signing. The cache
+is off for the signed release on purpose; see [release gates](release-gates.md).
 
 `.github/workflows/security-scan.yml` is a thin caller of the organization's
 reusable security scan (`PSD401/.github/.github/workflows/reusable-security-scan.yml`).
@@ -121,6 +122,12 @@ so central bumps propagate; that reference is marked as an intentional zizmor
 exception. The check is advisory until the organization's `psd-standard` ruleset moves
 from `evaluate` to `active`.
 
+`.gitleaksignore` is the gitleaks baseline for that scan. Each line is a fingerprint of a
+historical finding that was reviewed and judged a false positive; its header records the
+review. Findings not listed there still fail `security-scan`. The current entries are OAuth
+client IDs for public PKCE clients (identifiers, not secrets) and a Chrome manifest public
+key in an ADR. Do not add an entry to silence a new finding without the same review.
+
 The Claude workflows are separate from the release path. `.github/workflows/claude-code-review.yml`
 calls the organization's reusable Claude review workflow on pull requests that are opened,
 marked ready for review, or reopened, and skips Dependabot actors. The caller passes only
@@ -128,9 +135,11 @@ marked ready for review, or reopened, and skips Dependabot actors. The caller pa
 repository and organization secret. Keep this explicit list when editing the caller; restoring
 `secrets: inherit` would widen secret exposure. `.github/workflows/claude.yml` runs Claude Code
 when `@claude` appears in an issue, PR comment, or review, using the `CLAUDE_CODE_OAUTH_TOKEN`
-secret. `.github/workflows/openwiki-update.yml` calls the reusable OpenWiki workflow on pushes
-to `main`, on a Monday schedule, and on manual dispatch; it still uses `secrets: inherit` and
-needs `contents: write` to open its rolling docs pull request.
+secret and pins `anthropics/claude-code-action` to a full commit SHA (v1.0.247) to satisfy
+zizmor's unpinned-uses check. `.github/workflows/openwiki-update.yml` calls the reusable
+OpenWiki workflow on pushes to `main`, on a Monday schedule, and on manual dispatch; it
+still uses `secrets: inherit` and needs `contents: write` to open its rolling docs pull
+request.
 
 Focused validation for dependency or tooling changes:
 
@@ -147,5 +156,8 @@ when a change affects multiple gates, the workspace graph, or the CI step order.
 
 CI is defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 Detailed evidence is in [`docs/verification.md`](../../docs/verification.md).
+Gate ordering and dependency-review behavior are also reflected in the
+[release gates](release-gates.md).
+tion.md`](../../docs/verification.md).
 Gate ordering and dependency-review behavior are also reflected in the
 [release gates](release-gates.md).

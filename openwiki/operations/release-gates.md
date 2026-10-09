@@ -36,6 +36,12 @@ and Gatekeeper acceptance. The package verifier enforces the district signing te
 validates the must-quit rule, and confirms matching app version, build, bundle ID,
 and architectures against the manifest.
 
+The release job runs `oven-sh/setup-bun` with `no-cache: true`. The signed app is
+the release artifact, so a Bun dependency cache restored from another workflow run
+could ship inside it; the setting is the fix for the zizmor cache-poisoning finding.
+Keep it when editing the setup step. The job still installs with
+`bun install --frozen-lockfile` from the verified commit.
+
 Both public OAuth clients, idempotent authored-asset publication, and
 authenticated synthetic production-Atrium acceptance are live verified.
 `bun run verify:pilot` remains intentionally red until a receipt matches the exact
