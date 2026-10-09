@@ -121,6 +121,17 @@ so central bumps propagate; that reference is marked as an intentional zizmor
 exception. The check is advisory until the organization's `psd-standard` ruleset moves
 from `evaluate` to `active`.
 
+The Claude workflows are separate from the release path. `.github/workflows/claude-code-review.yml`
+calls the organization's reusable Claude review workflow on pull requests that are opened,
+marked ready for review, or reopened, and skips Dependabot actors. The caller passes only
+`BEDROCK_API_KEY`, by name, so the review job receives that one secret rather than every
+repository and organization secret. Keep this explicit list when editing the caller; restoring
+`secrets: inherit` would widen secret exposure. `.github/workflows/claude.yml` runs Claude Code
+when `@claude` appears in an issue, PR comment, or review, using the `CLAUDE_CODE_OAUTH_TOKEN`
+secret. `.github/workflows/openwiki-update.yml` calls the reusable OpenWiki workflow on pushes
+to `main`, on a Monday schedule, and on manual dispatch; it still uses `secrets: inherit` and
+needs `contents: write` to open its rolling docs pull request.
+
 Focused validation for dependency or tooling changes:
 
 ```sh
