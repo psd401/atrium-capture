@@ -137,9 +137,10 @@ repository and organization secret. Keep this explicit list when editing the cal
 when `@claude` appears in an issue, PR comment, or review, using the `CLAUDE_CODE_OAUTH_TOKEN`
 secret and pins `anthropics/claude-code-action` to a full commit SHA (v1.0.247) to satisfy
 zizmor's unpinned-uses check. `.github/workflows/openwiki-update.yml` calls the reusable
-OpenWiki workflow on pushes to `main`, on a Monday schedule, and on manual dispatch; it
-still uses `secrets: inherit` and needs `contents: write` to open its rolling docs pull
-request.
+OpenWiki workflow on pushes to `main`, on a Monday schedule, and on manual dispatch. Like the
+review caller, it passes an explicit secret list (`BEDROCK_API_KEY` and
+`PSD_AUTOMATION_APP_PRIVATE_KEY`) instead of `secrets: inherit`, and it needs
+`contents: write` to open its rolling docs pull request.
 
 Focused validation for dependency or tooling changes:
 
@@ -156,8 +157,5 @@ when a change affects multiple gates, the workspace graph, or the CI step order.
 
 CI is defined in [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml).
 Detailed evidence is in [`docs/verification.md`](../../docs/verification.md).
-Gate ordering and dependency-review behavior are also reflected in the
-[release gates](release-gates.md).
-tion.md`](../../docs/verification.md).
 Gate ordering and dependency-review behavior are also reflected in the
 [release gates](release-gates.md).
