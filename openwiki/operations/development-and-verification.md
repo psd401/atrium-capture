@@ -111,6 +111,17 @@ cache disabled (`no-cache: true`), installs Chromium with `bunx playwright insta
 and then runs `bun run check` and `bun run security:audit` before signing. The cache
 is off for the signed release on purpose; see [release gates](release-gates.md).
 
+`.github/workflows/psd-ci.yml` is the organization-standard PSD CI gate. It calls the
+org-owned reusable workflow `PSD401/.github/.github/workflows/reusable-psd-ci.yml` at `@main`
+on pull requests and pushes to `main`, with explicit lint and typecheck commands. Its lint
+command runs `format:check`, `openwiki:check`, `lint`, and `licenses:check`; its typecheck
+command runs `typecheck`, `contracts:check`, and `messages:check`. Test and build use the
+reusable workflow's defaults. It is a subset of `ci.yml`'s browser-and-contracts job: it
+omits Playwright (`test:extension`), browser packaging, and the network-dependent
+`security:audit`. Changing a command in `ci.yml` does not change `psd-ci.yml`, so keep the
+two lists aligned deliberately. The `@main` reference is intentional, as with
+`security-scan.yml`, and is marked as a zizmor exception.
+
 `.github/workflows/security-scan.yml` is a thin caller of the organization's
 reusable security scan (`PSD401/.github/.github/workflows/reusable-security-scan.yml`).
 It runs on pull requests, pushes to `main`, a Monday 09:00 UTC schedule, and manual
