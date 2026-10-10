@@ -130,7 +130,8 @@ key in an ADR. Do not add an entry to silence a new finding without the same rev
 
 The Claude workflows are separate from the release path. `.github/workflows/claude-code-review.yml`
 calls the organization's reusable Claude review workflow on pull requests that are opened,
-marked ready for review, or reopened, and skips Dependabot actors. The caller passes only
+synchronized (new commits pushed), marked ready for review, or reopened, and skips Dependabot
+actors. The caller passes only
 `BEDROCK_API_KEY`, by name, so the review job receives that one secret rather than every
 repository and organization secret. Keep this explicit list when editing the caller; restoring
 `secrets: inherit` would widen secret exposure. `.github/workflows/claude.yml` runs Claude Code
