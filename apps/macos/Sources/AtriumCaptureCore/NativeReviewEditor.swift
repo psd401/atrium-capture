@@ -149,7 +149,7 @@ public enum NativeReviewEditor {
             action: .manual,
             annotations: [],
             crop: nil,
-            instruction: Instruction(editedText: clean, generatedText: clean, source: .user, userEdited: true),
+            instruction: Instruction(editedText: clean, generatedText: clean, source: .user, title: nil, userEdited: true),
             occurredAt: now,
             privacyReview: .notReviewed,
             screenshotAssetID: nil,
@@ -186,6 +186,7 @@ public enum NativeReviewEditor {
                 editedText: "\(firstText) \(secondText)",
                 generatedText: "\(firstText) \(secondText)",
                 source: .user,
+                title: nil,
                 userEdited: true
             ),
             privacyReview: review,

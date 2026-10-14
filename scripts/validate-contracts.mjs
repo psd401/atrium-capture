@@ -21,6 +21,10 @@ const schemaFixtures = [
     'contracts/publish-job.schema.json',
     'packages/test-fixtures/fixtures/publish-job-ready-v1.json',
   ],
+  [
+    'contracts/guide-suggestion.schema.json',
+    'packages/test-fixtures/fixtures/guide-suggestion-v1.json',
+  ],
 ];
 
 const ajv = new Ajv2020({ allErrors: true, strict: true });

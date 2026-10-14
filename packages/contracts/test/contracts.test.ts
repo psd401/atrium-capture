@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   ArrowDirection,
+  type AtriumCaptureGuideSuggestion,
   type AtriumCaptureNativeBridgeMessage,
   type AtriumCapturePublishJob,
   type AtriumCaptureSession,
@@ -60,5 +61,26 @@ describe('generated contract fixtures', () => {
     expect(job.readerUrl).toBe(
       'https://atrium.example.test/reader/70000000-0000-4000-8000-000000000001',
     );
+  });
+
+  it('loads a guide suggestion that names only session step ids', async () => {
+    const suggestion = await readFixture<AtriumCaptureGuideSuggestion>('guide-suggestion-v1.json');
+    const session = await readFixture<AtriumCaptureSession>('capture-session-v1.json');
+    const sessionStepIds = new Set(session.steps.map((step) => step.stepId));
+
+    expect(suggestion.schemaVersion).toBe(1);
+    expect(suggestion.sessionId).toBe(session.sessionId);
+    expect(suggestion.steps).toHaveLength(session.steps.length);
+    for (const step of suggestion.steps) {
+      expect(sessionStepIds.has(step.stepId)).toBe(true);
+    }
+    expect(JSON.stringify(suggestion)).not.toMatch(/data:image|selector|bearer/i);
+  });
+
+  it('decodes an optional step title on the shared capture session', async () => {
+    const session = await readFixture<AtriumCaptureSession>('capture-session-v1.json');
+
+    expect(session.steps[0]?.instruction.title).toBe('Begin the request');
+    expect(session.steps[1]?.instruction.title).toBeUndefined();
   });
 });

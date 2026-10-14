@@ -12,6 +12,7 @@ const sources = [
   ['CaptureSession', 'contracts/capture-session.schema.json'],
   ['NativeBridgeMessage', 'contracts/native-bridge.schema.json'],
   ['PublishJob', 'contracts/publish-job.schema.json'],
+  ['GuideSuggestion', 'contracts/guide-suggestion.schema.json'],
 ];
 
 async function render(language, rendererOptions) {

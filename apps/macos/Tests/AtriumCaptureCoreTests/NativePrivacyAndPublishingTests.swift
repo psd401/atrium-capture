@@ -645,6 +645,7 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
                     editedText: nil,
                     generatedText: "Select the synthetic control.",
                     source: .rules,
+                    title: nil,
                     userEdited: false
                 ),
                 occurredAt: now,
