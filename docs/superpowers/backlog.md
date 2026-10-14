@@ -7,7 +7,16 @@ and note it here.
 
 ## 1. AI guide writer (in progress)
 
-Spec: `specs/2026-10-14-ai-guide-writer-design.md`.
+Spec: `specs/2026-10-14-ai-guide-writer-design.md`. Metadata only in this
+iteration.
+
+Follow-up, vision input: Atrium's temporary-attachment staging route accepts
+only the NextAuth session cookie and feeds files into repository ingestion.
+An aistudio change is needed before a bearer client can hand screenshots to
+the assistant as vision input: either bearer support plus a vision purpose on
+that route, or an image input on `POST /api/v1/assistants/{id}/execute`.
+After that, the client adds a staging step before execute and reuses the
+flattened `publishable_local` derivatives.
 
 ## 2. Snipaste parity on Mac
 
