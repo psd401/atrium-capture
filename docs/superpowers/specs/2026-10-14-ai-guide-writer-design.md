@@ -62,9 +62,7 @@ Atrium/AI Studio boundary under explicit policy.
   "sessionId": "<uuid>",
   "title": "<1..200 chars>",
   "summary": "<1..600 chars>",
-  "steps": [
-    { "stepId": "<uuid>", "title": "<1..120 chars>", "instruction": "<1..2000 chars>" }
-  ]
+  "steps": [{ "stepId": "<uuid>", "title": "<1..120 chars>", "instruction": "<1..2000 chars>" }]
 }
 ```
 

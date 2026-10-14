@@ -39,6 +39,7 @@
 ### Task 1: Shared contract for guide suggestions and the optional step title
 
 **Files:**
+
 - Create: `contracts/guide-suggestion.schema.json`
 - Modify: `contracts/capture-session.schema.json` (`$defs.instruction.properties`)
 - Modify: `contracts/README.md` (file list and additive history)
@@ -51,6 +52,7 @@
 - Generated (commit after `bun run contracts:generate`): `packages/contracts/src/generated/contracts.ts`, `apps/macos/Sources/AtriumCaptureContracts/Generated/Contracts.swift`
 
 **Interfaces:**
+
 - Produces TypeScript types from `@atrium-capture/contracts`: `AtriumCaptureGuideSuggestion { schemaVersion: number; sessionId: string; title: string; summary: string; steps: GuideSuggestionStep[] }`, `GuideSuggestionStep { stepId: string; title: string; instruction: string }`, and `Instruction.title?: string`.
 - Produces Swift types in `AtriumCaptureContracts`: `AtriumCaptureGuideSuggestion`, `GuideSuggestionStep`, and `Instruction.title: String?`.
 
@@ -59,28 +61,26 @@
 Append to `packages/contracts/test/contracts.test.ts` inside the existing `describe('generated contract fixtures', ...)` block:
 
 ```ts
-  it('loads a guide suggestion that names only session step ids', async () => {
-    const suggestion = await readFixture<AtriumCaptureGuideSuggestion>(
-      'guide-suggestion-v1.json',
-    );
-    const session = await readFixture<AtriumCaptureSession>('capture-session-v1.json');
-    const sessionStepIds = new Set(session.steps.map((step) => step.stepId));
+it('loads a guide suggestion that names only session step ids', async () => {
+  const suggestion = await readFixture<AtriumCaptureGuideSuggestion>('guide-suggestion-v1.json');
+  const session = await readFixture<AtriumCaptureSession>('capture-session-v1.json');
+  const sessionStepIds = new Set(session.steps.map((step) => step.stepId));
 
-    expect(suggestion.schemaVersion).toBe(1);
-    expect(suggestion.sessionId).toBe(session.sessionId);
-    expect(suggestion.steps).toHaveLength(session.steps.length);
-    for (const step of suggestion.steps) {
-      expect(sessionStepIds.has(step.stepId)).toBe(true);
-    }
-    expect(JSON.stringify(suggestion)).not.toMatch(/data:image|selector|bearer/i);
-  });
+  expect(suggestion.schemaVersion).toBe(1);
+  expect(suggestion.sessionId).toBe(session.sessionId);
+  expect(suggestion.steps).toHaveLength(session.steps.length);
+  for (const step of suggestion.steps) {
+    expect(sessionStepIds.has(step.stepId)).toBe(true);
+  }
+  expect(JSON.stringify(suggestion)).not.toMatch(/data:image|selector|bearer/i);
+});
 
-  it('decodes an optional step title on the shared capture session', async () => {
-    const session = await readFixture<AtriumCaptureSession>('capture-session-v1.json');
+it('decodes an optional step title on the shared capture session', async () => {
+  const session = await readFixture<AtriumCaptureSession>('capture-session-v1.json');
 
-    expect(session.steps[0]?.instruction.title).toBe('Begin the request');
-    expect(session.steps[1]?.instruction.title).toBeUndefined();
-  });
+  expect(session.steps[0]?.instruction.title).toBe('Begin the request');
+  expect(session.steps[1]?.instruction.title).toBeUndefined();
+});
 ```
 
 Add `type AtriumCaptureGuideSuggestion,` to the import list from `'../src/index.js'`.
@@ -256,6 +256,7 @@ git commit -m "feat(contracts): guide suggestion schema and optional step title"
 ### Task 2: `suggest_instruction` editor command (TypeScript and Swift)
 
 **Files:**
+
 - Modify: `packages/editor-model/src/index.ts:14-27` (`EditorCommand` union) and the `switch` in `applyEditorCommand`
 - Modify: `packages/editor-model/test/editor-model.test.ts`
 - Modify: `apps/browser-extension/src/message.schema.json` (`$defs.editorCommand.oneOf`)
@@ -267,6 +268,7 @@ git commit -m "feat(contracts): guide suggestion schema and optional step title"
 - Modify: `packages/atrium-client/test/atrium-client.test.ts`
 
 **Interfaces:**
+
 - Produces TypeScript: `EditorCommand` gains `{ kind: 'suggest_instruction'; stepId: string; text: string; title: string }`. Behavior: sets `instruction.generatedText = text`, `instruction.title = title`, `instruction.source = Source.DistrictAI`; keeps `editedText` and `userEdited`; does not change `privacyReview`; bumps `revision` and `updatedAt`.
 - Produces Swift: `NativeReviewEditor.suggestInstruction(in:stepID:text:title:now:) throws -> AtriumCaptureSession` with the same behavior.
 - Produces Markdown: `generateMarkdown` emits `## Step N: <title>` when `instruction.title` is set, else `## Step N`.
@@ -276,74 +278,74 @@ git commit -m "feat(contracts): guide suggestion schema and optional step title"
 Append to `packages/editor-model/test/editor-model.test.ts` inside `describe('editor commands', ...)`:
 
 ```ts
-  it('suggest_instruction fills generated text and title without touching user edits', () => {
-    let session = fixtureSession();
-    session = applyEditorCommand(session, {
-      kind: 'update_instruction',
-      stepId: firstStepId,
-      text: 'My own words.',
-    });
-    session = applyEditorCommand(session, {
-      kind: 'suggest_instruction',
-      stepId: firstStepId,
-      text: 'Select the synthetic button.',
-      title: 'Open the form',
-    });
-    session = applyEditorCommand(session, {
-      kind: 'suggest_instruction',
-      stepId: secondStepId,
-      text: 'Enter the requested value.',
-      title: 'Fill the field',
-    });
-
-    const first = session.steps.find((step) => step.stepId === firstStepId);
-    const second = session.steps.find((step) => step.stepId === secondStepId);
-    expect(first?.instruction.editedText).toBe('My own words.');
-    expect(first?.instruction.userEdited).toBe(true);
-    expect(first?.instruction.generatedText).toBe('Select the synthetic button.');
-    expect(first?.instruction.title).toBe('Open the form');
-    expect(first?.instruction.source).toBe(Source.DistrictAI);
-    expect(second?.instruction.editedText).toBeUndefined();
-    expect(second?.instruction.userEdited).toBe(false);
-    expect(second?.instruction.generatedText).toBe('Enter the requested value.');
-    expect(second?.instruction.source).toBe(Source.DistrictAI);
+it('suggest_instruction fills generated text and title without touching user edits', () => {
+  let session = fixtureSession();
+  session = applyEditorCommand(session, {
+    kind: 'update_instruction',
+    stepId: firstStepId,
+    text: 'My own words.',
+  });
+  session = applyEditorCommand(session, {
+    kind: 'suggest_instruction',
+    stepId: firstStepId,
+    text: 'Select the synthetic button.',
+    title: 'Open the form',
+  });
+  session = applyEditorCommand(session, {
+    kind: 'suggest_instruction',
+    stepId: secondStepId,
+    text: 'Enter the requested value.',
+    title: 'Fill the field',
   });
 
-  it('suggest_instruction rejects empty or oversize text and unknown steps', () => {
-    const session = fixtureSession();
-    expect(() =>
-      applyEditorCommand(session, {
-        kind: 'suggest_instruction',
-        stepId: firstStepId,
-        text: '   ',
-        title: 'Title',
-      }),
-    ).toThrow('invalid_instruction');
-    expect(() =>
-      applyEditorCommand(session, {
-        kind: 'suggest_instruction',
-        stepId: firstStepId,
-        text: 'x'.repeat(2_001),
-        title: 'Title',
-      }),
-    ).toThrow('invalid_instruction');
-    expect(() =>
-      applyEditorCommand(session, {
-        kind: 'suggest_instruction',
-        stepId: firstStepId,
-        text: 'Fine.',
-        title: 'x'.repeat(121),
-      }),
-    ).toThrow('invalid_title');
-    expect(() =>
-      applyEditorCommand(session, {
-        kind: 'suggest_instruction',
-        stepId: '10000000-0000-4000-8000-000000000099',
-        text: 'Fine.',
-        title: 'Title',
-      }),
-    ).toThrow('step_not_found');
-  });
+  const first = session.steps.find((step) => step.stepId === firstStepId);
+  const second = session.steps.find((step) => step.stepId === secondStepId);
+  expect(first?.instruction.editedText).toBe('My own words.');
+  expect(first?.instruction.userEdited).toBe(true);
+  expect(first?.instruction.generatedText).toBe('Select the synthetic button.');
+  expect(first?.instruction.title).toBe('Open the form');
+  expect(first?.instruction.source).toBe(Source.DistrictAI);
+  expect(second?.instruction.editedText).toBeUndefined();
+  expect(second?.instruction.userEdited).toBe(false);
+  expect(second?.instruction.generatedText).toBe('Enter the requested value.');
+  expect(second?.instruction.source).toBe(Source.DistrictAI);
+});
+
+it('suggest_instruction rejects empty or oversize text and unknown steps', () => {
+  const session = fixtureSession();
+  expect(() =>
+    applyEditorCommand(session, {
+      kind: 'suggest_instruction',
+      stepId: firstStepId,
+      text: '   ',
+      title: 'Title',
+    }),
+  ).toThrow('invalid_instruction');
+  expect(() =>
+    applyEditorCommand(session, {
+      kind: 'suggest_instruction',
+      stepId: firstStepId,
+      text: 'x'.repeat(2_001),
+      title: 'Title',
+    }),
+  ).toThrow('invalid_instruction');
+  expect(() =>
+    applyEditorCommand(session, {
+      kind: 'suggest_instruction',
+      stepId: firstStepId,
+      text: 'Fine.',
+      title: 'x'.repeat(121),
+    }),
+  ).toThrow('invalid_title');
+  expect(() =>
+    applyEditorCommand(session, {
+      kind: 'suggest_instruction',
+      stepId: '10000000-0000-4000-8000-000000000099',
+      text: 'Fine.',
+      title: 'Title',
+    }),
+  ).toThrow('step_not_found');
+});
 ```
 
 Note: the fixture session in that file is in `review` state; `suggest_instruction` must be allowed in `review` like `update_instruction`. Check whether `fixtureSession()` steps are `approved`; the command must not change `privacyReview`, so add `expect(first?.privacyReview).toBe(before.privacyReview)` using a captured `before` value.
@@ -416,22 +418,22 @@ Expected: validator regenerated, check passes.
 Add to `apps/browser-extension/test/messages.test.ts` (follow the file's existing pattern for a valid `editor.command` message):
 
 ```ts
-  it('accepts a suggest_instruction editor command', () => {
-    expect(
-      parseIncomingMessage({
-        kind: 'editor.command',
-        payload: {
-          commandId: '40000000-0000-4000-8000-000000000001',
-          command: {
-            kind: 'suggest_instruction',
-            stepId: '20000000-0000-4000-8000-000000000001',
-            text: 'Select the synthetic button.',
-            title: 'Open the form',
-          },
+it('accepts a suggest_instruction editor command', () => {
+  expect(
+    parseIncomingMessage({
+      kind: 'editor.command',
+      payload: {
+        commandId: '40000000-0000-4000-8000-000000000001',
+        command: {
+          kind: 'suggest_instruction',
+          stepId: '20000000-0000-4000-8000-000000000001',
+          text: 'Select the synthetic button.',
+          title: 'Open the form',
         },
-      }),
-    ).toBeDefined();
-  });
+      },
+    }),
+  ).toBeDefined();
+});
 ```
 
 Run: `bun run vitest run apps/browser-extension/test/messages.test.ts`
@@ -442,20 +444,20 @@ Expected: PASS.
 In `packages/atrium-client/test/atrium-client.test.ts`, find the existing test that calls `generateMarkdown` and add a sibling:
 
 ```ts
-  it('uses the suggested step title as the heading when present', () => {
-    const session = publishableFixtureSession(); // reuse the file's existing publishable session helper
-    const titled = {
-      ...session,
-      steps: session.steps.map((step, index) =>
-        index === 0
-          ? { ...step, instruction: { ...step.instruction, title: 'Open the form' } }
-          : step,
-      ),
-    };
-    const markdown = generateMarkdown(titled, readyJobFixture(), new MockAtriumGateway());
-    expect(markdown).toContain('## Step 1: Open the form');
-    expect(markdown).toContain('## Step 2\n');
-  });
+it('uses the suggested step title as the heading when present', () => {
+  const session = publishableFixtureSession(); // reuse the file's existing publishable session helper
+  const titled = {
+    ...session,
+    steps: session.steps.map((step, index) =>
+      index === 0
+        ? { ...step, instruction: { ...step.instruction, title: 'Open the form' } }
+        : step,
+    ),
+  };
+  const markdown = generateMarkdown(titled, readyJobFixture(), new MockAtriumGateway());
+  expect(markdown).toContain('## Step 1: Open the form');
+  expect(markdown).toContain('## Step 2\n');
+});
 ```
 
 Use the file's real helper names for the session and job fixtures; read the file first and substitute.
@@ -595,6 +597,7 @@ git commit -m "feat(editor): suggest_instruction command and titled step heading
 ### Task 3: `packages/guide-writer` request builder, validator, and apply
 
 **Files:**
+
 - Create: `packages/guide-writer/package.json`
 - Create: `packages/guide-writer/tsconfig.json`
 - Create: `packages/guide-writer/README.md`
@@ -602,6 +605,7 @@ git commit -m "feat(editor): suggest_instruction command and titled step heading
 - Create: `packages/guide-writer/test/guide-writer.test.ts`
 
 **Interfaces:**
+
 - Consumes: `EditorCommand` and `canFinalizeReview` from `@atrium-capture/editor-model` (Task 2), `AtriumCaptureGuideSuggestion` from `@atrium-capture/contracts` (Task 1), `normalizeCaptureSourceOriginForPublication` from `@atrium-capture/atrium-client`.
 - Produces:
   - `GUIDE_WRITER_REQUEST_LIMIT_BYTES = 131_072`
@@ -664,7 +668,7 @@ Run `bun install` from the repository root so the workspace link exists.
 
 `packages/guide-writer/test/guide-writer.test.ts`:
 
-```ts
+````ts
 import {
   Action,
   AssetState,
@@ -936,7 +940,11 @@ function fixtureSession(): AtriumCaptureSession {
         sequence: 1,
         stepId: secondStepId,
         target: {
-          macos: { appName: 'Synthetic App', bundleId: 'test.synthetic', windowTitle: 'Synthetic window' },
+          macos: {
+            appName: 'Synthetic App',
+            bundleId: 'test.synthetic',
+            windowTitle: 'Synthetic window',
+          },
         },
       },
     ],
@@ -944,7 +952,7 @@ function fixtureSession(): AtriumCaptureSession {
     updatedAt: new Date(2),
   };
 }
-```
+````
 
 Before running, open `contracts/capture-session.schema.json` and confirm the exact property names under `target.browser` (`pageTitle`, `path`, `selectors`) and `target.macos` (`appName`, `bundleId`, `windowTitle`) and the type of `selectors`. Adjust the fixture to the real shape so the session is valid.
 
@@ -957,7 +965,7 @@ Expected: FAIL, module `../src/index.js` not found.
 
 `packages/guide-writer/src/index.ts`:
 
-```ts
+````ts
 // ABOUTME: Builds the metadata-only Capture Guide Writer request, validates the assistant's
 // ABOUTME: JSON reply against the shared contract, and converts it into editor commands.
 import { normalizeCaptureSourceOriginForPublication } from '@atrium-capture/atrium-client';
@@ -1067,7 +1075,10 @@ export function validateGuideSuggestion(
     const stepRecord = requireRecord(entry, ['stepId', 'title', 'instruction']);
     const stepId = requireText(stepRecord.stepId, 1, 36, 'stepId');
     if (!sessionStepIds.has(stepId) || seen.has(stepId)) {
-      throw new GuideSuggestionError('suggestion_unknown_step', `unknown or repeated step ${stepId}`);
+      throw new GuideSuggestionError(
+        'suggestion_unknown_step',
+        `unknown or repeated step ${stepId}`,
+      );
     }
     seen.add(stepId);
     return {
@@ -1159,7 +1170,7 @@ function requireText(value: unknown, min: number, max: number, label: string): s
   }
   return trimmed;
 }
-```
+````
 
 Match the generated enum and property names from `contracts.ts` (`step.action` is the `Action` enum whose string values are the schema strings; `step.target?.accessibleName` and `browser.pageTitle` exist only if the schema defines them; read `Target`, `Browser`, and `Macos` in the generated file and adjust).
 
@@ -1183,6 +1194,7 @@ If `bun.lock` did not change, omit it.
 ### Task 4: `executeGuideWriter` on the TypeScript Atrium gateways
 
 **Files:**
+
 - Modify: `packages/atrium-client/src/index.ts:14-23` (`AtriumCapabilities`), `:75-92` (`AtriumGateway`), `:122-140` (`UnavailableAtriumGateway`)
 - Modify: `packages/atrium-client/src/live-gateway.ts:23-31` (scopes), `:96-120` (capabilities), new method, `sendApiJson`/`getApiJson` reuse
 - Modify: `packages/atrium-client/src/mock-gateway.ts:64-92`
@@ -1193,6 +1205,7 @@ If `bun.lock` did not change, omit it.
 - Modify: `scripts/verify-atrium-production-boundary.mjs` and any other script that lists `ATRIUM_OAUTH_SCOPES` or the capability keys (grep for `internalPublication:` and `content:publish_internal` outside `packages/`).
 
 **Interfaces:**
+
 - Produces:
   - `AtriumCapabilities.guideWriter: boolean`
   - `interface ExecuteGuideWriterRequest { assistantId: number; steps: string; signal?: AbortSignal }`
@@ -1207,156 +1220,157 @@ If `bun.lock` did not change, omit it.
 Append to `packages/atrium-client/test/live-gateway.test.ts` inside the outer `describe`:
 
 ```ts
-  it('requests the execute scope', async () => {
-    const { ATRIUM_OAUTH_SCOPES } = await import('../src/live-gateway.js');
-    expect(ATRIUM_OAUTH_SCOPES).toContain('assistants:execute');
+it('requests the execute scope', async () => {
+  const { ATRIUM_OAUTH_SCOPES } = await import('../src/live-gateway.js');
+  expect(ATRIUM_OAUTH_SCOPES).toContain('assistants:execute');
+});
+
+it('executes the guide writer assistant and polls the job to completion', async () => {
+  const calls: Array<{ body?: unknown; headers: Headers; method: string; url: string }> = [];
+  let polls = 0;
+  const gateway = new ProductionAtriumGateway({
+    accessToken: async () => 'synthetic-access-token',
+    configured: async () => true,
+    request: async (input, init) => {
+      const url = String(input);
+      const method = init?.method ?? 'GET';
+      const headers = new Headers(init?.headers);
+      const body = typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : init?.body;
+      calls.push({ ...(body === undefined ? {} : { body }), headers, method, url });
+      if (url.endsWith('/api/v1/assistants/42/execute') && method === 'POST') {
+        return json(
+          { data: { jobId: 'job-1', pollUrl: '/api/v1/jobs/job-1', status: 'pending' } },
+          202,
+        );
+      }
+      if (url.endsWith('/api/v1/jobs/job-1') && method === 'GET') {
+        polls += 1;
+        if (polls < 2) {
+          return json({
+            data: { pollingInterval: 1, shouldContinuePolling: true, status: 'processing' },
+          });
+        }
+        return json({
+          data: {
+            partialContent: '',
+            pollingInterval: 1,
+            responseData: { text: '{"schemaVersion":1}' },
+            shouldContinuePolling: false,
+            status: 'completed',
+          },
+        });
+      }
+      return json({ error: { code: 'not_found' } }, 404);
+    },
+    sleep: async () => undefined,
   });
 
-  it('executes the guide writer assistant and polls the job to completion', async () => {
-    const calls: Array<{ body?: unknown; headers: Headers; method: string; url: string }> = [];
-    let polls = 0;
+  const result = await gateway.executeGuideWriter({
+    assistantId: 42,
+    steps: '{"schemaVersion":1,"steps":[]}',
+  });
+
+  expect(result).toEqual({ jobId: 'job-1', text: '{"schemaVersion":1}' });
+  const execute = calls[0];
+  expect(execute?.headers.get('accept')).toBe('application/json');
+  expect(execute?.headers.get('authorization')).toBe('Bearer synthetic-access-token');
+  expect(execute?.body).toEqual({ inputs: { steps: '{"schemaVersion":1,"steps":[]}' } });
+  expect(polls).toBe(2);
+});
+
+it('maps failed and cancelled jobs to retryable gateway errors', async () => {
+  for (const status of ['failed', 'cancelled'] as const) {
     const gateway = new ProductionAtriumGateway({
       accessToken: async () => 'synthetic-access-token',
       configured: async () => true,
       request: async (input, init) => {
         const url = String(input);
-        const method = init?.method ?? 'GET';
-        const headers = new Headers(init?.headers);
-        const body =
-          typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : init?.body;
-        calls.push({ ...(body === undefined ? {} : { body }), headers, method, url });
-        if (url.endsWith('/api/v1/assistants/42/execute') && method === 'POST') {
-          return json(
-            { data: { jobId: 'job-1', pollUrl: '/api/v1/jobs/job-1', status: 'pending' } },
-            202,
-          );
+        if (init?.method === 'POST') {
+          return json({ data: { jobId: 'job-2', status: 'pending' } }, 202);
         }
-        if (url.endsWith('/api/v1/jobs/job-1') && method === 'GET') {
-          polls += 1;
-          if (polls < 2) {
-            return json({
-              data: { pollingInterval: 1, shouldContinuePolling: true, status: 'processing' },
-            });
-          }
-          return json({
-            data: {
-              partialContent: '',
-              pollingInterval: 1,
-              responseData: { text: '{"schemaVersion":1}' },
-              shouldContinuePolling: false,
-              status: 'completed',
-            },
-          });
+        if (url.endsWith('/api/v1/jobs/job-2')) {
+          return json({ data: { errorMessage: 'synthetic', status } });
         }
         return json({ error: { code: 'not_found' } }, 404);
       },
       sleep: async () => undefined,
     });
+    await expect(
+      gateway.executeGuideWriter({ assistantId: 42, steps: '{}' }),
+    ).rejects.toMatchObject({ code: `atrium_job_${status}`, retryable: true });
+  }
+});
 
-    const result = await gateway.executeGuideWriter({
-      assistantId: 42,
-      steps: '{"schemaVersion":1,"steps":[]}',
-    });
-
-    expect(result).toEqual({ jobId: 'job-1', text: '{"schemaVersion":1}' });
-    const execute = calls[0];
-    expect(execute?.headers.get('accept')).toBe('application/json');
-    expect(execute?.headers.get('authorization')).toBe('Bearer synthetic-access-token');
-    expect(execute?.body).toEqual({ inputs: { steps: '{"schemaVersion":1,"steps":[]}' } });
-    expect(polls).toBe(2);
+it('surfaces a 403 on execute as a non-retryable error without polling', async () => {
+  let polled = false;
+  const gateway = new ProductionAtriumGateway({
+    accessToken: async () => 'synthetic-access-token',
+    configured: async () => true,
+    request: async (_input, init) => {
+      if (init?.method === 'POST') {
+        return json({ error: { code: 'insufficient_scope', message: 'nope' } }, 403);
+      }
+      polled = true;
+      return json({});
+    },
+    sleep: async () => undefined,
   });
-
-  it('maps failed and cancelled jobs to retryable gateway errors', async () => {
-    for (const status of ['failed', 'cancelled'] as const) {
-      const gateway = new ProductionAtriumGateway({
-        accessToken: async () => 'synthetic-access-token',
-        configured: async () => true,
-        request: async (input, init) => {
-          const url = String(input);
-          if (init?.method === 'POST') {
-            return json({ data: { jobId: 'job-2', status: 'pending' } }, 202);
-          }
-          if (url.endsWith('/api/v1/jobs/job-2')) {
-            return json({ data: { errorMessage: 'synthetic', status } });
-          }
-          return json({ error: { code: 'not_found' } }, 404);
-        },
-        sleep: async () => undefined,
-      });
-      await expect(gateway.executeGuideWriter({ assistantId: 42, steps: '{}' })).rejects.toMatchObject(
-        { code: `atrium_job_${status}`, retryable: true },
-      );
-    }
+  await expect(gateway.executeGuideWriter({ assistantId: 42, steps: '{}' })).rejects.toMatchObject({
+    code: 'insufficient_scope',
+    retryable: false,
   });
+  expect(polled).toBe(false);
+});
 
-  it('surfaces a 403 on execute as a non-retryable error without polling', async () => {
-    let polled = false;
-    const gateway = new ProductionAtriumGateway({
-      accessToken: async () => 'synthetic-access-token',
-      configured: async () => true,
-      request: async (_input, init) => {
-        if (init?.method === 'POST') {
-          return json({ error: { code: 'insufficient_scope', message: 'nope' } }, 403);
-        }
-        polled = true;
-        return json({});
-      },
-      sleep: async () => undefined,
-    });
-    await expect(gateway.executeGuideWriter({ assistantId: 42, steps: '{}' })).rejects.toMatchObject(
-      { code: 'insufficient_scope', retryable: false },
-    );
-    expect(polled).toBe(false);
+it('aborts polling when the overall budget is exhausted', async () => {
+  let now = 0;
+  const gateway = new ProductionAtriumGateway({
+    accessToken: async () => 'synthetic-access-token',
+    clock: () => now,
+    configured: async () => true,
+    request: async (_input, init) => {
+      if (init?.method === 'POST') {
+        return json({ data: { jobId: 'job-3', status: 'pending' } }, 202);
+      }
+      return json({ data: { pollingInterval: 10_000, status: 'processing' } });
+    },
+    sleep: async (ms) => {
+      now += ms;
+    },
   });
+  await expect(gateway.executeGuideWriter({ assistantId: 42, steps: '{}' })).rejects.toMatchObject({
+    code: 'atrium_job_timeout',
+    retryable: true,
+  });
+  expect(now).toBeGreaterThanOrEqual(120_000);
+});
 
-  it('aborts polling when the overall budget is exhausted', async () => {
-    let now = 0;
-    const gateway = new ProductionAtriumGateway({
-      accessToken: async () => 'synthetic-access-token',
-      clock: () => now,
-      configured: async () => true,
-      request: async (_input, init) => {
-        if (init?.method === 'POST') {
-          return json({ data: { jobId: 'job-3', status: 'pending' } }, 202);
-        }
-        return json({ data: { pollingInterval: 10_000, status: 'processing' } });
-      },
-      sleep: async (ms) => {
-        now += ms;
-      },
-    });
-    await expect(gateway.executeGuideWriter({ assistantId: 42, steps: '{}' })).rejects.toMatchObject(
-      { code: 'atrium_job_timeout', retryable: true },
-    );
-    expect(now).toBeGreaterThanOrEqual(120_000);
+it('clamps the server polling interval to the documented range', async () => {
+  const sleeps: number[] = [];
+  let polls = 0;
+  const gateway = new ProductionAtriumGateway({
+    accessToken: async () => 'synthetic-access-token',
+    configured: async () => true,
+    request: async (_input, init) => {
+      if (init?.method === 'POST') {
+        return json({ data: { jobId: 'job-4', status: 'pending' } }, 202);
+      }
+      polls += 1;
+      if (polls === 1) {
+        return json({ data: { pollingInterval: 50, status: 'processing' } });
+      }
+      if (polls === 2) {
+        return json({ data: { pollingInterval: 60_000, status: 'processing' } });
+      }
+      return json({ data: { responseData: { text: 'ok' }, status: 'completed' } });
+    },
+    sleep: async (ms) => {
+      sleeps.push(ms);
+    },
   });
-
-  it('clamps the server polling interval to the documented range', async () => {
-    const sleeps: number[] = [];
-    let polls = 0;
-    const gateway = new ProductionAtriumGateway({
-      accessToken: async () => 'synthetic-access-token',
-      configured: async () => true,
-      request: async (_input, init) => {
-        if (init?.method === 'POST') {
-          return json({ data: { jobId: 'job-4', status: 'pending' } }, 202);
-        }
-        polls += 1;
-        if (polls === 1) {
-          return json({ data: { pollingInterval: 50, status: 'processing' } });
-        }
-        if (polls === 2) {
-          return json({ data: { pollingInterval: 60_000, status: 'processing' } });
-        }
-        return json({ data: { responseData: { text: 'ok' }, status: 'completed' } });
-      },
-      sleep: async (ms) => {
-        sleeps.push(ms);
-      },
-    });
-    await gateway.executeGuideWriter({ assistantId: 42, steps: '{}' });
-    expect(sleeps).toEqual([1_000, 10_000]);
-  });
+  await gateway.executeGuideWriter({ assistantId: 42, steps: '{}' });
+  expect(sleeps).toEqual([1_000, 10_000]);
+});
 ```
 
 Note the first poll happens after one sleep of the clamped interval from the 202 body (default 1000 ms when absent). If the test's expected `sleeps` differs after reading the implementation below, keep the implementation's documented behaviour: sleep before every poll, using the most recent server interval clamped to 1000 to 10000 ms.
@@ -1486,7 +1500,8 @@ Module-level helpers (next to `parseApiResponse`):
 
 ```ts
 function clampPollInterval(value: unknown): number {
-  const milliseconds = typeof value === 'number' && Number.isFinite(value) ? value : GUIDE_WRITER_POLL_MIN_MS;
+  const milliseconds =
+    typeof value === 'number' && Number.isFinite(value) ? value : GUIDE_WRITER_POLL_MIN_MS;
   return Math.min(GUIDE_WRITER_POLL_MAX_MS, Math.max(GUIDE_WRITER_POLL_MIN_MS, milliseconds));
 }
 
@@ -1586,43 +1601,43 @@ function parseGuideWriterResult(value: unknown): ExecuteGuideWriterResult {
 In `mock-server.ts` add a route after the `/objects` POST:
 
 ```ts
-    const executeMatch = /^\/assistants\/([^/]+)\/execute$/.exec(relativePath);
-    if (request.method === 'POST' && executeMatch?.[1]) {
-      const body = requireRecord(await readJson(request));
-      const result = await gateway.executeGuideWriter({
-        assistantId: Number(decodeURIComponent(executeMatch[1])),
-        steps: requireString(body, 'steps'),
-      });
-      return json(response, 200, result);
-    }
+const executeMatch = /^\/assistants\/([^/]+)\/execute$/.exec(relativePath);
+if (request.method === 'POST' && executeMatch?.[1]) {
+  const body = requireRecord(await readJson(request));
+  const result = await gateway.executeGuideWriter({
+    assistantId: Number(decodeURIComponent(executeMatch[1])),
+    steps: requireString(body, 'steps'),
+  });
+  return json(response, 200, result);
+}
 ```
 
 Add a test to `packages/atrium-client/test/atrium-client.test.ts`:
 
 ```ts
-  it('mock gateway writes a suggestion for every requested step', async () => {
-    const gateway = new MockAtriumGateway();
-    const result = await gateway.executeGuideWriter({
-      assistantId: 1,
-      steps: JSON.stringify({
-        schemaVersion: 1,
-        sessionId: '00000000-0000-4000-8000-000000000001',
-        steps: [{ instruction: 'Select Start.', sequence: 0, stepId: 'step-a' }],
-        title: 'Guide',
-      }),
-    });
-    expect(JSON.parse(result.text)).toMatchObject({
+it('mock gateway writes a suggestion for every requested step', async () => {
+  const gateway = new MockAtriumGateway();
+  const result = await gateway.executeGuideWriter({
+    assistantId: 1,
+    steps: JSON.stringify({
       schemaVersion: 1,
       sessionId: '00000000-0000-4000-8000-000000000001',
-      steps: [{ instruction: 'Select Start. (AI)', stepId: 'step-a', title: 'Step 1' }],
-    });
-    await expect(
-      new MockAtriumGateway({ guideWriter: { fail: 'failed' } }).executeGuideWriter({
-        assistantId: 1,
-        steps: '{}',
-      }),
-    ).rejects.toMatchObject({ code: 'atrium_job_failed', retryable: true });
+      steps: [{ instruction: 'Select Start.', sequence: 0, stepId: 'step-a' }],
+      title: 'Guide',
+    }),
   });
+  expect(JSON.parse(result.text)).toMatchObject({
+    schemaVersion: 1,
+    sessionId: '00000000-0000-4000-8000-000000000001',
+    steps: [{ instruction: 'Select Start. (AI)', stepId: 'step-a', title: 'Step 1' }],
+  });
+  await expect(
+    new MockAtriumGateway({ guideWriter: { fail: 'failed' } }).executeGuideWriter({
+      assistantId: 1,
+      steps: '{}',
+    }),
+  ).rejects.toMatchObject({ code: 'atrium_job_failed', retryable: true });
+});
 ```
 
 Add a round-trip assertion to `packages/atrium-client/test/mock-http.test.ts` following its existing pattern: start the mock server, call `executeGuideWriter` through `HttpMockAtriumGateway`, and expect `text` to parse as JSON with `schemaVersion: 1`.
@@ -1651,6 +1666,7 @@ Review `git status` before `git add apps scripts docs`; stage only the files you
 ### Task 5: Browser extension policy, service, message, and button
 
 **Files:**
+
 - Modify: `apps/browser-extension/src/managed-policy.ts` (`RuntimeManagedPolicy`, `allowedKeys`, `defaults`, `parseManagedPolicy`)
 - Modify: `apps/browser-extension/test/managed-policy.test.ts`
 - Create: `apps/browser-extension/src/guide-writer-service.ts`
@@ -1666,6 +1682,7 @@ Review `git status` before `git add apps scripts docs`; stage only the files you
 - Modify: `docs/browser-managed-policy.md`
 
 **Interfaces:**
+
 - Consumes: `buildGuideWriterRequest`, `serializeGuideWriterRequest`, `parseGuideSuggestionText`, `validateGuideSuggestion`, `applyGuideSuggestion`, `GuideSuggestionError` (Task 3); `AtriumGateway.executeGuideWriter`, `capabilities().guideWriter`, `GatewayError` (Task 4); `EditorService.command` (existing).
 - Produces:
   - `RuntimeManagedPolicy.aiGuideWriting: 'off' | 'on'` (default `'on'`) and `RuntimeManagedPolicy.atriumGuideWriterAssistantId?: number`.
@@ -1681,27 +1698,30 @@ Review `git status` before `git add apps scripts docs`; stage only the files you
 Add to `apps/browser-extension/test/managed-policy.test.ts`:
 
 ```ts
-  it('defaults AI guide writing on with no assistant configured', () => {
-    const snapshot = parseManagedPolicy({});
-    expect(snapshot.policy.aiGuideWriting).toBe('on');
-    expect(snapshot.policy.atriumGuideWriterAssistantId).toBeUndefined();
-  });
+it('defaults AI guide writing on with no assistant configured', () => {
+  const snapshot = parseManagedPolicy({});
+  expect(snapshot.policy.aiGuideWriting).toBe('on');
+  expect(snapshot.policy.atriumGuideWriterAssistantId).toBeUndefined();
+});
 
-  it('accepts the guide writer policy keys and rejects bad values', () => {
-    expect(
-      parseManagedPolicy({ aiGuideWriting: 'off', atriumGuideWriterAssistantId: 42, schemaVersion: 1 })
-        .policy,
-    ).toMatchObject({ aiGuideWriting: 'off', atriumGuideWriterAssistantId: 42 });
-    expect(parseManagedPolicy({ aiGuideWriting: 'maybe', schemaVersion: 1 }).issues).toContain(
-      'ai_guide_writing_invalid',
-    );
-    expect(
-      parseManagedPolicy({ atriumGuideWriterAssistantId: 0, schemaVersion: 1 }).issues,
-    ).toContain('atrium_guide_writer_assistant_id_invalid');
-    expect(
-      parseManagedPolicy({ atriumGuideWriterAssistantId: '42', schemaVersion: 1 }).issues,
-    ).toContain('atrium_guide_writer_assistant_id_invalid');
-  });
+it('accepts the guide writer policy keys and rejects bad values', () => {
+  expect(
+    parseManagedPolicy({
+      aiGuideWriting: 'off',
+      atriumGuideWriterAssistantId: 42,
+      schemaVersion: 1,
+    }).policy,
+  ).toMatchObject({ aiGuideWriting: 'off', atriumGuideWriterAssistantId: 42 });
+  expect(parseManagedPolicy({ aiGuideWriting: 'maybe', schemaVersion: 1 }).issues).toContain(
+    'ai_guide_writing_invalid',
+  );
+  expect(
+    parseManagedPolicy({ atriumGuideWriterAssistantId: 0, schemaVersion: 1 }).issues,
+  ).toContain('atrium_guide_writer_assistant_id_invalid');
+  expect(
+    parseManagedPolicy({ atriumGuideWriterAssistantId: '42', schemaVersion: 1 }).issues,
+  ).toContain('atrium_guide_writer_assistant_id_invalid');
+});
 ```
 
 Run: `bun run vitest run apps/browser-extension/test/managed-policy.test.ts`. Expected: FAIL.
@@ -1714,18 +1734,18 @@ Implement in `managed-policy.ts`:
 - In `parseManagedPolicy`, after `atriumOAuthClientId`:
 
 ```ts
-  const aiGuideWriting = parseEnum(
-    record.aiGuideWriting,
-    ['on', 'off'] as const,
-    defaults.aiGuideWriting,
-    'ai_guide_writing_invalid',
-    issues,
-  );
-  const atriumGuideWriterAssistantId = parseOptionalPositiveInteger(
-    record.atriumGuideWriterAssistantId,
-    'atrium_guide_writer_assistant_id_invalid',
-    issues,
-  );
+const aiGuideWriting = parseEnum(
+  record.aiGuideWriting,
+  ['on', 'off'] as const,
+  defaults.aiGuideWriting,
+  'ai_guide_writing_invalid',
+  issues,
+);
+const atriumGuideWriterAssistantId = parseOptionalPositiveInteger(
+  record.atriumGuideWriterAssistantId,
+  'atrium_guide_writer_assistant_id_invalid',
+  issues,
+);
 ```
 
 Read `parseEnum`'s real signature near line 219 and match its argument order. Add the result to the returned `policy` object (`aiGuideWriting,` and `...(atriumGuideWriterAssistantId ? { atriumGuideWriterAssistantId } : {})`) and to `invalidPolicy` (`aiGuideWriting: 'off'`, so an invalid policy disables the feature). Add the helper:
@@ -1789,16 +1809,21 @@ describe('guide writer service', () => {
   it('reports why the writer is unavailable', async () => {
     const gateway = new MockAtriumGateway();
     expect(
-      await new GuideWriterService(repository, editor, gateway, policy({ aiGuideWriting: 'off' })).availability(),
+      await new GuideWriterService(
+        repository,
+        editor,
+        gateway,
+        policy({ aiGuideWriting: 'off' }),
+      ).availability(),
     ).toEqual({ available: false, reason: 'policy_off' });
     expect(
       await new GuideWriterService(repository, editor, gateway, async () =>
         parseManagedPolicy({ schemaVersion: 1 }),
       ).availability(),
     ).toEqual({ available: false, reason: 'assistant_unconfigured' });
-    expect(await new GuideWriterService(repository, editor, gateway, policy()).availability()).toEqual(
-      { available: true },
-    );
+    expect(
+      await new GuideWriterService(repository, editor, gateway, policy()).availability(),
+    ).toEqual({ available: true });
   });
 
   it('refuses to call the gateway when policy is off even if asked', async () => {
@@ -1810,8 +1835,16 @@ describe('guide writer service', () => {
       executed = true;
       return original(request);
     };
-    const service = new GuideWriterService(repository, editor, gateway, policy({ aiGuideWriting: 'off' }));
-    expect(await service.write(crypto.randomUUID())).toMatchObject({ ok: false, errorCode: 'policy_off' });
+    const service = new GuideWriterService(
+      repository,
+      editor,
+      gateway,
+      policy({ aiGuideWriting: 'off' }),
+    );
+    expect(await service.write(crypto.randomUUID())).toMatchObject({
+      ok: false,
+      errorCode: 'policy_off',
+    });
     expect(executed).toBe(false);
   });
 
@@ -2070,14 +2103,14 @@ export interface EditorWriteGuideMessage {
 and add it to the `IncomingMessage` union. Add to `messages.test.ts`:
 
 ```ts
-  it('accepts an editor.write-guide message', () => {
-    expect(
-      parseIncomingMessage({
-        kind: 'editor.write-guide',
-        payload: { commandId: '40000000-0000-4000-8000-000000000002' },
-      }),
-    ).toBeDefined();
-  });
+it('accepts an editor.write-guide message', () => {
+  expect(
+    parseIncomingMessage({
+      kind: 'editor.write-guide',
+      payload: { commandId: '40000000-0000-4000-8000-000000000002' },
+    }),
+  ).toBeDefined();
+});
 ```
 
 In `background.ts`:
@@ -2110,32 +2143,32 @@ Run: `bun run vitest run apps/browser-extension && bun run --filter '@atrium-cap
 In `App.tsx` add state and a handler next to `finalize`:
 
 ```tsx
-  const [guideWriterError, setGuideWriterError] = useState<string>();
-  const [writingGuide, setWritingGuide] = useState(false);
-  const guideWriterVisible =
-    diagnostics?.managedPolicy.aiGuideWriting !== 'off' &&
-    diagnostics?.managedPolicy.guideWriterConfigured === true &&
-    publication?.capabilities.guideWriter === true;
+const [guideWriterError, setGuideWriterError] = useState<string>();
+const [writingGuide, setWritingGuide] = useState(false);
+const guideWriterVisible =
+  diagnostics?.managedPolicy.aiGuideWriting !== 'off' &&
+  diagnostics?.managedPolicy.guideWriterConfigured === true &&
+  publication?.capabilities.guideWriter === true;
 
-  const writeGuide = async () => {
-    setWritingGuide(true);
-    setGuideWriterError(undefined);
-    try {
-      const outcome = (await browser.runtime.sendMessage({
-        kind: 'editor.write-guide',
-        payload: { commandId: crypto.randomUUID() },
-      })) as { ok: true; session: AtriumCaptureSession } | { errorCode: string; ok: false };
-      if (!outcome?.ok) {
-        setGuideWriterError(guideWriterFailureMessage(outcome?.errorCode));
-        return;
-      }
-      setSession(outcome.session);
-    } catch {
-      setGuideWriterError(guideWriterFailureMessage('guide_writer_failed'));
-    } finally {
-      setWritingGuide(false);
+const writeGuide = async () => {
+  setWritingGuide(true);
+  setGuideWriterError(undefined);
+  try {
+    const outcome = (await browser.runtime.sendMessage({
+      kind: 'editor.write-guide',
+      payload: { commandId: crypto.randomUUID() },
+    })) as { ok: true; session: AtriumCaptureSession } | { errorCode: string; ok: false };
+    if (!outcome?.ok) {
+      setGuideWriterError(guideWriterFailureMessage(outcome?.errorCode));
+      return;
     }
-  };
+    setSession(outcome.session);
+  } catch {
+    setGuideWriterError(guideWriterFailureMessage('guide_writer_failed'));
+  } finally {
+    setWritingGuide(false);
+  }
+};
 ```
 
 Add a module-level helper at the bottom of `App.tsx`:
@@ -2158,31 +2191,33 @@ function guideWriterFailureMessage(code: string | undefined): string {
 Inside the review section, before the `finalize-row` div, add:
 
 ```tsx
-          {guideWriterVisible && (
-            <div className="guide-writer-row">
-              <button
-                aria-busy={writingGuide}
-                disabled={pending || writingGuide || issues.length > 0}
-                onClick={() => void writeGuide()}
-                type="button"
-              >
-                {writingGuide ? 'Writing step titles and instructions' : 'Write with AI'}
-              </button>
-              <small>
-                {issues.length > 0
-                  ? 'Approve every step first. The AI writer sees step metadata, never screenshots.'
-                  : 'Fills the title and each step from step metadata. You can edit everything after.'}
-              </small>
-              {guideWriterError && (
-                <p className="error" role="alert">
-                  {guideWriterError}{' '}
-                  <button onClick={() => void writeGuide()} type="button">
-                    Retry
-                  </button>
-                </p>
-              )}
-            </div>
-          )}
+{
+  guideWriterVisible && (
+    <div className="guide-writer-row">
+      <button
+        aria-busy={writingGuide}
+        disabled={pending || writingGuide || issues.length > 0}
+        onClick={() => void writeGuide()}
+        type="button"
+      >
+        {writingGuide ? 'Writing step titles and instructions' : 'Write with AI'}
+      </button>
+      <small>
+        {issues.length > 0
+          ? 'Approve every step first. The AI writer sees step metadata, never screenshots.'
+          : 'Fills the title and each step from step metadata. You can edit everything after.'}
+      </small>
+      {guideWriterError && (
+        <p className="error" role="alert">
+          {guideWriterError}{' '}
+          <button onClick={() => void writeGuide()} type="button">
+            Retry
+          </button>
+        </p>
+      )}
+    </div>
+  );
+}
 ```
 
 Find the `useState` for `publication` (the `PublicationSnapshot`) to confirm its variable name; the snippet assumes `publication`. Match the existing `.finalize-row` CSS by adding `.guide-writer-row` to the same rule in the side panel stylesheet (search `finalize-row` under `entrypoints/sidepanel/`).
@@ -2196,8 +2231,8 @@ Run: `bun run --filter '@atrium-capture/browser-extension' typecheck && bun run 
 In `recorder.pw.ts`, after the line `await expect(panel.getByRole('status')).toContainText('Privacy approved');` add:
 
 ```ts
-  // No assistant id is configured in this run, so the AI writer must stay hidden.
-  await expect(panel.getByRole('button', { name: 'Write with AI' })).toHaveCount(0);
+// No assistant id is configured in this run, so the AI writer must stay hidden.
+await expect(panel.getByRole('button', { name: 'Write with AI' })).toHaveCount(0);
 ```
 
 The extension-loaded run cannot reach a mock assistant because the production gateway only talks to the fixed Atrium origin. The full write path is covered by the service test in Step 2 with `MockAtriumGateway`.
@@ -2228,6 +2263,7 @@ git commit -m "feat(browser): Write with AI under managed policy"
 ### Task 6: Mac app gateway, editor, model, and button
 
 **Files:**
+
 - Modify: `apps/macos/Sources/AtriumCaptureCore/NativePublishing.swift` (`NativeAtriumCapabilities` gains `guideWriter`, protocol gains `executeGuideWriter`, `UnavailableNativeAtriumGateway` and `MockNativeAtriumGateway` implement it)
 - Create: `apps/macos/Sources/AtriumCaptureCore/NativeGuideWriter.swift` (request builder, suggestion validation, apply)
 - Create: `apps/macos/Tests/AtriumCaptureCoreTests/NativeGuideWriterTests.swift`
@@ -2238,6 +2274,7 @@ git commit -m "feat(browser): Write with AI under managed policy"
 - Modify: `docs/macos-runbook.md`
 
 **Interfaces:**
+
 - Consumes: `NativeReviewEditor.suggestInstruction` (Task 2), `Instruction.title` (Task 1), `AtriumCaptureGuideSuggestion` (Task 1).
 - Produces:
   - `NativeAtriumCapabilities.guideWriter: Bool` (new trailing init parameter with default `false` so existing call sites compile; production and mock pass `true`).
@@ -2252,7 +2289,7 @@ git commit -m "feat(browser): Write with AI under managed policy"
 
 `apps/macos/Tests/AtriumCaptureCoreTests/NativeGuideWriterTests.swift`:
 
-```swift
+````swift
 import AtriumCaptureContracts
 @testable import AtriumCaptureCore
 import XCTest
@@ -2340,7 +2377,7 @@ final class NativeGuideWriterTests: XCTestCase {
         // NativePrivacyAndPublishingTests.makeSession and add the target fields.
     }
 }
-```
+````
 
 Replace the `makeSession` comment with real construction code copied from `NativePrivacyAndPublishingTests.swift` (near line 584) before running.
 
@@ -2348,7 +2385,7 @@ Run: `bun run swift:test`. Expected: FAIL to compile (`NativeGuideWriter` missin
 
 - [ ] **Step 2: Implement `NativeGuideWriter.swift`**
 
-```swift
+````swift
 // ABOUTME: Builds the metadata-only Capture Guide Writer request, validates the assistant's
 // ABOUTME: JSON reply, and applies it to a reviewed session without touching user edits.
 import AtriumCaptureContracts
@@ -2466,7 +2503,7 @@ public enum NativeGuideWriter {
         guard range.contains(count) else { throw NativeGuideWriterError.invalid(label) }
     }
 }
-```
+````
 
 `NativePublishing.normalizedSourceOrigin` is a placeholder name: search `NativePublishing.swift` for the function that filters browser origins for `sourceRef.sourceOrigins` (the Mac path strips them entirely, per the comment near `createPrivateDraft`). If no origin normalizer exists in Core, add a private `normalizedOrigin(_:)` in `NativeGuideWriter` that keeps only `http`/`https` origins without credentials and rejects loopback and RFC 1918 hosts, mirroring `normalizeCaptureSourceOriginForPublication` in `packages/atrium-client/src/index.ts:643`. Read `NativeReviewEditor.setTitle` to confirm its signature and that it does not reset `privacyReview`.
 
@@ -2758,6 +2795,7 @@ git commit -m "feat(mac): Write with AI through the native Atrium gateway"
 ### Task 7: Assistant definition export, prompt, and integration docs
 
 **Files:**
+
 - Create: `docs/atrium/capture-guide-writer.assistant.json`
 - Create: `docs/atrium/capture-guide-writer.md`
 - Modify: `docs/atrium-integration.md` (new section "AI guide writer" after "## OAuth registration and configuration")
@@ -2765,6 +2803,7 @@ git commit -m "feat(mac): Write with AI through the native Atrium gateway"
 - Modify: `scripts/validate-contracts.mjs` (validate the sample reply embedded in the prompt doc against the schema) or a new unit test under `packages/guide-writer/test/assistant-definition.test.ts`
 
 **Interfaces:**
+
 - Consumes: `contracts/guide-suggestion.schema.json` (Task 1), `validateGuideSuggestion` (Task 3).
 - Produces: an import file in aistudio's `ExportFormat` version `1.0` (fields `version`, `exported_at`, `export_source`, `assistants[]` with `name`, `description`, `status`, `mode`, `prompts[]`, `input_fields[]`; see `lib/assistant-export-import.ts` in psd401/aistudio).
 
@@ -2924,11 +2963,13 @@ git commit -m "docs: Capture Guide Writer assistant definition and integration n
 This task runs in a clone of `psd401/aistudio`, not in this repository. Open a pull request there.
 
 **Files (in psd401/aistudio):**
+
 - Create: `infra/database/schema/188-atrium-capture-execute-scope.sql` (use the next free number after the last entry in `infra/database/migrations.json`)
 - Modify: `infra/database/migrations.json` (append the filename)
 - Create: `tests/unit/atrium-capture-execute-scope-migration.test.ts`
 
 **Interfaces:**
+
 - Consumes: `oauth_clients.allowed_scopes` (jsonb array), client ids `ae781263-20c0-4b0c-8a34-8be01ab72fb1` (browser) and `fbdaa815-1b0f-435b-805f-1732805720c1` (Mac), `is_first_party` from migration 134.
 - Produces: both rows' `allowed_scopes` contain `assistants:execute`.
 
@@ -2949,34 +2990,34 @@ Follow any rule in `CONTRIBUTING.md` about migration headers, the one-line PL/pg
 `tests/unit/atrium-capture-execute-scope-migration.test.ts`, mirroring `tests/unit/oauth-first-party-migration.test.ts`:
 
 ```ts
-import fs from "node:fs"
-import path from "node:path"
+import fs from 'node:fs';
+import path from 'node:path';
 
 const migrationPath = path.join(
   process.cwd(),
-  "infra/database/schema/188-atrium-capture-execute-scope.sql"
-)
-const migration = fs.readFileSync(migrationPath, "utf8")
+  'infra/database/schema/188-atrium-capture-execute-scope.sql',
+);
+const migration = fs.readFileSync(migrationPath, 'utf8');
 
-describe("Atrium Capture execute scope migration", () => {
-  it("adds assistants:execute to only the two exact first-party clients", () => {
-    expect(migration).toContain("ae781263-20c0-4b0c-8a34-8be01ab72fb1")
-    expect(migration).toContain("fbdaa815-1b0f-435b-805f-1732805720c1")
-    expect(migration).toContain("is_first_party = true")
-    expect(migration).toContain("token_endpoint_auth_method = 'none'")
-    expect(migration).toContain("require_pkce = true")
-    expect(migration).toContain("'\"assistants:execute\"'::jsonb")
-    expect(migration).not.toContain("client_name =")
-  })
+describe('Atrium Capture execute scope migration', () => {
+  it('adds assistants:execute to only the two exact first-party clients', () => {
+    expect(migration).toContain('ae781263-20c0-4b0c-8a34-8be01ab72fb1');
+    expect(migration).toContain('fbdaa815-1b0f-435b-805f-1732805720c1');
+    expect(migration).toContain('is_first_party = true');
+    expect(migration).toContain("token_endpoint_auth_method = 'none'");
+    expect(migration).toContain('require_pkce = true');
+    expect(migration).toContain('\'"assistants:execute"\'::jsonb');
+    expect(migration).not.toContain('client_name =');
+  });
 
-  it("is idempotent and registered", () => {
-    expect(migration).toContain("NOT allowed_scopes ? 'assistants:execute'")
+  it('is idempotent and registered', () => {
+    expect(migration).toContain("NOT allowed_scopes ? 'assistants:execute'");
     const registry = JSON.parse(
-      fs.readFileSync(path.join(process.cwd(), "infra/database/migrations.json"), "utf8")
-    ) as { migrations: string[] }
-    expect(registry.migrations.at(-1)).toBe("188-atrium-capture-execute-scope.sql")
-  })
-})
+      fs.readFileSync(path.join(process.cwd(), 'infra/database/migrations.json'), 'utf8'),
+    ) as { migrations: string[] };
+    expect(registry.migrations.at(-1)).toBe('188-atrium-capture-execute-scope.sql');
+  });
+});
 ```
 
 Check the real top-level key name in `migrations.json` (the tail shows an array; confirm whether the key is `migrations`). Run the unit test the way the repository documents. Expected: FAIL, file missing.
@@ -3056,6 +3097,7 @@ Record the PR URL in the atrium-capture journal entry.
 ### Task 9: Full gate, backlog note, journal, and the atrium-capture pull request
 
 **Files:**
+
 - Modify: `docs/superpowers/backlog.md` (item 1 status)
 - Modify: `/Users/HerberR_1/code/claudefeaturemaintenance/journal/atriumcapture/2026-10-14-d3271cc9.md` (append outcome)
 - Modify: `docs/milestones.md` if it tracks shipped features (read it first)
