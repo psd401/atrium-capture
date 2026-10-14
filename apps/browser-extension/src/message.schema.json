@@ -298,6 +298,17 @@
         {
           "type": "object",
           "additionalProperties": false,
+          "required": ["kind", "stepId", "text", "title"],
+          "properties": {
+            "kind": { "const": "suggest_instruction" },
+            "stepId": { "type": "string", "format": "uuid" },
+            "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+            "title": { "type": "string", "minLength": 1, "maxLength": 120 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
           "required": ["kind", "stepId", "toIndex"],
           "properties": {
             "kind": { "const": "move_step" },

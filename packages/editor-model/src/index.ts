@@ -15,6 +15,7 @@ export type EditorCommand =
   | { kind: 'begin_review' }
   | { kind: 'update_title'; title: string }
   | { kind: 'update_instruction'; stepId: string; text: string }
+  | { kind: 'suggest_instruction'; stepId: string; text: string; title: string }
   | { kind: 'move_step'; stepId: string; toIndex: number }
   | { kind: 'delete_step'; stepId: string }
   | { kind: 'merge_step'; stepId: string; withStepId: string }
@@ -85,6 +86,25 @@ export function applyEditorCommand(
           editedText: text,
           source: Source.User,
           userEdited: true,
+        },
+      }));
+    }
+    case 'suggest_instruction': {
+      const text = command.text.trim();
+      if (!text || text.length > 2_000) {
+        throw new Error('invalid_instruction');
+      }
+      const title = command.title.trim();
+      if (!title || title.length > 120) {
+        throw new Error('invalid_title');
+      }
+      return mapStep(session, command.stepId, now, (step) => ({
+        ...step,
+        instruction: {
+          ...step.instruction,
+          generatedText: text,
+          source: Source.DistrictAI,
+          title,
         },
       }));
     }

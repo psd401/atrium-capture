@@ -941,7 +941,10 @@ public actor DurableNativePublisher {
         })
         let lines = try session.steps.map { step -> String in
             let raw = step.instruction.editedText ?? step.instruction.generatedText
-            let escaped = raw
+            let heading = step.instruction.title.map { title in
+                "**" + title.replacingOccurrences(of: "*", with: "\\*") + "** "
+            } ?? ""
+            let escaped = (heading + raw)
                 .replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "[", with: "\\[")
                 .replacingOccurrences(of: "]", with: "\\]")
@@ -1000,6 +1003,7 @@ public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Send
     private var versions: [String: NativeVersionResult] = [:]
     private var publishes: Set<String> = []
     private var titles: [String: String] = [:]
+    private var lastMarkdown: String?
     private var failurePoint: MockNativeFailurePoint?
     private let failureRequestID: String?
     private let failureRetryable: Bool
@@ -1022,6 +1026,10 @@ public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Send
 
     public func remoteTitle(objectID: String) -> String? {
         lock.withLock { titles[objectID] }
+    }
+
+    public var capturedMarkdown: String? {
+        lock.withLock { lastMarkdown }
     }
 
     public func createPrivateDraft(
@@ -1067,10 +1075,11 @@ public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Send
 
     public func createVersion(
         objectID _: String,
-        markdown _: String,
+        markdown: String,
         idempotencyKey: String
     ) async throws -> NativeVersionResult {
         return try lock.withLock {
+            lastMarkdown = markdown
             let result = versions[idempotencyKey] ?? NativeVersionResult(
                 versionID: "mock-version-\(versions.count + 1)",
                 readerURL: "http://127.0.0.1/_mock/atrium-capture/reader"

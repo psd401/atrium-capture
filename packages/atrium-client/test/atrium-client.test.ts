@@ -324,6 +324,26 @@ describe('durable publishing outbox', () => {
     expect(markdown).not.toContain('[link](https://bad.example)');
     expect(generateMarkdown(fixture.session, ready, gateway)).toBe(markdown);
   });
+
+  it('uses the suggested step title as the heading when present', async () => {
+    const fixture = await makeFixture();
+    fixture.session.steps[0]!.instruction.title = 'Open the form';
+    const gateway = new MockAtriumGateway();
+    const jobs = new MemoryJobStore();
+    const publisher = new DurablePublisher(
+      gateway,
+      jobs,
+      new MemorySource(fixture.session, fixture.assets),
+      tickingClock(),
+    );
+    const job = await publisher.enqueue(fixture.session, { idFactory: () => JOB_ID });
+    const ready = await publisher.resume(job.jobId);
+
+    const markdown = generateMarkdown(fixture.session, ready, gateway);
+
+    expect(markdown).toContain('## Step 1: Open the form');
+    expect(markdown).toContain('## Step 2\n');
+  });
 });
 
 describe('capture source provenance', () => {

@@ -562,7 +562,9 @@ export function generateMarkdown(
   const lines = ['## Steps', ''];
   for (const step of session.steps) {
     lines.push(
-      `## Step ${step.sequence + 1}`,
+      step.instruction.title
+        ? `## Step ${step.sequence + 1}: ${escapeMarkdown(step.instruction.title)}`
+        : `## Step ${step.sequence + 1}`,
       '',
       escapeMarkdown(step.instruction.editedText ?? step.instruction.generatedText),
       '',

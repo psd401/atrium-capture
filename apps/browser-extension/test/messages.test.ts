@@ -144,6 +144,23 @@ describe('runtime message boundary', () => {
     ).toBeUndefined();
   });
 
+  it('accepts a suggest_instruction editor command', () => {
+    expect(
+      parseIncomingMessage({
+        kind: 'editor.command',
+        payload: {
+          command: {
+            kind: 'suggest_instruction',
+            stepId: crypto.randomUUID(),
+            text: 'Select the synthetic button.',
+            title: 'Open the form',
+          },
+          commandId: crypto.randomUUID(),
+        },
+      }),
+    ).toBeTruthy();
+  });
+
   it('accepts publication control metadata but rejects tokens and screenshot bytes', () => {
     expect(parseIncomingMessage({ kind: 'publisher.sign-in' })).toBeTruthy();
     expect(parseIncomingMessage({ kind: 'publisher.sign-out' })).toBeTruthy();
