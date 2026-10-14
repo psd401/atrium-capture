@@ -941,14 +941,15 @@ public actor DurableNativePublisher {
         })
         let lines = try session.steps.map { step -> String in
             let raw = step.instruction.editedText ?? step.instruction.generatedText
-            let heading = step.instruction.title.map { title in
-                "**" + title.replacingOccurrences(of: "*", with: "\\*") + "** "
-            } ?? ""
-            let escaped = (heading + raw)
+            let escapedRaw = raw
                 .replacingOccurrences(of: "\\", with: "\\\\")
                 .replacingOccurrences(of: "[", with: "\\[")
                 .replacingOccurrences(of: "]", with: "\\]")
                 .replacingOccurrences(of: "\n", with: " ")
+            let heading = step.instruction.title.map { title in
+                "**" + escapeStepTitle(title) + "** "
+            } ?? ""
+            let escaped = heading + escapedRaw
             if let assetID = step.screenshotAssetID,
                let remoteAssetID = remoteAssets[assetID],
                session.assets.contains(where: { $0.assetID == assetID && $0.state == .publishableLocal }) {
@@ -961,6 +962,15 @@ public actor DurableNativePublisher {
             return "1. \(escaped)"
         }
         return "## Steps\n\n" + lines.joined(separator: "\n")
+    }
+
+    private static func escapeStepTitle(_ title: String) -> String {
+        title
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "*", with: "\\*")
+            .replacingOccurrences(of: "[", with: "\\[")
+            .replacingOccurrences(of: "]", with: "\\]")
+            .replacingOccurrences(of: "\n", with: " ")
     }
 
     private static func recoveryPhase(

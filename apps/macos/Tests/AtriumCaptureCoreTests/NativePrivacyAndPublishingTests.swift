@@ -527,6 +527,30 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
         XCTAssertTrue(markdown.contains("1. **Open the form** "))
     }
 
+    func testPublishedMarkdownEscapesAsterisksAndBackslashesInStepTitleExactlyOnce() async throws {
+        let repository = MemoryNativePublishRepository(assets: [
+            "assets/publishable.png": Data([1, 2, 3]),
+        ])
+        let gateway = MockNativeAtriumGateway()
+        let publisher = DurableNativePublisher(repository: repository, gateway: gateway)
+        let base = makeSession(
+            state: .publishable,
+            review: .approved,
+            assetState: .publishableLocal,
+            stepReview: .approved
+        )
+        let session = base.with(steps: [
+            base.steps[0].with(
+                instruction: base.steps[0].instruction.with(title: "Open the *Settings* pane\\")
+            ),
+        ])
+        let job = try await publisher.enqueue(session: session)
+        _ = try await publisher.resume(jobID: job.jobID)
+
+        let markdown = try XCTUnwrap(gateway.capturedMarkdown)
+        XCTAssertTrue(markdown.contains("1. **Open the \\*Settings\\* pane\\\\** "))
+    }
+
     func testResumePendingRestoresTerminalDraftWithoutRepeatingRemoteWrites() async throws {
         let repository = MemoryNativePublishRepository(assets: [
             "assets/publishable.png": Data([1, 2, 3]),
