@@ -15,9 +15,21 @@ import {
   type AtriumCaptureSession,
 } from '@atrium-capture/contracts';
 import { applyEditorCommand } from '@atrium-capture/editor-model';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import {
+  GUIDE_SUGGESTION_INSTRUCTION_MAX_LENGTH,
+  GUIDE_SUGGESTION_INSTRUCTION_MIN_LENGTH,
+  GUIDE_SUGGESTION_STEP_TITLE_MAX_LENGTH,
+  GUIDE_SUGGESTION_STEP_TITLE_MIN_LENGTH,
+  GUIDE_SUGGESTION_STEPS_MAX_ITEMS,
+  GUIDE_SUGGESTION_STEPS_MIN_ITEMS,
+  GUIDE_SUGGESTION_SUMMARY_MAX_LENGTH,
+  GUIDE_SUGGESTION_SUMMARY_MIN_LENGTH,
+  GUIDE_SUGGESTION_TITLE_MAX_LENGTH,
+  GUIDE_SUGGESTION_TITLE_MIN_LENGTH,
   GUIDE_WRITER_REQUEST_LIMIT_BYTES,
   GuideSuggestionError,
   applyGuideSuggestion,
@@ -26,6 +38,10 @@ import {
   serializeGuideWriterRequest,
   validateGuideSuggestion,
 } from '../src/index.js';
+
+const guideSuggestionSchemaPath = fileURLToPath(
+  new URL('../../../contracts/guide-suggestion.schema.json', import.meta.url),
+);
 
 const sessionId = '00000000-0000-4000-8000-000000000001';
 const firstStepId = '10000000-0000-4000-8000-000000000001';
@@ -163,6 +179,45 @@ describe('validateGuideSuggestion', () => {
     expect(parseGuideSuggestionText(json)).toEqual(fixtureSuggestion());
     expect(parseGuideSuggestionText('```json\n' + json + '\n```')).toEqual(fixtureSuggestion());
     expect(() => parseGuideSuggestionText('Here is your guide:')).toThrow(GuideSuggestionError);
+  });
+});
+
+describe('guide suggestion limit constants', () => {
+  it('match the limits declared in contracts/guide-suggestion.schema.json', () => {
+    const schema = JSON.parse(readFileSync(guideSuggestionSchemaPath, 'utf8')) as {
+      $defs: {
+        guideSuggestionStep: {
+          properties: {
+            instruction: { maxLength: number; minLength: number };
+            title: { maxLength: number; minLength: number };
+          };
+        };
+      };
+      properties: {
+        steps: { maxItems: number; minItems: number };
+        summary: { maxLength: number; minLength: number };
+        title: { maxLength: number; minLength: number };
+      };
+    };
+
+    expect(GUIDE_SUGGESTION_TITLE_MIN_LENGTH).toBe(schema.properties.title.minLength);
+    expect(GUIDE_SUGGESTION_TITLE_MAX_LENGTH).toBe(schema.properties.title.maxLength);
+    expect(GUIDE_SUGGESTION_SUMMARY_MIN_LENGTH).toBe(schema.properties.summary.minLength);
+    expect(GUIDE_SUGGESTION_SUMMARY_MAX_LENGTH).toBe(schema.properties.summary.maxLength);
+    expect(GUIDE_SUGGESTION_STEPS_MIN_ITEMS).toBe(schema.properties.steps.minItems);
+    expect(GUIDE_SUGGESTION_STEPS_MAX_ITEMS).toBe(schema.properties.steps.maxItems);
+    expect(GUIDE_SUGGESTION_STEP_TITLE_MIN_LENGTH).toBe(
+      schema.$defs.guideSuggestionStep.properties.title.minLength,
+    );
+    expect(GUIDE_SUGGESTION_STEP_TITLE_MAX_LENGTH).toBe(
+      schema.$defs.guideSuggestionStep.properties.title.maxLength,
+    );
+    expect(GUIDE_SUGGESTION_INSTRUCTION_MIN_LENGTH).toBe(
+      schema.$defs.guideSuggestionStep.properties.instruction.minLength,
+    );
+    expect(GUIDE_SUGGESTION_INSTRUCTION_MAX_LENGTH).toBe(
+      schema.$defs.guideSuggestionStep.properties.instruction.maxLength,
+    );
   });
 });
 

@@ -5,13 +5,26 @@ import {
   SourceURLRetention,
   type AtriumCaptureGuideSuggestion,
   type AtriumCaptureSession,
+  type GuideSuggestionStep,
   type StepElement,
 } from '@atrium-capture/contracts';
 import type { EditorCommand } from '@atrium-capture/editor-model';
 
 export const GUIDE_WRITER_REQUEST_LIMIT_BYTES = 131_072;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const MAX_STEPS = 1_000;
+
+// Pinned against `contracts/guide-suggestion.schema.json`; see the schema-drift test in
+// `test/guide-writer.test.ts`.
+export const GUIDE_SUGGESTION_TITLE_MIN_LENGTH = 1;
+export const GUIDE_SUGGESTION_TITLE_MAX_LENGTH = 200;
+export const GUIDE_SUGGESTION_SUMMARY_MIN_LENGTH = 1;
+export const GUIDE_SUGGESTION_SUMMARY_MAX_LENGTH = 600;
+export const GUIDE_SUGGESTION_STEP_TITLE_MIN_LENGTH = 1;
+export const GUIDE_SUGGESTION_STEP_TITLE_MAX_LENGTH = 120;
+export const GUIDE_SUGGESTION_INSTRUCTION_MIN_LENGTH = 1;
+export const GUIDE_SUGGESTION_INSTRUCTION_MAX_LENGTH = 2_000;
+export const GUIDE_SUGGESTION_STEPS_MIN_ITEMS = 1;
+export const GUIDE_SUGGESTION_STEPS_MAX_ITEMS = 1_000;
 
 export interface GuideWriterRequestStep {
   accessibleName?: string;
@@ -96,9 +109,23 @@ export function validateGuideSuggestion(
   if (suggestionSessionId !== session.sessionId) {
     throw new GuideSuggestionError('suggestion_session_mismatch');
   }
-  const title = requireText(record.title, 1, 200, 'title');
-  const summary = requireText(record.summary, 1, 600, 'summary');
-  if (!Array.isArray(record.steps) || record.steps.length < 1 || record.steps.length > MAX_STEPS) {
+  const title = requireText(
+    record.title,
+    GUIDE_SUGGESTION_TITLE_MIN_LENGTH,
+    GUIDE_SUGGESTION_TITLE_MAX_LENGTH,
+    'title',
+  );
+  const summary = requireText(
+    record.summary,
+    GUIDE_SUGGESTION_SUMMARY_MIN_LENGTH,
+    GUIDE_SUGGESTION_SUMMARY_MAX_LENGTH,
+    'summary',
+  );
+  if (
+    !Array.isArray(record.steps) ||
+    record.steps.length < GUIDE_SUGGESTION_STEPS_MIN_ITEMS ||
+    record.steps.length > GUIDE_SUGGESTION_STEPS_MAX_ITEMS
+  ) {
     throw new GuideSuggestionError('suggestion_invalid', 'steps must be a non-empty array');
   }
   const sessionStepIds = new Set(session.steps.map((step) => step.stepId));
@@ -114,9 +141,19 @@ export function validateGuideSuggestion(
     }
     seen.add(stepId);
     return {
-      instruction: requireText(stepRecord.instruction, 1, 2_000, 'instruction'),
+      instruction: requireText(
+        stepRecord.instruction,
+        GUIDE_SUGGESTION_INSTRUCTION_MIN_LENGTH,
+        GUIDE_SUGGESTION_INSTRUCTION_MAX_LENGTH,
+        'instruction',
+      ),
       stepId,
-      title: requireText(stepRecord.title, 1, 120, 'step title'),
+      title: requireText(
+        stepRecord.title,
+        GUIDE_SUGGESTION_STEP_TITLE_MIN_LENGTH,
+        GUIDE_SUGGESTION_STEP_TITLE_MAX_LENGTH,
+        'step title',
+      ),
     };
   });
   for (const stepId of sessionStepIds) {
@@ -127,7 +164,7 @@ export function validateGuideSuggestion(
   return {
     schemaVersion: 1,
     sessionId: suggestionSessionId,
-    steps: steps as [GuideSuggestionStepValue, ...GuideSuggestionStepValue[]],
+    steps: steps as [GuideSuggestionStep, ...GuideSuggestionStep[]],
     summary,
     title,
   };
@@ -207,10 +244,4 @@ function requireText(value: unknown, min: number, max: number, label: string): s
     throw new GuideSuggestionError('suggestion_invalid', `${label} length out of range`);
   }
   return trimmed;
-}
-
-interface GuideSuggestionStepValue {
-  instruction: string;
-  stepId: string;
-  title: string;
 }
