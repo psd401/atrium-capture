@@ -41,7 +41,9 @@ The Mac client omits `sourceOrigins`; Accessibility application/window details n
 
 Create two public clients at Atrium's administrator OAuth client screen. Select no client secret, require S256 PKCE, and allow:
 
-`openid profile offline_access content:read content:create content:update content:publish_internal`
+`openid profile offline_access content:read content:create content:update content:publish_internal assistants:execute`
+
+`assistants:execute` is used only by the AI guide writer.
 
 | Client profile      | Exact redirect                                                    | Production configuration                      |
 | ------------------- | ----------------------------------------------------------------- | --------------------------------------------- |

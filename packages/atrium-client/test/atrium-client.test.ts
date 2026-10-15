@@ -446,6 +446,32 @@ describe('collection capability fallback', () => {
   });
 });
 
+describe('mock guide writer', () => {
+  it('mock gateway writes a suggestion for every requested step', async () => {
+    const gateway = new MockAtriumGateway();
+    const result = await gateway.executeGuideWriter({
+      assistantId: 1,
+      steps: JSON.stringify({
+        schemaVersion: 1,
+        sessionId: '00000000-0000-4000-8000-000000000001',
+        steps: [{ instruction: 'Select Start.', sequence: 0, stepId: 'step-a' }],
+        title: 'Guide',
+      }),
+    });
+    expect(JSON.parse(result.text)).toMatchObject({
+      schemaVersion: 1,
+      sessionId: '00000000-0000-4000-8000-000000000001',
+      steps: [{ instruction: 'Select Start. (AI)', stepId: 'step-a', title: 'Step 1' }],
+    });
+    await expect(
+      new MockAtriumGateway({ guideWriter: { fail: 'failed' } }).executeGuideWriter({
+        assistantId: 1,
+        steps: '{}',
+      }),
+    ).rejects.toMatchObject({ code: 'atrium_job_failed', retryable: true });
+  });
+});
+
 async function makeFixture(): Promise<{
   assets: Map<string, Blob>;
   session: AtriumCaptureSession;

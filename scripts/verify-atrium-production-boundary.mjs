@@ -13,6 +13,7 @@ const requiredScopes = [
   'content:create',
   'content:update',
   'content:publish_internal',
+  'assistants:execute',
 ];
 const productionClientIds = {
   browser_extension: 'ae781263-20c0-4b0c-8a34-8be01ab72fb1',

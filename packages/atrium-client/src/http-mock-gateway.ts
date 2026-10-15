@@ -4,6 +4,8 @@ import type {
   AtriumGateway,
   CreateMarkdownVersionRequest,
   CreatePrivateObjectRequest,
+  ExecuteGuideWriterRequest,
+  ExecuteGuideWriterResult,
   UpdateContentTitleRequest,
   UploadImmutableAssetRequest,
 } from './index.js';
@@ -42,6 +44,14 @@ export class HttpMockAtriumGateway implements AtriumGateway {
     request: CreatePrivateObjectRequest,
   ): Promise<{ contentObjectId: string }> {
     return this.sendJson('/objects', request, parseObject);
+  }
+
+  async executeGuideWriter(request: ExecuteGuideWriterRequest): Promise<ExecuteGuideWriterResult> {
+    return this.sendJson(
+      `/assistants/${encodeURIComponent(String(request.assistantId))}/execute`,
+      { steps: request.steps },
+      parseGuideWriterResult,
+    );
   }
 
   formatAssetMarkdown(remoteAssetId: string, altText: string): string {
@@ -168,6 +178,7 @@ function parseCapabilities(value: unknown): AtriumCapabilities {
   return {
     collectionDiscovery: requireBoolean(record, 'collectionDiscovery'),
     contentUpdates: requireBoolean(record, 'contentUpdates'),
+    guideWriter: requireBoolean(record, 'guideWriter'),
     idempotentWrites: requireBoolean(record, 'idempotentWrites'),
     immutableAssets: requireBoolean(record, 'immutableAssets'),
     internalPublication: requireBoolean(record, 'internalPublication'),
@@ -175,6 +186,11 @@ function parseCapabilities(value: unknown): AtriumCapabilities {
     oauth: requireBoolean(record, 'oauth'),
     reasons,
   };
+}
+
+function parseGuideWriterResult(value: unknown): ExecuteGuideWriterResult {
+  const record = requireRecord(value);
+  return { jobId: requireString(record, 'jobId'), text: requireString(record, 'text') };
 }
 
 function parseUpdatedObject(value: unknown): { contentObjectId: string; title: string } {
