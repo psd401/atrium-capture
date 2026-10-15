@@ -16,15 +16,25 @@ public let atriumOAuthScopes = [
     "content:create",
     "content:update",
     "content:publish_internal",
+    "assistants:execute",
 ]
 
 public struct NativeAtriumProductionSettings: Sendable {
     public let oauth: NativeOAuthConfiguration
     public let defaultCollectionID: String?
+    public let guideWriterAssistantID: Int?
+    public let aiGuideWritingEnabled: Bool
 
-    public init(oauth: NativeOAuthConfiguration, defaultCollectionID: String?) {
+    public init(
+        oauth: NativeOAuthConfiguration,
+        defaultCollectionID: String?,
+        guideWriterAssistantID: Int? = nil,
+        aiGuideWritingEnabled: Bool = true
+    ) {
         self.oauth = oauth
         self.defaultCollectionID = defaultCollectionID
+        self.guideWriterAssistantID = guideWriterAssistantID
+        self.aiGuideWritingEnabled = aiGuideWritingEnabled
     }
 
     public static func load(
@@ -47,6 +57,20 @@ public struct NativeAtriumProductionSettings: Sendable {
         if let collectionID, UUID(uuidString: collectionID) == nil {
             return nil
         }
+        let assistantRaw = firstNonempty(
+            environment["ATRIUM_CAPTURE_GUIDE_WRITER_ASSISTANT_ID"],
+            defaults.string(forKey: "AtriumGuideWriterAssistantId"),
+            (bundle.object(forInfoDictionaryKey: "AtriumGuideWriterAssistantId") as? NSNumber)?.stringValue,
+            bundle.object(forInfoDictionaryKey: "AtriumGuideWriterAssistantId") as? String
+        )
+        let assistantID = assistantRaw.flatMap(Int.init).flatMap { $0 > 0 ? $0 : nil }
+        if assistantRaw != nil, assistantID == nil { return nil }
+        let aiRaw = firstNonempty(
+            environment["ATRIUM_CAPTURE_AI_GUIDE_WRITING"],
+            defaults.string(forKey: "AtriumAIGuideWriting"),
+            bundle.object(forInfoDictionaryKey: "AtriumAIGuideWriting") as? String
+        )?.lowercased()
+        if let aiRaw, aiRaw != "on", aiRaw != "off" { return nil }
         guard let oauth = try? NativeOAuthConfiguration(
             authorizationEndpoint: atriumProductionOrigin.appending(path: "api/oauth/auth"),
             tokenEndpoint: atriumProductionOrigin.appending(path: "api/oauth/token"),
@@ -56,7 +80,12 @@ public struct NativeAtriumProductionSettings: Sendable {
             resourceServer: atriumProductionOrigin,
             scopes: atriumOAuthScopes
         ) else { return nil }
-        return NativeAtriumProductionSettings(oauth: oauth, defaultCollectionID: collectionID)
+        return NativeAtriumProductionSettings(
+            oauth: oauth,
+            defaultCollectionID: collectionID,
+            guideWriterAssistantID: assistantID,
+            aiGuideWritingEnabled: aiRaw != "off"
+        )
     }
 }
 
@@ -74,17 +103,26 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
         versionCreation: true,
         internalPublish: true,
         titleUpdate: true,
-        blocker: nil
+        blocker: nil,
+        guideWriter: true
     )
+
+    private static let guideWriterBudget: TimeInterval = 120
+    private static let guideWriterPollMin: TimeInterval = 1
+    private static let guideWriterPollMax: TimeInterval = 10
 
     private let accessToken: @Sendable () async throws -> String
     private let transport: any NativeHTTPTransport
     private let origin: URL
     private let apiBase: URL
+    private let clock: @Sendable () -> TimeInterval
+    private let sleep: @Sendable (TimeInterval) async throws -> Void
 
     public init(
         origin: URL = atriumProductionOrigin,
         transport: any NativeHTTPTransport = URLSession.shared,
+        clock: @escaping @Sendable () -> TimeInterval = { Date().timeIntervalSince1970 },
+        sleep: @escaping @Sendable (TimeInterval) async throws -> Void = { try await Task.sleep(for: .seconds($0)) },
         accessToken: @escaping @Sendable () async throws -> String
     ) throws {
         guard origin.scheme == "https",
@@ -96,6 +134,8 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
         self.origin = origin
         apiBase = origin.appending(path: "api/v1")
         self.transport = transport
+        self.clock = clock
+        self.sleep = sleep
         self.accessToken = accessToken
     }
 
@@ -316,6 +356,49 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
             objectID: try Self.uuid(data["id"]),
             title: confirmedTitle
         )
+    }
+
+    public func executeGuideWriter(assistantID: Int, steps: String) async throws -> NativeGuideWriterResult {
+        guard assistantID > 0 else { throw NativeGatewayFailure(code: "ATRIUM_ASSISTANT_ID_INVALID", retryable: false) }
+        let startedAt = clock()
+        let accepted = try Self.record(try Self.record(try await apiJSON(
+            path: "assistants/\(assistantID)/execute",
+            method: "POST",
+            body: ["inputs": ["steps": steps]]
+        ))["data"])
+        guard let jobID = Self.string(accepted["jobId"], maximum: 200) else { throw Self.invalidResponse() }
+        var interval = Self.clampPollInterval(accepted["pollingInterval"])
+        while true {
+            if clock() - startedAt >= Self.guideWriterBudget {
+                throw NativeGatewayFailure(code: "ATRIUM_JOB_TIMEOUT", retryable: true)
+            }
+            try await sleep(interval)
+            let job = try Self.record(try Self.record(try await apiJSON(path: "jobs/\(jobID)", method: "GET"))["data"])
+            let status = Self.string(job["status"], maximum: 32) ?? ""
+            switch status {
+            case "completed":
+                let responseData = try? Self.record(job["responseData"])
+                let text = Self.string(responseData?["text"], maximum: 1_000_000)
+                    ?? Self.string(responseData?["content"], maximum: 1_000_000)
+                    ?? Self.string(job["partialContent"], maximum: 1_000_000)
+                guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    throw Self.invalidResponse()
+                }
+                return NativeGuideWriterResult(jobID: jobID, text: text)
+            case "failed", "cancelled":
+                throw NativeGatewayFailure(code: "ATRIUM_JOB_\(status.uppercased())", retryable: true)
+            case "pending", "processing", "streaming":
+                interval = Self.clampPollInterval(job["pollingInterval"])
+            default:
+                throw Self.invalidResponse()
+            }
+        }
+    }
+
+    private static func clampPollInterval(_ value: Any?) -> TimeInterval {
+        // Atrium reports pollingInterval in milliseconds.
+        let milliseconds = (value as? NSNumber)?.doubleValue ?? (guideWriterPollMin * 1_000)
+        return min(guideWriterPollMax, max(guideWriterPollMin, milliseconds / 1_000))
     }
 
     private func initiateAsset(

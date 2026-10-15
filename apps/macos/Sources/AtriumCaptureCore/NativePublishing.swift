@@ -9,6 +9,7 @@ public struct NativeAtriumCapabilities: Equatable, Sendable {
     public let internalPublish: Bool
     public let titleUpdate: Bool
     public let blocker: String?
+    public let guideWriter: Bool
 
     public init(
         oauth: Bool,
@@ -17,7 +18,8 @@ public struct NativeAtriumCapabilities: Equatable, Sendable {
         versionCreation: Bool,
         internalPublish: Bool,
         titleUpdate: Bool,
-        blocker: String?
+        blocker: String?,
+        guideWriter: Bool = false
     ) {
         self.oauth = oauth
         self.privateDrafts = privateDrafts
@@ -26,6 +28,7 @@ public struct NativeAtriumCapabilities: Equatable, Sendable {
         self.internalPublish = internalPublish
         self.titleUpdate = titleUpdate
         self.blocker = blocker
+        self.guideWriter = guideWriter
     }
 
     public static let unavailable = NativeAtriumCapabilities(
@@ -35,7 +38,8 @@ public struct NativeAtriumCapabilities: Equatable, Sendable {
         versionCreation: false,
         internalPublish: false,
         titleUpdate: false,
-        blocker: "ATRIUM_API_UNAVAILABLE"
+        blocker: "ATRIUM_API_UNAVAILABLE",
+        guideWriter: false
     )
 }
 
@@ -72,6 +76,16 @@ public struct NativeTitleResult: Equatable, Sendable {
     public init(objectID: String, title: String) {
         self.objectID = objectID
         self.title = title
+    }
+}
+
+public struct NativeGuideWriterResult: Equatable, Sendable {
+    public let jobID: String
+    public let text: String
+
+    public init(jobID: String, text: String) {
+        self.jobID = jobID
+        self.text = text
     }
 }
 
@@ -124,6 +138,7 @@ public protocol NativeAtriumGateway: AnyObject, Sendable {
     ) async throws -> NativeVersionResult
     func publishInternal(objectID: String, versionID: String, idempotencyKey: String) async throws
     func updateTitle(objectID: String, title: String) async throws -> NativeTitleResult
+    func executeGuideWriter(assistantID: Int, steps: String) async throws -> NativeGuideWriterResult
 }
 
 public final class UnavailableNativeAtriumGateway: NativeAtriumGateway {
@@ -173,6 +188,10 @@ public final class UnavailableNativeAtriumGateway: NativeAtriumGateway {
     }
 
     public func updateTitle(objectID _: String, title _: String) async throws -> NativeTitleResult {
+        throw NativeGatewayFailure(code: "ATRIUM_API_UNAVAILABLE", retryable: false)
+    }
+
+    public func executeGuideWriter(assistantID _: Int, steps _: String) async throws -> NativeGuideWriterResult {
         throw NativeGatewayFailure(code: "ATRIUM_API_UNAVAILABLE", retryable: false)
     }
 }
@@ -600,7 +619,7 @@ public enum NativePublishError: Error, Equatable {
 
 public actor DurableNativePublisher {
     private let repository: any NativePublishRepository
-    private let gateway: any NativeAtriumGateway
+    public nonisolated let gateway: any NativeAtriumGateway
     public nonisolated let capabilities: NativeAtriumCapabilities
     private var activeJobIDs: Set<String> = []
 
@@ -1005,7 +1024,8 @@ public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Send
         versionCreation: true,
         internalPublish: true,
         titleUpdate: true,
-        blocker: nil
+        blocker: nil,
+        guideWriter: true
     )
     private let lock = NSLock()
     private var objects: [String: NativeDraftResult] = [:]
@@ -1117,6 +1137,35 @@ public final class MockNativeAtriumGateway: NativeAtriumGateway, @unchecked Send
             try failOnce(.titleUpdate)
             return NativeTitleResult(objectID: objectID, title: title)
         }
+    }
+
+    public func executeGuideWriter(assistantID _: Int, steps: String) async throws -> NativeGuideWriterResult {
+        guard let data = steps.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let requestSteps = object["steps"] as? [[String: Any]]
+        else { throw NativeGatewayFailure(code: "ATRIUM_RESPONSE_INVALID", retryable: false) }
+        let sessionID = object["sessionId"] as? String ?? ""
+        let suggestedSteps = requestSteps.enumerated().map { index, step -> [String: Any] in
+            let stepID = step["stepId"] as? String ?? ""
+            let instruction = step["instruction"] as? String ?? ""
+            return [
+                "stepId": stepID,
+                "title": "Step \(index + 1)",
+                "instruction": "\(instruction) (AI)",
+            ]
+        }
+        let body: [String: Any] = [
+            "schemaVersion": 1,
+            "sessionId": sessionID,
+            "title": "Synthetic written guide",
+            "summary": "Synthetic summary written by the mock guide writer.",
+            "steps": suggestedSteps,
+        ]
+        let data2 = try JSONSerialization.data(withJSONObject: body)
+        return NativeGuideWriterResult(
+            jobID: "mock-job-\(UUID().uuidString)",
+            text: String(decoding: data2, as: UTF8.self)
+        )
     }
 
     private func failOnce(_ point: MockNativeFailurePoint) throws {
