@@ -140,7 +140,7 @@ The clients run one approved assistant, "Capture Guide Writer", through
 `POST /api/v1/assistants/{id}/execute` with `Accept: application/json` and poll
 `GET /api/v1/jobs/{jobId}` until `completed`, `failed`, or `cancelled`. The
 request body is `{"inputs":{"steps":"<json string>"}}` and stays under 128 KiB.
-Polling honours the server `pollingInterval` (milliseconds, clamped to 1 to 10 s)
+Polling honors the server `pollingInterval` (milliseconds, clamped to 1 to 10 s)
 inside a 120 s budget. The token needs `assistants:execute`.
 
 The assistant receives step metadata only: action, element role and accessible
