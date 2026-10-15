@@ -513,6 +513,68 @@ export class CaptureRepository {
     return next;
   }
 
+  async applyEditorCommands(
+    commandId: string,
+    expectedRevision: number,
+    commands: readonly EditorCommand[],
+    now = new Date(),
+  ): Promise<AtriumCaptureSession> {
+    const database = await this.open();
+    const transaction = database.transaction(
+      ['commands', 'meta', 'publishJobs', 'sessions'],
+      'readwrite',
+    );
+    const commandStore = transaction.objectStore('commands');
+    const existing = await commandStore.get(commandId);
+    const active = await transaction.objectStore('meta').get(activeSessionKey);
+    const sessionStore = transaction.objectStore('sessions');
+    const session = active ? await sessionStore.get(active.value) : undefined;
+    if (!session) {
+      throw new Error('session_not_found');
+    }
+    if (existing) {
+      await transaction.done;
+      return session;
+    }
+    if (session.revision !== expectedRevision) {
+      throw new Error('session_revision_changed');
+    }
+    const jobs = await transaction
+      .objectStore('publishJobs')
+      .index('by-session')
+      .getAll(session.sessionId);
+    const hasNonTitleCommand = commands.some((command) => command.kind !== 'update_title');
+    if (jobs.length > 0 && hasNonTitleCommand) {
+      throw new Error('guide_content_frozen_after_publish');
+    }
+    // Validate every command against the in-memory session before any store write, so a later
+    // command's failure (frozen content, invalid input) leaves nothing applied.
+    let next = session;
+    for (const command of commands) {
+      next = reduceEditorCommand(next, command, { idFactory: this.idFactory, now });
+    }
+    if (jobs.length > 0) {
+      for (const job of jobs) {
+        if (!job.createTitle) {
+          await transaction.objectStore('publishJobs').put({
+            ...job,
+            createTitle: session.title,
+            updatedAt: now,
+          });
+        }
+      }
+    }
+    await sessionStore.put(next);
+    await commandStore.put({
+      commandId,
+      revision: next.revision,
+      sessionId: next.sessionId,
+      type: 'edit',
+    });
+    await transaction.done;
+    return next;
+  }
+
   async finalizeReview(
     commandId: string,
     expectedRevision: number,

@@ -962,7 +962,7 @@ export function App() {
 
           <div className="finalize-row">
             <button
-              disabled={pending || issues.length > 0}
+              disabled={pending || writingGuide || issues.length > 0}
               onClick={() => void finalize()}
               type="button"
             >

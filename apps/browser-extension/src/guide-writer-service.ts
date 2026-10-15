@@ -111,6 +111,7 @@ export class GuideWriterService {
     }
 
     let commands;
+    let validatedRevision: number;
     try {
       const current = await this.repository.getActiveSession();
       if (!current || current.sessionId !== session.sessionId) {
@@ -120,19 +121,21 @@ export class GuideWriterService {
         current,
         validateGuideSuggestion(parseGuideSuggestionText(text), current),
       );
+      validatedRevision = current.revision;
     } catch (error) {
       const code = error instanceof GuideSuggestionError ? error.code : 'suggestion_invalid';
       return this.failure(code, true);
     }
 
     try {
-      let updated = session;
-      for (const [index, command] of commands.entries()) {
-        updated = await this.editor.command(`${commandId}:${index}`, command);
-      }
+      const updated = await this.editor.commands(commandId, validatedRevision, commands);
       return { ok: true, session: updated };
     } catch (error) {
-      return this.failure(error instanceof Error ? error.message : 'guide_writer_failed', false);
+      const message = error instanceof Error ? error.message : 'guide_writer_failed';
+      return this.failure(
+        message === 'session_revision_changed' ? 'session_changed' : message,
+        false,
+      );
     }
   }
 

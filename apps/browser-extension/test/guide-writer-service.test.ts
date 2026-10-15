@@ -210,6 +210,40 @@ describe('guide writer service', () => {
     );
   });
 
+  it('applies nothing and reports session_changed when the session revision moves between validation and apply', async () => {
+    const sessionId = await reviewedSession();
+    // Simulate a concurrent edit (for example, Finalize) that commits after this service reads
+    // the session for validation but before the suggestion is applied: patch the second
+    // getActiveSession() call (the post-gateway "current" read) to mutate the session, right
+    // after capturing the pre-mutation snapshot the service will validate and apply against.
+    let getActiveSessionCalls = 0;
+    const originalGetActiveSession = repository.getActiveSession.bind(repository);
+    repository.getActiveSession = async () => {
+      getActiveSessionCalls += 1;
+      const snapshot = await originalGetActiveSession();
+      if (getActiveSessionCalls === 2) {
+        await repository.applyEditorCommand(crypto.randomUUID(), {
+          kind: 'update_title',
+          title: 'Retitled during the wait',
+        });
+      }
+      return snapshot;
+    };
+    const service = new GuideWriterService(repository, editor, new MockAtriumGateway(), policy());
+
+    try {
+      const outcome = await service.write(crypto.randomUUID());
+
+      expect(outcome).toEqual({ errorCode: 'session_changed', ok: false, retryable: false });
+      const after = await repository.getActiveSession();
+      expect(after?.sessionId).toBe(sessionId);
+      expect(after?.title).toBe('Retitled during the wait');
+      expect(after?.steps[0]?.instruction.source).not.toBe(Source.DistrictAI);
+    } finally {
+      repository.getActiveSession = originalGetActiveSession;
+    }
+  });
+
   it('refuses before review is complete and before any network call', async () => {
     await repository.startSession('Synthetic guide', '0.1.0');
     await recordStep();
