@@ -569,6 +569,7 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
         else { throw NativeGatewayFailure(code: "OAUTH_TOKEN_INVALID", retryable: false) }
         var request = URLRequest(url: apiBase.appending(path: path))
         request.httpMethod = method
+        request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         request.setValue("no-store", forHTTPHeaderField: "Cache-Control")

@@ -296,6 +296,36 @@ final class ProductionNativeGatewayTests: XCTestCase {
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
         XCTAssertEqual((json["inputs"] as? [String: Any])?["steps"] as? String, "{\"schemaVersion\":1}")
         XCTAssertEqual(requests.filter { $0.url?.path == "/api/v1/jobs/job-1" }.count, 2)
+        XCTAssertEqual(requests.first?.timeoutInterval, 30)
+    }
+
+    func testGuideWriterMapsCancelledJobLikeFailed() async throws {
+        let cancelled = SyntheticAtriumTransport(jobStatus: "cancelled")
+        let gateway = try ProductionNativeAtriumGateway(transport: cancelled, sleep: { _ in }, accessToken: { "t" })
+        await XCTAssertThrowsErrorAsync(try await gateway.executeGuideWriter(assistantID: 42, steps: "{}")) { error in
+            XCTAssertEqual((error as? NativeGatewayFailure)?.code, "ATRIUM_JOB_CANCELLED")
+            XCTAssertEqual((error as? NativeGatewayFailure)?.retryable, true)
+        }
+    }
+
+    func testGuideWriterMapsForbiddenExecuteToTheCodeTheAppLatchesOn() async throws {
+        let gateway = try ProductionNativeAtriumGateway(
+            transport: SyntheticNonJSONFailureTransport(),
+            sleep: { _ in },
+            accessToken: { "t" }
+        )
+        await XCTAssertThrowsErrorAsync(try await gateway.executeGuideWriter(assistantID: 42, steps: "{}")) { error in
+            XCTAssertEqual((error as? NativeGatewayFailure)?.code, "ATRIUM_HTTP_403")
+            XCTAssertFalse((error as? NativeGatewayFailure)?.retryable ?? true)
+        }
+    }
+
+    func testGuideWriterRequestHasA30SecondDeadline() async throws {
+        let transport = SyntheticAtriumTransport()
+        let gateway = try ProductionNativeAtriumGateway(transport: transport, sleep: { _ in }, accessToken: { "t" })
+        _ = try await gateway.executeGuideWriter(assistantID: 42, steps: "{}")
+        let requests = await transport.requests
+        XCTAssertTrue(requests.allSatisfy { $0.timeoutInterval == 30 })
     }
 
     func testGuideWriterMapsFailedJobAndBudget() async throws {
