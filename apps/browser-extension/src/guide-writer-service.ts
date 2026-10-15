@@ -24,8 +24,16 @@ export type GuideWriterOutcome =
   | { ok: true; session: AtriumCaptureSession }
   | { errorCode: string; ok: false; retryable: boolean };
 
+type AvailabilityCheck =
+  | { available: true; assistantId: number; snapshot: ManagedPolicySnapshot }
+  | { available: false; reason: 'assistant_unconfigured' | 'gateway_unavailable' | 'policy_off' };
+
 export class GuideWriterService {
   private forbiddenForSession = false;
+  // Single in-flight guard: this service is bound to one CaptureRepository with at most one
+  // active session, so a boolean is equivalent to tracking per-session in-flight state, and it
+  // is set before any await so a second concurrent write() call always sees it.
+  private writeInFlight = false;
 
   constructor(
     private readonly repository: CaptureRepository,
@@ -35,31 +43,50 @@ export class GuideWriterService {
   ) {}
 
   async availability(): Promise<GuideWriterAvailability> {
+    const check = await this.checkAvailability();
+    return check.available ? { available: true } : check;
+  }
+
+  async write(commandId: string): Promise<GuideWriterOutcome> {
+    if (this.writeInFlight) {
+      return { errorCode: 'write_in_progress', ok: false, retryable: false };
+    }
+    this.writeInFlight = true;
+    try {
+      return await this.performWrite(commandId);
+    } finally {
+      this.writeInFlight = false;
+    }
+  }
+
+  private async checkAvailability(): Promise<AvailabilityCheck> {
     const snapshot = await this.policy();
     if (!snapshot.valid || snapshot.policy.aiGuideWriting === 'off' || this.forbiddenForSession) {
       return { available: false, reason: 'policy_off' };
     }
-    if (!snapshot.policy.atriumGuideWriterAssistantId) {
+    const assistantId = snapshot.policy.atriumGuideWriterAssistantId;
+    if (!assistantId) {
       return { available: false, reason: 'assistant_unconfigured' };
     }
     if (!(await this.gateway.capabilities()).guideWriter) {
       return { available: false, reason: 'gateway_unavailable' };
     }
-    return { available: true };
+    return { available: true, assistantId, snapshot };
   }
 
-  async write(commandId: string): Promise<GuideWriterOutcome> {
-    const availability = await this.availability();
-    if (!availability.available) {
-      return { errorCode: availability.reason, ok: false, retryable: false };
+  private async performWrite(commandId: string): Promise<GuideWriterOutcome> {
+    const check = await this.checkAvailability();
+    if (!check.available) {
+      // Pre-gateway gating refusal: policy/configuration state, not a recorded failure.
+      return { errorCode: check.reason, ok: false, retryable: false };
     }
-    const snapshot = await this.policy();
-    const assistantId = snapshot.policy.atriumGuideWriterAssistantId as number;
+    const { assistantId } = check;
     const session = await this.repository.getActiveSession();
     if (!session) {
-      return { errorCode: 'session_not_found', ok: false, retryable: false };
+      return this.failure('session_not_found', false);
     }
     if (!canFinalizeReview(session)) {
+      // Pre-gateway gating refusal: review isn't finished, not a recorded failure.
       return { errorCode: 'privacy_review_incomplete', ok: false, retryable: false };
     }
 
@@ -85,8 +112,8 @@ export class GuideWriterService {
 
     let commands;
     try {
-      const current = (await this.repository.getActiveSession()) ?? session;
-      if (current.sessionId !== session.sessionId) {
+      const current = await this.repository.getActiveSession();
+      if (!current || current.sessionId !== session.sessionId) {
         return this.failure('session_changed', false);
       }
       commands = applyGuideSuggestion(
@@ -98,11 +125,15 @@ export class GuideWriterService {
       return this.failure(code, true);
     }
 
-    let updated = session;
-    for (const [index, command] of commands.entries()) {
-      updated = await this.editor.command(`${commandId}:${index}`, command);
+    try {
+      let updated = session;
+      for (const [index, command] of commands.entries()) {
+        updated = await this.editor.command(`${commandId}:${index}`, command);
+      }
+      return { ok: true, session: updated };
+    } catch (error) {
+      return this.failure(error instanceof Error ? error.message : 'guide_writer_failed', false);
     }
-    return { ok: true, session: updated };
   }
 
   private async failure(errorCode: string, retryable: boolean): Promise<GuideWriterOutcome> {

@@ -153,6 +153,63 @@ describe('guide writer service', () => {
     expect(await service.availability()).toEqual({ available: false, reason: 'policy_off' });
   });
 
+  it('refuses a second write while one is already running for the session', async () => {
+    await reviewedSession();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let callCount = 0;
+    const gateway = new MockAtriumGateway();
+    const original = gateway.executeGuideWriter.bind(gateway);
+    gateway.executeGuideWriter = async (request) => {
+      callCount += 1;
+      await gate;
+      return original(request);
+    };
+    const service = new GuideWriterService(repository, editor, gateway, policy());
+
+    const first = service.write(crypto.randomUUID());
+    const second = await service.write(crypto.randomUUID());
+
+    expect(second).toEqual({ errorCode: 'write_in_progress', ok: false, retryable: false });
+    release();
+    const firstOutcome = await first;
+    expect(firstOutcome.ok).toBe(true);
+    expect(callCount).toBe(1);
+  });
+
+  it('fails cleanly without an uncaught rejection if the active session changes mid-write', async () => {
+    await reviewedSession();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let started!: () => void;
+    const startedPromise = new Promise<void>((resolve) => {
+      started = resolve;
+    });
+    const gateway = new MockAtriumGateway();
+    const original = gateway.executeGuideWriter.bind(gateway);
+    gateway.executeGuideWriter = async (request) => {
+      started();
+      await gate;
+      return original(request);
+    };
+    const service = new GuideWriterService(repository, editor, gateway, policy());
+
+    const pending = service.write(crypto.randomUUID());
+    await startedPromise;
+    await repository.startNewSession('Another guide', '0.1.0');
+    release();
+    const outcome = await pending;
+
+    expect(outcome).toEqual({ errorCode: 'session_changed', ok: false, retryable: false });
+    expect((await repository.listHealthEvents()).map((event) => event.code)).toContain(
+      'guide_writer_failed',
+    );
+  });
+
   it('refuses before review is complete and before any network call', async () => {
     await repository.startSession('Synthetic guide', '0.1.0');
     await recordStep();

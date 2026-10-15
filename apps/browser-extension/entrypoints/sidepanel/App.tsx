@@ -1393,6 +1393,8 @@ function guideWriterFailureMessage(code: string | undefined): string {
       return 'AI guide writing is turned off by district policy.';
     case 'privacy_review_incomplete':
       return 'Approve every step before writing with AI.';
+    case 'write_in_progress':
+      return 'Already writing with AI. Wait for it to finish.';
     default:
       return 'The AI writer could not finish. Your current text is unchanged. Try again.';
   }
