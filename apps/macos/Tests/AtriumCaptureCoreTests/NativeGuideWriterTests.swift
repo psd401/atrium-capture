@@ -23,6 +23,42 @@ final class NativeGuideWriterTests: XCTestCase {
         XCTAssertFalse(text.contains("bundleId"))
     }
 
+    func testRequestDropsIPv6LocalNetworkOrigins() throws {
+        var session = makeSession()
+        session = session.with(
+            policy: session.policy.with(sourceURLRetention: .full),
+            steps: [
+                session.steps[0].with(target: session.steps[0].target?.with(
+                    browser: browser(origin: "https://[fd00::1]/")
+                )),
+                session.steps[1].with(target: session.steps[1].target?.with(
+                    browser: browser(origin: "https://[2001:db8::5]/")
+                )),
+            ]
+        )
+
+        let text = try NativeGuideWriter.buildRequest(for: session)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+        let steps = try XCTUnwrap(json["steps"] as? [[String: Any]])
+
+        // Unique-local literal is dropped.
+        XCTAssertNil(steps[0]["origin"])
+        XCTAssertFalse(text.contains("fd00"))
+        // An ordinary global IPv6 origin is not local and is kept, bracketed.
+        XCTAssertEqual(steps[1]["origin"] as? String, "https://[2001:db8::5]")
+    }
+
+    private func browser(origin: String) -> Browser {
+        Browser(
+            devicePixelRatio: 2,
+            origin: origin,
+            pageTitle: nil,
+            path: nil,
+            selectors: nil,
+            viewportCSS: ViewportCSS(height: 800, width: 1_200)
+        )
+    }
+
     func testRequestRejectsOversizeSessions() {
         var session = makeSession()
         let padded = String(repeating: "x", count: 1_900)

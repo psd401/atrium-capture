@@ -116,27 +116,56 @@ public enum NativeGuideWriter {
         else { return nil }
         var components = URLComponents()
         components.scheme = scheme
-        components.host = host
+        // URLComponents requires an IPv6 literal host to be bracketed, unlike
+        // URL.host, which returns it unbracketed.
+        components.host = host.contains(":") ? "[\(host)]" : host
         components.port = url.port
         return components.url?.absoluteString
     }
 
     private static func isLocalNetworkHostLiteral(_ value: String) -> Bool {
-        let hostname = value.lowercased()
+        var hostname = value.lowercased()
+        if hostname.hasPrefix("["), hostname.hasSuffix("]") {
+            hostname = String(hostname.dropFirst().dropLast())
+        }
         if hostname == "localhost" || hostname.hasSuffix(".localhost") { return true }
         let octets = hostname.split(separator: ".").map(String.init)
         if octets.count == 4, octets.allSatisfy({ $0.allSatisfy(\.isNumber) && (UInt8($0) != nil) }) {
             let bytes = octets.compactMap { UInt8($0) }
             guard bytes.count == 4 else { return false }
-            if bytes[0] == 10 { return true }
-            if bytes[0] == 127 { return true }
-            if bytes[0] == 172, (16...31).contains(bytes[1]) { return true }
-            if bytes[0] == 192, bytes[1] == 168 { return true }
-            if bytes[0] == 169, bytes[1] == 254 { return true }
-            if bytes[0] == 0 { return true }
-            return false
+            return isLocalIPv4(first: bytes[0], second: bytes[1])
+        }
+        if let mapped = mappedIPv4Bytes(hostname) {
+            return isLocalIPv4(first: mapped.0, second: mapped.1)
+        }
+        // IPv6 loopback (::1), unspecified (::), unique-local (fc00::/7), and
+        // link-local (fe80::/10) literals, mirroring isLocalNetworkHostLiteral
+        // in packages/atrium-client/src/index.ts.
+        if hostname == "::" || hostname == "::1" { return true }
+        for prefix in ["fc", "fd", "fe8", "fe9", "fea", "feb"] where hostname.hasPrefix(prefix) {
+            return true
         }
         return false
+    }
+
+    private static func isLocalIPv4(first: UInt8, second: UInt8) -> Bool {
+        if first == 0 { return true }
+        if first == 10 { return true }
+        if first == 127 { return true }
+        if first == 169, second == 254 { return true }
+        if first == 172, (16...31).contains(second) { return true }
+        if first == 192, second == 168 { return true }
+        return false
+    }
+
+    private static func mappedIPv4Bytes(_ hostname: String) -> (UInt8, UInt8)? {
+        guard hostname.hasPrefix("::ffff:") else { return nil }
+        let groups = hostname.dropFirst("::ffff:".count).split(separator: ":")
+        guard groups.count == 2,
+              let high = UInt16(groups[0], radix: 16),
+              let low = UInt16(groups[1], radix: 16)
+        else { return nil }
+        return (UInt8(high >> 8), UInt8(high & 0xff))
     }
 
     private static func put(_ record: inout [String: Any], _ key: String, _ value: String?) {

@@ -634,6 +634,7 @@ final class CaptureAppModel: ObservableObject {
             } catch NativeGuideWriterError.requestTooLarge {
                 statusCode = "GUIDE_WRITER_REQUEST_TOO_LARGE"
             } catch let failure as NativeGatewayFailure where failure.code == "ATRIUM_HTTP_403" || failure.code == "INSUFFICIENT_SCOPE" {
+                // Stays set for the rest of this app session; only a relaunch re-checks policy.
                 guideWriterForbidden = true
                 statusCode = "GUIDE_WRITER_POLICY_OFF"
             } catch {

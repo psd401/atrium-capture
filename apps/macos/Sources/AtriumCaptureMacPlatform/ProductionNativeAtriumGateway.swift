@@ -63,14 +63,17 @@ public struct NativeAtriumProductionSettings: Sendable {
             (bundle.object(forInfoDictionaryKey: "AtriumGuideWriterAssistantId") as? NSNumber)?.stringValue,
             bundle.object(forInfoDictionaryKey: "AtriumGuideWriterAssistantId") as? String
         )
+        // A malformed or non-positive assistant id means the feature is
+        // unconfigured, not that Atrium publishing itself should fail closed.
         let assistantID = assistantRaw.flatMap(Int.init).flatMap { $0 > 0 ? $0 : nil }
-        if assistantRaw != nil, assistantID == nil { return nil }
         let aiRaw = firstNonempty(
             environment["ATRIUM_CAPTURE_AI_GUIDE_WRITING"],
             defaults.string(forKey: "AtriumAIGuideWriting"),
             bundle.object(forInfoDictionaryKey: "AtriumAIGuideWriting") as? String
         )?.lowercased()
-        if let aiRaw, aiRaw != "on", aiRaw != "off" { return nil }
+        // An unrecognized value disables the AI guide writer only; it must
+        // not disable Atrium publishing on a typo.
+        let aiGuideWritingEnabled = aiRaw == nil || aiRaw == "on"
         guard let oauth = try? NativeOAuthConfiguration(
             authorizationEndpoint: atriumProductionOrigin.appending(path: "api/oauth/auth"),
             tokenEndpoint: atriumProductionOrigin.appending(path: "api/oauth/token"),
@@ -84,7 +87,7 @@ public struct NativeAtriumProductionSettings: Sendable {
             oauth: oauth,
             defaultCollectionID: collectionID,
             guideWriterAssistantID: assistantID,
-            aiGuideWritingEnabled: aiRaw != "off"
+            aiGuideWritingEnabled: aiGuideWritingEnabled
         )
     }
 }

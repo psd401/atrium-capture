@@ -160,14 +160,28 @@ final class ProductionNativeGatewayTests: XCTestCase {
         XCTAssertFalse(settings.aiGuideWritingEnabled)
     }
 
-    func testProductionSettingsRejectInvalidAIGuideWritingValue() {
-        XCTAssertNil(
+    func testProductionSettingsTreatInvalidAIGuideWritingValueAsOff() throws {
+        let settings = try XCTUnwrap(
             NativeAtriumProductionSettings.load(
                 environment: ["ATRIUM_CAPTURE_AI_GUIDE_WRITING": "maybe"],
                 defaults: UserDefaults(suiteName: "ProductionNativeGatewayInvalidAIGuideWritingTests")!,
                 bundle: Bundle(for: Self.self)
             )
         )
+
+        XCTAssertFalse(settings.aiGuideWritingEnabled)
+    }
+
+    func testProductionSettingsTreatMalformedAssistantIDAsUnconfigured() throws {
+        let settings = try XCTUnwrap(
+            NativeAtriumProductionSettings.load(
+                environment: ["ATRIUM_CAPTURE_GUIDE_WRITER_ASSISTANT_ID": "not-a-number"],
+                defaults: UserDefaults(suiteName: "ProductionNativeGatewayMalformedAssistantIDTests")!,
+                bundle: Bundle(for: Self.self)
+            )
+        )
+
+        XCTAssertNil(settings.guideWriterAssistantID)
     }
 
     func testProductionSettingsUseBundledPublicClientWithoutUserConfiguration() throws {
