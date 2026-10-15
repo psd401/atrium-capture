@@ -5,13 +5,18 @@ Date: 2026-10-14. Status: approved for planning.
 ## Outcome
 
 After a user finishes redaction review, Atrium Capture can fill in the guide
-title, a short summary, and every step's title and instruction by running a
-district-approved Atrium assistant over the reviewed capture. The user edits
-the suggested text and publishes as today. Nothing publishes without the user
-looking, and the model sees only non-sensitive step metadata: action type,
-element role and accessible name, page title and policy-filtered origin, Mac
-app and window title, and the current rules text. No screenshot leaves the
-device for this feature in this iteration.
+title and every step's title and instruction by running a district-approved
+Atrium assistant over the reviewed capture. The user edits the suggested text
+and publishes as today. Nothing publishes without the user looking, and the
+model sees only non-sensitive step metadata: action type, element role and
+accessible name, page title and policy-filtered origin, Mac app and window
+title, and the current rules text. No screenshot leaves the device for this
+feature in this iteration.
+
+The assistant also returns a short summary. The contract requires it and both
+platforms validate it, but neither platform stores it in this iteration: the
+capture-session contract has no summary field. See the backlog for storing it
+once that field exists.
 
 This fills the existing `instruction.source: "district_ai"` slot in
 `contracts/capture-session.schema.json`, which no code populates today, and

@@ -18,6 +18,20 @@ that route, or an image input on `POST /api/v1/assistants/{id}/execute`.
 After that, the client adds a staging step before execute and reuses the
 flattened `publishable_local` derivatives.
 
+Follow-up, suggestion summary: store the suggestion summary as
+`session.summary` once the capture-session contract gains that field. The
+guide-writer assistant already returns and validates it on both platforms.
+Only persistence is missing.
+
+Follow-up, deferred test gaps: a Playwright run that presses "Write with AI"
+and checks the applied title and step text is still missing. It needs
+managed-policy injection and a mock-gateway switch in the browser extension
+test harness, neither of which exists yet. A Mac XCTest for the workspace
+gating state (`guideWriterAvailable`, `canWriteGuideWithAI`) is also missing.
+It needs a test target for the `AtriumCaptureMacApp` executable target, which
+does not exist today. `canApplyResult` is covered as a pure function in
+`AtriumCaptureCore` instead.
+
 ## 2. Snipaste parity on Mac
 
 Milestone M7 already has region capture, magnifier, hex color readout, global

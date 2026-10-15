@@ -42,6 +42,11 @@ string built by `buildGuideWriterRequest` and `serializeGuideWriterRequest` in
 `parseGuideSuggestionText` and checked with `validateGuideSuggestion`, both in
 `packages/guide-writer`, against `contracts/guide-suggestion.schema.json`.
 
+The reply's `summary` field is required and validated on both platforms, but
+neither platform stores it in this iteration: `contracts/capture-session.schema.json`
+has no summary field. See `docs/superpowers/backlog.md` item 1 for storing it
+once that field exists.
+
 ## Import steps
 
 1. In Atrium, go to **Admin → Assistants → Import**.
