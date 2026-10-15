@@ -5,10 +5,11 @@ spec under `docs/superpowers/specs/` before implementation. When work on a
 nearby part of the codebase makes one of these cheap, pick it up in that PR
 and note it here.
 
-## 1. AI guide writer (in progress)
+## 1. AI guide writer (PR open)
 
 Spec: `specs/2026-10-14-ai-guide-writer-design.md`. Metadata only in this
-iteration.
+iteration. Atrium side: psd401/aistudio#1938 (scope migration plus provider
+and first-party grant registration).
 
 Follow-up, vision input: Atrium's temporary-attachment staging route accepts
 only the NextAuth session cookie and feeds files into repository ingestion.
@@ -28,6 +29,8 @@ and checks the applied title and step text is still missing. It needs
 managed-policy injection and a mock-gateway switch in the browser extension
 test harness, neither of which exists yet. A Mac XCTest for the workspace
 gating state (`guideWriterAvailable`, `canWriteGuideWithAI`) is also missing.
+The Swift `executeGuideWriter` has no cancellation token; the post-await
+guard discards a stale result, but a dead run still waits out the budget.
 It needs a test target for the `AtriumCaptureMacApp` executable target, which
 does not exist today. `canApplyResult` is covered as a pure function in
 `AtriumCaptureCore` instead.
