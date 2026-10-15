@@ -42,7 +42,7 @@ export interface ProductionAtriumGatewayOptions {
   configured?: () => Promise<boolean>;
   origin?: string;
   request?: typeof fetch;
-  sleep?: (milliseconds: number) => Promise<void>;
+  sleep?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
 }
 
 interface ContentAsset {
@@ -83,7 +83,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
   private readonly clock: () => number;
   private readonly origin: string;
   private readonly request: typeof fetch;
-  private readonly sleep: (milliseconds: number) => Promise<void>;
+  private readonly sleep: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
 
   constructor(private readonly options: ProductionAtriumGatewayOptions) {
     const origin = new URL(options.origin ?? ATRIUM_PRODUCTION_ORIGIN);
@@ -102,9 +102,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
     const request = options.request ?? fetch;
     this.request = (input, init) => request(input, init);
     this.clock = options.clock ?? (() => Date.now());
-    this.sleep =
-      options.sleep ??
-      ((milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds)));
+    this.sleep = options.sleep ?? abortableSleep;
   }
 
   async capabilities(): Promise<AtriumCapabilities> {
@@ -201,9 +199,13 @@ export class ProductionAtriumGateway implements AtriumGateway {
     const startedAt = this.clock();
     const accepted = requireRecord(
       requireRecord(
-        await this.sendApiJson(`/assistants/${request.assistantId}/execute`, {
-          inputs: { steps: request.steps },
-        }),
+        await this.sendApiJson(
+          `/assistants/${request.assistantId}/execute`,
+          { inputs: { steps: request.steps } },
+          {},
+          'POST',
+          request.signal,
+        ),
       ).data,
     );
     const jobId = typeof accepted.jobId === 'string' ? accepted.jobId : undefined;
@@ -215,10 +217,14 @@ export class ProductionAtriumGateway implements AtriumGateway {
       if (this.clock() - startedAt + interval > GUIDE_WRITER_BUDGET_MS) {
         throw new GatewayError('atrium_job_timeout', true);
       }
-      request.signal?.throwIfAborted();
-      await this.sleep(interval);
+      try {
+        await this.sleep(interval, request.signal);
+      } catch {
+        throw new GatewayError('atrium_request_aborted', false);
+      }
       const job = requireRecord(
-        requireRecord(await this.getApiJson(`/jobs/${encodeURIComponent(jobId)}`)).data,
+        requireRecord(await this.getApiJson(`/jobs/${encodeURIComponent(jobId)}`, request.signal))
+          .data,
       );
       const status = typeof job.status === 'string' ? job.status : '';
       if (status === 'completed') {
@@ -411,7 +417,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
     );
   }
 
-  private async getApiJson(path: string): Promise<unknown> {
+  private async getApiJson(path: string, signal?: AbortSignal): Promise<unknown> {
     const token = await this.requireAccessToken();
     let response: Response;
     try {
@@ -421,10 +427,10 @@ export class ProductionAtriumGateway implements AtriumGateway {
           authorization: `Bearer ${token}`,
           'cache-control': 'no-store',
         },
-        signal: AbortSignal.timeout(API_REQUEST_TIMEOUT_MS),
+        signal: requestSignal(signal, API_REQUEST_TIMEOUT_MS),
       });
     } catch {
-      throw new GatewayError('atrium_network_failed', true);
+      throw mapRequestError(signal);
     }
     return parseApiResponse(response);
   }
@@ -493,6 +499,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
     body: unknown,
     extraHeaders: Record<string, string> = {},
     method: 'PATCH' | 'POST' = 'POST',
+    signal?: AbortSignal,
   ): Promise<unknown> {
     const token = await this.requireAccessToken();
     let response: Response;
@@ -507,10 +514,10 @@ export class ProductionAtriumGateway implements AtriumGateway {
           ...extraHeaders,
         },
         method,
-        signal: AbortSignal.timeout(API_REQUEST_TIMEOUT_MS),
+        signal: requestSignal(signal, API_REQUEST_TIMEOUT_MS),
       });
     } catch {
-      throw new GatewayError('atrium_network_failed', true);
+      throw mapRequestError(signal);
     }
     return parseApiResponse(response);
   }
@@ -580,6 +587,36 @@ function normalizeBase64Checksum(value: string): string | undefined {
     return undefined;
   }
   return value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function abortableSleep(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const timer = setTimeout(resolve, milliseconds);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
+  });
+}
+
+function requestSignal(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+  return signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])
+    : AbortSignal.timeout(timeoutMs);
+}
+
+function mapRequestError(signal: AbortSignal | undefined): GatewayError {
+  return signal?.aborted
+    ? new GatewayError('atrium_request_aborted', false)
+    : new GatewayError('atrium_network_failed', true);
 }
 
 function clampPollInterval(value: unknown): number {

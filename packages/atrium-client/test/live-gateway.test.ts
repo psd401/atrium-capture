@@ -672,6 +672,7 @@ describe('production Atrium v1 gateway', () => {
 
   it('aborts polling when the overall budget is exhausted', async () => {
     let now = 0;
+    let polls = 0;
     const gateway = new ProductionAtriumGateway({
       accessToken: async () => 'synthetic-access-token',
       clock: () => now,
@@ -680,6 +681,7 @@ describe('production Atrium v1 gateway', () => {
         if (init?.method === 'POST') {
           return json({ data: { jobId: 'job-3', status: 'pending' } }, 202);
         }
+        polls += 1;
         return json({ data: { pollingInterval: 10_000, status: 'processing' } });
       },
       sleep: async (ms) => {
@@ -696,6 +698,8 @@ describe('production Atrium v1 gateway', () => {
     // interval of the budget rather than crossing it.
     expect(now).toBeLessThan(GUIDE_WRITER_BUDGET_MS);
     expect(now + 10_000).toBeGreaterThanOrEqual(GUIDE_WRITER_BUDGET_MS);
+    // No poll request is issued once the budget check rejects before a sleep.
+    expect(polls).toBe(12);
   });
 
   it('clamps the server polling interval to the documented range', async () => {
@@ -727,6 +731,35 @@ describe('production Atrium v1 gateway', () => {
     // second reflects the first poll's clamped 50ms, and the third reflects
     // the second poll's clamped 60s.
     expect(sleeps).toEqual([1_000, 1_000, 10_000]);
+  });
+
+  it('aborts the poll loop when the caller signal fires during a sleep', async () => {
+    const controller = new AbortController();
+    let polls = 0;
+    const gateway = new ProductionAtriumGateway({
+      accessToken: async () => 'synthetic-access-token',
+      configured: async () => true,
+      request: async (_input, init) => {
+        if (init?.method === 'POST') {
+          return json({ data: { jobId: 'job-6', status: 'pending' } }, 202);
+        }
+        polls += 1;
+        return json({ data: { status: 'processing' } });
+      },
+      sleep: async (_milliseconds, signal) => {
+        controller.abort();
+        signal?.throwIfAborted();
+      },
+    });
+
+    await expect(
+      gateway.executeGuideWriter({
+        assistantId: 42,
+        signal: controller.signal,
+        steps: '{}',
+      }),
+    ).rejects.toMatchObject({ code: 'atrium_request_aborted', retryable: false });
+    expect(polls).toBe(0);
   });
 });
 
