@@ -221,6 +221,15 @@ describe('runtime message boundary', () => {
     ).toBeUndefined();
   });
 
+  it('accepts an editor.write-guide message', () => {
+    expect(
+      parseIncomingMessage({
+        kind: 'editor.write-guide',
+        payload: { commandId: '40000000-0000-4000-8000-000000000002' },
+      }),
+    ).toBeDefined();
+  });
+
   it('allows only bounded native bridge controls', () => {
     expect(parseIncomingMessage({ kind: 'native-bridge.snapshot' })).toBeTruthy();
     expect(

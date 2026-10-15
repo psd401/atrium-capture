@@ -133,6 +133,22 @@
       "additionalProperties": false,
       "required": ["kind", "payload"],
       "properties": {
+        "kind": { "const": "editor.write-guide" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["commandId"],
+          "properties": {
+            "commandId": { "type": "string", "format": "uuid" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "payload"],
+      "properties": {
         "kind": { "const": "editor.asset" },
         "payload": {
           "type": "object",

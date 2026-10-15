@@ -183,6 +183,8 @@ test('records a multi-page workflow across a forced service-worker stop', async 
   expect(publishable?.assets.some((asset) => asset.state === 'publishable_local')).toBe(true);
   expect(publishable?.assets.filter((asset) => asset.state === 'raw_local')).toHaveLength(0);
   await expect(panel.getByRole('status')).toContainText('Privacy approved');
+  // No assistant id is configured in this run, so the AI writer must stay hidden.
+  await expect(panel.getByRole('button', { name: 'Write with AI' })).toHaveCount(0);
   await expect(panel.getByText('raw source bytes were deleted', { exact: false })).toBeVisible();
   await expect(
     panel.getByText(

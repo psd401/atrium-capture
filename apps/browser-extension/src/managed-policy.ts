@@ -7,6 +7,8 @@ export const DEFAULT_MAX_STORAGE_BYTES = 512 * 1024 * 1024;
 export const DEFAULT_MAX_SESSION_STEPS = 1_000;
 
 export interface RuntimeManagedPolicy extends CaptureSitePolicy {
+  aiGuideWriting: 'off' | 'on';
+  atriumGuideWriterAssistantId?: number;
   atriumOAuthClientId?: string;
   defaultCollectionId?: string;
   maxSessionSteps: number;
@@ -28,7 +30,9 @@ export interface ManagedStorageArea {
 }
 
 const allowedKeys = new Set([
+  'aiGuideWriting',
   'allowedOrigins',
+  'atriumGuideWriterAssistantId',
   'atriumOAuthClientId',
   'defaultCollectionId',
   'deniedOrigins',
@@ -40,6 +44,7 @@ const allowedKeys = new Set([
 ]);
 
 const defaults: RuntimeManagedPolicy = {
+  aiGuideWriting: 'on',
   maxSessionSteps: DEFAULT_MAX_SESSION_STEPS,
   maxStorageBytes: DEFAULT_MAX_STORAGE_BYTES,
   policyVersion: 'local-default-v1',
@@ -120,6 +125,18 @@ export function parseManagedPolicy(value: unknown): ManagedPolicySnapshot {
     'atrium_oauth_client_id_invalid',
     issues,
   );
+  const aiGuideWriting = parseEnum(
+    record.aiGuideWriting,
+    ['on', 'off'] as const,
+    defaults.aiGuideWriting,
+    'ai_guide_writing_invalid',
+    issues,
+  );
+  const atriumGuideWriterAssistantId = parseOptionalPositiveInteger(
+    record.atriumGuideWriterAssistantId,
+    'atrium_guide_writer_assistant_id_invalid',
+    issues,
+  );
 
   if (issues.length > 0) {
     return invalidPolicy(issues);
@@ -128,6 +145,7 @@ export function parseManagedPolicy(value: unknown): ManagedPolicySnapshot {
     configured: true,
     issues: [],
     policy: {
+      aiGuideWriting,
       maxSessionSteps,
       maxStorageBytes,
       policyVersion: `managed-v${MANAGED_POLICY_SCHEMA_VERSION}`,
@@ -137,6 +155,7 @@ export function parseManagedPolicy(value: unknown): ManagedPolicySnapshot {
       ...(allowedOrigins ? { allowedOrigins } : {}),
       ...(deniedOrigins ? { deniedOrigins } : {}),
       ...(defaultCollectionId ? { defaultCollectionId } : {}),
+      ...(atriumGuideWriterAssistantId ? { atriumGuideWriterAssistantId } : {}),
     },
     valid: true,
   };
@@ -148,6 +167,7 @@ function invalidPolicy(issues: string[]): ManagedPolicySnapshot {
     issues,
     policy: {
       ...defaults,
+      aiGuideWriting: 'off',
       allowedOrigins: [],
       policyVersion: 'managed-invalid-v1',
       sourceUrlRetention: 'none',
@@ -254,6 +274,21 @@ function parseInteger(
   }
   issues.push(issue);
   return fallback;
+}
+
+function parseOptionalPositiveInteger(
+  value: unknown,
+  issue: string,
+  issues: string[],
+): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+    issues.push(issue);
+    return undefined;
+  }
+  return value;
 }
 
 function parseOptionalUuid(value: unknown, issue: string, issues: string[]): string | undefined {

@@ -82,6 +82,7 @@ export type HealthEventCode =
   | 'capture_paused_quota'
   | 'capture_started'
   | 'capture_state_changed'
+  | 'guide_writer_failed'
   | 'managed_policy_invalid'
   | 'message_handling_failed'
   | 'publication_attention'
