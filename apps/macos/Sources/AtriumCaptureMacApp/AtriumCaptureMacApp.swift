@@ -620,7 +620,12 @@ final class CaptureAppModel: ObservableObject {
             do {
                 let steps = try NativeGuideWriter.buildRequest(for: current)
                 let result = try await publisher.gateway.executeGuideWriter(assistantID: assistantID, steps: steps)
-                guard recorder.snapshot()?.sessionID == current.sessionID, let latest = recorder.snapshot() else {
+                let latestSnapshot = recorder.snapshot()
+                guard NativeGuideWriter.canApplyResult(
+                    forSessionID: current.sessionID,
+                    latestSessionID: latestSnapshot?.sessionID,
+                    guideContentFrozen: currentGuideContentFrozen
+                ), let latest = latestSnapshot else {
                     statusCode = "GUIDE_WRITER_FAILED"
                     return
                 }

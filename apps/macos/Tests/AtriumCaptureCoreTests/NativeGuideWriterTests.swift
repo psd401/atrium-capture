@@ -59,6 +59,48 @@ final class NativeGuideWriterTests: XCTestCase {
         )
     }
 
+    func testCanApplyResultAllowsSameSessionWhenNotFrozen() {
+        XCTAssertTrue(
+            NativeGuideWriter.canApplyResult(
+                forSessionID: "session-a",
+                latestSessionID: "session-a",
+                guideContentFrozen: false
+            )
+        )
+    }
+
+    func testCanApplyResultRejectsWhenSessionChanged() {
+        XCTAssertFalse(
+            NativeGuideWriter.canApplyResult(
+                forSessionID: "session-a",
+                latestSessionID: "session-b",
+                guideContentFrozen: false
+            )
+        )
+    }
+
+    func testCanApplyResultRejectsWhenNoLatestSession() {
+        XCTAssertFalse(
+            NativeGuideWriter.canApplyResult(
+                forSessionID: "session-a",
+                latestSessionID: nil,
+                guideContentFrozen: false
+            )
+        )
+    }
+
+    func testCanApplyResultRejectsWhenContentFrozenAfterAwait() {
+        // Publication started (or a publish job landed) while the gateway call was in flight;
+        // the result must be discarded even though the session id did not change.
+        XCTAssertFalse(
+            NativeGuideWriter.canApplyResult(
+                forSessionID: "session-a",
+                latestSessionID: "session-a",
+                guideContentFrozen: true
+            )
+        )
+    }
+
     func testRequestRejectsOversizeSessions() {
         var session = makeSession()
         let padded = String(repeating: "x", count: 1_900)

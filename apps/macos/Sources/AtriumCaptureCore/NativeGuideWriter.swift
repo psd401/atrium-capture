@@ -15,6 +15,18 @@ public enum NativeGuideWriterError: Error, Equatable {
 }
 
 public enum NativeGuideWriter {
+    /// Whether a guide-writer result for `forSessionID`, obtained before an await, is still
+    /// safe to apply. Checked again after the await: the active session may have changed, or
+    /// publication may have started (or a publish job landed) and frozen the content, while the
+    /// gateway call was in flight.
+    public static func canApplyResult(
+        forSessionID: String,
+        latestSessionID: String?,
+        guideContentFrozen: Bool
+    ) -> Bool {
+        !guideContentFrozen && latestSessionID == forSessionID
+    }
+
     public static func buildRequest(for session: AtriumCaptureSession) throws -> String {
         let retainOrigin = session.policy.sourceURLRetention != .none
         let steps: [[String: Any]] = session.steps.sorted { $0.sequence < $1.sequence }.map { step in
