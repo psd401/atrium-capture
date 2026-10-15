@@ -1,7 +1,5 @@
 // ABOUTME: Tests that the committed Atrium assistant definition imports cleanly and that the
 // ABOUTME: sample reply in its companion doc validates against the guide-suggestion contract.
-import Ajv2020 from 'ajv/dist/2020.js';
-import addFormats from 'ajv-formats';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -14,9 +12,9 @@ const promptDocPath = path.resolve(
   import.meta.dirname,
   '../../../docs/atrium/capture-guide-writer.md',
 );
-const schemaPath = path.resolve(
+const fixturePath = path.resolve(
   import.meta.dirname,
-  '../../../contracts/guide-suggestion.schema.json',
+  '../../../packages/test-fixtures/fixtures/guide-suggestion-v1.json',
 );
 
 describe('Capture Guide Writer assistant definition', () => {
@@ -58,17 +56,14 @@ describe('Capture Guide Writer prompt doc', () => {
     }
   });
 
-  it('embeds a sample reply that validates against the guide-suggestion schema', async () => {
+  it('embeds the contract fixture as its sample reply', async () => {
+    // scripts/validate-contracts.mjs validates this fixture against the schema with ajv,
+    // so equality here proves the documented sample is schema-valid.
     const promptDoc = await readFile(promptDocPath, 'utf8');
     const fenced = [...promptDoc.matchAll(/```json\n([\s\S]*?)\n```/g)];
     expect(fenced.length).toBeGreaterThan(0);
     const sampleReply = JSON.parse(fenced.at(-1)![1]!) as unknown;
-
-    const schema = JSON.parse(await readFile(schemaPath, 'utf8')) as object;
-    const ajv = new Ajv2020({ allErrors: true, strict: true });
-    addFormats(ajv);
-    const validate = ajv.compile(schema);
-    const valid = validate(sampleReply);
-    expect(valid, ajv.errorsText(validate.errors)).toBe(true);
+    const fixture = JSON.parse(await readFile(fixturePath, 'utf8')) as unknown;
+    expect(sampleReply).toEqual(fixture);
   });
 });
