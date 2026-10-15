@@ -369,7 +369,7 @@ public final class ProductionNativeAtriumGateway: NativeAtriumGateway, @unchecke
         guard let jobID = Self.string(accepted["jobId"], maximum: 200) else { throw Self.invalidResponse() }
         var interval = Self.clampPollInterval(accepted["pollingInterval"])
         while true {
-            if clock() - startedAt >= Self.guideWriterBudget {
+            if clock() - startedAt + interval > Self.guideWriterBudget {
                 throw NativeGatewayFailure(code: "ATRIUM_JOB_TIMEOUT", retryable: true)
             }
             try await sleep(interval)

@@ -303,7 +303,13 @@ final class ProductionNativeGatewayTests: XCTestCase {
         await XCTAssertThrowsErrorAsync(try await budgeted.executeGuideWriter(assistantID: 42, steps: "{}")) { error in
             XCTAssertEqual((error as? NativeGatewayFailure)?.code, "ATRIUM_JOB_TIMEOUT")
         }
-        XCTAssertGreaterThanOrEqual(now, 120)
+        // The budget check runs before each sleep, so it stops within one poll
+        // interval of the budget rather than crossing it.
+        XCTAssertLessThan(now, 120)
+        XCTAssertGreaterThanOrEqual(now + 10, 120)
+        // No poll request is issued once the budget check rejects before a sleep.
+        let pollRequests = await slow.requests.filter { $0.url?.path == "/api/v1/jobs/job-1" }.count
+        XCTAssertEqual(pollRequests, 12)
     }
 }
 
