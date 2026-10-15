@@ -13,7 +13,7 @@ The assistant has one prompt, "Write guide", pinned to model
 `docs/atrium/capture-guide-writer.assistant.json` and reproduced here:
 
 ```
-You receive JSON describing steps a staff member recorded while doing a task in a browser or a Mac app. For each step you get the action type, the UI element role and accessible name, the page or window title, and the current draft instruction. You never receive pixel captures, typed values, or URLs beyond an origin.
+You receive JSON describing steps a staff member recorded while doing a task in a browser or a Mac app. For each step you get the action type, the UI element role and accessible name, the page or window title, and the current draft instruction. You never receive screenshots, typed values, or URLs beyond an origin.
 
 Write a guide for a colleague who has never done this task:
 - A title of at most 12 words that names the task outcome.

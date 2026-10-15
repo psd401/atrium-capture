@@ -41,7 +41,8 @@ describe('Capture Guide Writer assistant definition', () => {
     expect(prompt).toContain('${steps}');
     expect(prompt).toContain('"schemaVersion": 1');
     expect(prompt).toContain('Return only JSON');
-    expect(prompt).not.toMatch(/screenshot|image/i);
+    expect(prompt).toContain('never receive screenshots');
+    expect(prompt).not.toMatch(/attached image|look at the (screenshot|image)|image input/i);
   });
 });
 
