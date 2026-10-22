@@ -10,7 +10,7 @@ jobs:
     permissions:
       contents: write # rolling docs PR + self-merge; caller must grant (org default is read-only)
       pull-requests: write
-    uses: PSD401/.github/.github/workflows/reusable-openwiki.yml@main
+    uses: PSD401/.github/.github/workflows/reusable-openwiki.yml@1aa5f5351a78b15f5c71668037f5d35b9613ae41 # v1.0.0
     with:
       base_branch: main
     secrets:
