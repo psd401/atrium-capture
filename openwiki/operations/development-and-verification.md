@@ -112,15 +112,17 @@ and then runs `bun run check` and `bun run security:audit` before signing. The c
 is off for the signed release on purpose; see [release gates](release-gates.md).
 
 `.github/workflows/psd-ci.yml` is the organization-standard PSD CI gate. It calls the
-org-owned reusable workflow `PSD401/.github/.github/workflows/reusable-psd-ci.yml` at `@main`
-on pull requests and pushes to `main`, with explicit lint and typecheck commands. Its lint
+org-owned reusable workflow `PSD401/.github/.github/workflows/reusable-psd-ci.yml`, pinned to
+the full commit SHA `1aa5f5351a78b15f5c71668037f5d35b9613ae41` (tagged `v1.0.0`), on pull
+requests and pushes to `main`, with explicit lint and typecheck commands. Its lint
 command runs `format:check`, `openwiki:check`, `lint`, and `licenses:check`; its typecheck
 command runs `typecheck`, `contracts:check`, and `messages:check`. Test and build use the
 reusable workflow's defaults. It is a subset of `ci.yml`'s browser-and-contracts job: it
 omits Playwright (`test:extension`), browser packaging, and the network-dependent
 `security:audit`. Changing a command in `ci.yml` does not change `psd-ci.yml`, so keep the
-two lists aligned deliberately. The `@main` reference is intentional, as with
-`security-scan.yml`, and is marked as a zizmor exception.
+two lists aligned deliberately. Because the reusable workflow is pinned to a commit SHA
+rather than a moving ref, an organization-standard change reaches this repository only
+when that pin is bumped.
 
 `.github/workflows/security-scan.yml` is a thin caller of the organization's
 reusable security scan (`PSD401/.github/.github/workflows/reusable-security-scan.yml`).
@@ -128,9 +130,9 @@ It runs on pull requests, pushes to `main`, a Monday 09:00 UTC schedule, and man
 dispatch. The scan runs gitleaks over the full git history (findings are redacted in
 the log) and zizmor, which fails on high-severity workflow issues. Dependency review
 runs on pull requests only in public repositories. The caller grants `contents: read`
-only and passes no secrets. The reusable workflow is referenced at `@main` on purpose
-so central bumps propagate; that reference is marked as an intentional zizmor
-exception. The check is advisory until the organization's `psd-standard` ruleset moves
+only and passes no secrets. The reusable workflow is pinned to the commit SHA for
+`v1.0.0`, so central changes are adopted by bumping that pin rather than by following
+`@main`. The check is advisory until the organization's `psd-standard` ruleset moves
 from `evaluate` to `active`.
 
 `.gitleaksignore` is the gitleaks baseline for that scan. Each line is a fingerprint of a
@@ -142,7 +144,8 @@ key in an ADR. Do not add an entry to silence a new finding without the same rev
 The Claude workflows are separate from the release path. `.github/workflows/claude-code-review.yml`
 calls the organization's reusable Claude review workflow on pull requests that are opened,
 synchronized (new commits pushed), marked ready for review, or reopened, and skips Dependabot
-actors. The caller passes only
+actors. The reusable workflow is pinned to the same `v1.0.0` commit SHA as the other PSD
+callers. The caller passes only
 `BEDROCK_API_KEY`, by name, so the review job receives that one secret rather than every
 repository and organization secret. Keep this explicit list when editing the caller; restoring
 `secrets: inherit` would widen secret exposure. `.github/workflows/claude.yml` runs Claude Code
