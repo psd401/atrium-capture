@@ -10,17 +10,17 @@
     "@atrium-capture/contracts": "workspace:*",
     "@atrium-capture/editor-model": "workspace:*",
     "@atrium-capture/privacy": "workspace:*",
-    "idb": "8.0.3",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "idb": "8.0.4",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "@playwright/test": "1.62.1",
-    "@types/react": "19.2.18",
-    "@types/react-dom": "19.2.4",
+    "@playwright/test": "1.64.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "@wxt-dev/module-react": "1.2.2",
     "esbuild": "0.28.2",
-    "fake-indexeddb": "6.2.5",
+    "fake-indexeddb": "6.2.6",
     "wxt": "0.21.4"
   },
   "scripts": {
