@@ -5,6 +5,7 @@ public enum NativeReviewError: Error, Equatable {
     case stepNotFound
     case invalidGeometry
     case invalidTitle
+    case invalidInstruction
     case rawAssetNotPublishable
     case incompletePrivacyReview
     case sensitiveRegionRequiresRedaction
@@ -40,6 +41,35 @@ public enum NativeReviewEditor {
                 userEdited: true
             ), privacyReview: reviewAfterEdit(step))
         }
+    }
+
+    public static func suggestInstruction(
+        in session: AtriumCaptureSession,
+        stepID: String,
+        text: String,
+        title: String,
+        now: Date = Date()
+    ) throws -> AtriumCaptureSession {
+        let cleanText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanText.isEmpty, cleanText.count <= 2_000 else {
+            throw NativeReviewError.invalidInstruction
+        }
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanTitle.isEmpty, cleanTitle.count <= 120 else {
+            throw NativeReviewError.invalidTitle
+        }
+        guard session.steps.contains(where: { $0.stepID == stepID }) else {
+            throw NativeReviewError.stepNotFound
+        }
+        let steps = session.steps.map { step -> StepElement in
+            guard step.stepID == stepID else { return step }
+            return step.with(instruction: step.instruction.with(
+                generatedText: cleanText,
+                source: .districtAI,
+                title: cleanTitle
+            ))
+        }
+        return session.with(revision: session.revision + 1, steps: steps, updatedAt: now)
     }
 
     public static func setCrop(
@@ -149,7 +179,7 @@ public enum NativeReviewEditor {
             action: .manual,
             annotations: [],
             crop: nil,
-            instruction: Instruction(editedText: clean, generatedText: clean, source: .user, userEdited: true),
+            instruction: Instruction(editedText: clean, generatedText: clean, source: .user, title: nil, userEdited: true),
             occurredAt: now,
             privacyReview: .notReviewed,
             screenshotAssetID: nil,
@@ -186,6 +216,7 @@ public enum NativeReviewEditor {
                 editedText: "\(firstText) \(secondText)",
                 generatedText: "\(firstText) \(secondText)",
                 source: .user,
+                title: nil,
                 userEdited: true
             ),
             privacyReview: review,

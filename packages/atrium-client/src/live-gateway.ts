@@ -4,6 +4,8 @@ import type {
   AtriumGateway,
   CreateMarkdownVersionRequest,
   CreatePrivateObjectRequest,
+  ExecuteGuideWriterRequest,
+  ExecuteGuideWriterResult,
   UpdateContentTitleRequest,
   UploadImmutableAssetRequest,
 } from './index.js';
@@ -12,6 +14,9 @@ import { GatewayError } from './index.js';
 const MAX_JSON_RESPONSE_BYTES = 1_000_000;
 const API_REQUEST_TIMEOUT_MS = 30_000;
 const ASSET_UPLOAD_TIMEOUT_MS = 120_000;
+export const GUIDE_WRITER_BUDGET_MS = 120_000;
+export const GUIDE_WRITER_POLL_MIN_MS = 1_000;
+export const GUIDE_WRITER_POLL_MAX_MS = 10_000;
 const API_PATH = '/api/v1';
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -28,13 +33,16 @@ export const ATRIUM_OAUTH_SCOPES = [
   'content:create',
   'content:update',
   'content:publish_internal',
+  'assistants:execute',
 ] as const;
 
 export interface ProductionAtriumGatewayOptions {
   accessToken(): Promise<string>;
+  clock?: () => number;
   configured?: () => Promise<boolean>;
   origin?: string;
   request?: typeof fetch;
+  sleep?: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
 }
 
 interface ContentAsset {
@@ -72,8 +80,10 @@ interface InitiatedContentAsset extends ContentAsset {
  */
 export class ProductionAtriumGateway implements AtriumGateway {
   private readonly apiBaseUrl: string;
+  private readonly clock: () => number;
   private readonly origin: string;
   private readonly request: typeof fetch;
+  private readonly sleep: (milliseconds: number, signal?: AbortSignal) => Promise<void>;
 
   constructor(private readonly options: ProductionAtriumGatewayOptions) {
     const origin = new URL(options.origin ?? ATRIUM_PRODUCTION_ORIGIN);
@@ -91,6 +101,8 @@ export class ProductionAtriumGateway implements AtriumGateway {
     this.apiBaseUrl = `${origin.origin}${API_PATH}`;
     const request = options.request ?? fetch;
     this.request = (input, init) => request(input, init);
+    this.clock = options.clock ?? (() => Date.now());
+    this.sleep = options.sleep ?? abortableSleep;
   }
 
   async capabilities(): Promise<AtriumCapabilities> {
@@ -98,6 +110,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
       return {
         collectionDiscovery: false,
         contentUpdates: false,
+        guideWriter: false,
         idempotentWrites: false,
         immutableAssets: false,
         internalPublication: false,
@@ -109,6 +122,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
     return {
       collectionDiscovery: true,
       contentUpdates: true,
+      guideWriter: true,
       idempotentWrites: true,
       immutableAssets: true,
       internalPublication: true,
@@ -176,6 +190,56 @@ export class ProductionAtriumGateway implements AtriumGateway {
       throw new GatewayError('atrium_bodyless_object_expected', false);
     }
     return { contentObjectId: requireUuid(data, 'id') };
+  }
+
+  async executeGuideWriter(request: ExecuteGuideWriterRequest): Promise<ExecuteGuideWriterResult> {
+    if (!Number.isInteger(request.assistantId) || request.assistantId <= 0) {
+      throw new GatewayError('atrium_assistant_id_invalid', false);
+    }
+    const startedAt = this.clock();
+    const accepted = requireRecord(
+      requireRecord(
+        await this.sendApiJson(
+          `/assistants/${request.assistantId}/execute`,
+          { inputs: { steps: request.steps } },
+          {},
+          'POST',
+          request.signal,
+        ),
+      ).data,
+    );
+    const jobId = typeof accepted.jobId === 'string' ? accepted.jobId : undefined;
+    if (!jobId || jobId.length > 200) {
+      throw new GatewayError('atrium_response_invalid', false);
+    }
+    let interval = clampPollInterval(accepted.pollingInterval);
+    for (;;) {
+      if (this.clock() - startedAt + interval > GUIDE_WRITER_BUDGET_MS) {
+        throw new GatewayError('atrium_job_timeout', true);
+      }
+      try {
+        await this.sleep(interval, request.signal);
+      } catch {
+        throw new GatewayError('atrium_request_aborted', false);
+      }
+      const job = requireRecord(
+        requireRecord(await this.getApiJson(`/jobs/${encodeURIComponent(jobId)}`, request.signal))
+          .data,
+      );
+      const status = typeof job.status === 'string' ? job.status : '';
+      if (status === 'completed') {
+        return { jobId, text: completedText(job) };
+      }
+      if (status === 'failed' || status === 'cancelled') {
+        const message =
+          typeof job.errorMessage === 'string' ? job.errorMessage.slice(0, 1_000) : undefined;
+        throw new GatewayError(`atrium_job_${status}`, true, message);
+      }
+      if (status !== 'pending' && status !== 'processing' && status !== 'streaming') {
+        throw new GatewayError('atrium_response_invalid', false);
+      }
+      interval = clampPollInterval(job.pollingInterval);
+    }
   }
 
   formatAssetMarkdown(remoteAssetId: string, altText: string): string {
@@ -353,7 +417,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
     );
   }
 
-  private async getApiJson(path: string): Promise<unknown> {
+  private async getApiJson(path: string, signal?: AbortSignal): Promise<unknown> {
     const token = await this.requireAccessToken();
     let response: Response;
     try {
@@ -363,10 +427,10 @@ export class ProductionAtriumGateway implements AtriumGateway {
           authorization: `Bearer ${token}`,
           'cache-control': 'no-store',
         },
-        signal: AbortSignal.timeout(API_REQUEST_TIMEOUT_MS),
+        signal: requestSignal(signal, API_REQUEST_TIMEOUT_MS),
       });
     } catch {
-      throw new GatewayError('atrium_network_failed', true);
+      throw mapRequestError(signal);
     }
     return parseApiResponse(response);
   }
@@ -435,6 +499,7 @@ export class ProductionAtriumGateway implements AtriumGateway {
     body: unknown,
     extraHeaders: Record<string, string> = {},
     method: 'PATCH' | 'POST' = 'POST',
+    signal?: AbortSignal,
   ): Promise<unknown> {
     const token = await this.requireAccessToken();
     let response: Response;
@@ -449,10 +514,10 @@ export class ProductionAtriumGateway implements AtriumGateway {
           ...extraHeaders,
         },
         method,
-        signal: AbortSignal.timeout(API_REQUEST_TIMEOUT_MS),
+        signal: requestSignal(signal, API_REQUEST_TIMEOUT_MS),
       });
     } catch {
-      throw new GatewayError('atrium_network_failed', true);
+      throw mapRequestError(signal);
     }
     return parseApiResponse(response);
   }
@@ -522,6 +587,59 @@ function normalizeBase64Checksum(value: string): string | undefined {
     return undefined;
   }
   return value.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function abortableSleep(milliseconds: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(signal.reason);
+      return;
+    }
+    const timer = setTimeout(resolve, milliseconds);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        reject(signal.reason);
+      },
+      { once: true },
+    );
+  });
+}
+
+function requestSignal(signal: AbortSignal | undefined, timeoutMs: number): AbortSignal {
+  return signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(timeoutMs)])
+    : AbortSignal.timeout(timeoutMs);
+}
+
+function mapRequestError(signal: AbortSignal | undefined): GatewayError {
+  return signal?.aborted
+    ? new GatewayError('atrium_request_aborted', false)
+    : new GatewayError('atrium_network_failed', true);
+}
+
+function clampPollInterval(value: unknown): number {
+  const milliseconds =
+    typeof value === 'number' && Number.isFinite(value) ? value : GUIDE_WRITER_POLL_MIN_MS;
+  return Math.min(GUIDE_WRITER_POLL_MAX_MS, Math.max(GUIDE_WRITER_POLL_MIN_MS, milliseconds));
+}
+
+function completedText(job: Record<string, unknown>): string {
+  const responseData =
+    job.responseData && typeof job.responseData === 'object'
+      ? (job.responseData as Record<string, unknown>)
+      : {};
+  const candidates = [responseData.text, responseData.content, job.partialContent];
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim()) {
+      if (candidate.length > MAX_JSON_RESPONSE_BYTES) {
+        throw new GatewayError('atrium_response_too_large', false);
+      }
+      return candidate;
+    }
+  }
+  throw new GatewayError('atrium_response_invalid', false, 'Completed job carried no text.');
 }
 
 async function parseApiResponse(response: Response): Promise<unknown> {

@@ -6,6 +6,7 @@
 //   let atriumCaptureSession = try AtriumCaptureSession(json)
 //   let atriumCaptureNativeBridgeMessage = try AtriumCaptureNativeBridgeMessage(json)
 //   let atriumCapturePublishJob = try AtriumCapturePublishJob(json)
+//   let atriumCaptureGuideSuggestion = try AtriumCaptureGuideSuggestion(json)
 
 import Foundation
 
@@ -644,19 +645,22 @@ public struct Instruction: Codable {
     public let editedText: String?
     public let generatedText: String
     public let source: Source
+    public let title: String?
     public let userEdited: Bool
 
     public enum CodingKeys: String, CodingKey {
         case editedText = "editedText"
         case generatedText = "generatedText"
         case source = "source"
+        case title = "title"
         case userEdited = "userEdited"
     }
 
-    public init(editedText: String?, generatedText: String, source: Source, userEdited: Bool) {
+    public init(editedText: String?, generatedText: String, source: Source, title: String?, userEdited: Bool) {
         self.editedText = editedText
         self.generatedText = generatedText
         self.source = source
+        self.title = title
         self.userEdited = userEdited
     }
 }
@@ -683,12 +687,14 @@ public extension Instruction {
         editedText: String?? = nil,
         generatedText: String? = nil,
         source: Source? = nil,
+        title: String?? = nil,
         userEdited: Bool? = nil
     ) -> Instruction {
         return Instruction(
             editedText: editedText ?? self.editedText,
             generatedText: generatedText ?? self.generatedText,
             source: source ?? self.source,
+            title: title ?? self.title,
             userEdited: userEdited ?? self.userEdited
         )
     }
@@ -1328,6 +1334,134 @@ public enum Phase: String, Codable {
     case queued = "queued"
     case readyAsDraft = "ready_as_draft"
     case uploadingAssets = "uploading_assets"
+}
+
+/// Assistant-written title, summary, and per-step text for a reviewed capture session. Text
+/// only; never images, selectors, or typed values.
+// MARK: - AtriumCaptureGuideSuggestion
+public struct AtriumCaptureGuideSuggestion: Codable {
+    public let schemaVersion: Int
+    public let sessionID: String
+    public let steps: [GuideSuggestionStep]
+    public let summary: String
+    public let title: String
+
+    public enum CodingKeys: String, CodingKey {
+        case schemaVersion = "schemaVersion"
+        case sessionID = "sessionId"
+        case steps = "steps"
+        case summary = "summary"
+        case title = "title"
+    }
+
+    public init(schemaVersion: Int, sessionID: String, steps: [GuideSuggestionStep], summary: String, title: String) {
+        self.schemaVersion = schemaVersion
+        self.sessionID = sessionID
+        self.steps = steps
+        self.summary = summary
+        self.title = title
+    }
+}
+
+// MARK: AtriumCaptureGuideSuggestion convenience initializers and mutators
+
+public extension AtriumCaptureGuideSuggestion {
+    init(data: Data) throws {
+        self = try newJSONDecoder().decode(AtriumCaptureGuideSuggestion.self, from: data)
+    }
+
+    init(_ json: String, using encoding: String.Encoding = .utf8) throws {
+        guard let data = json.data(using: encoding) else {
+            throw NSError(domain: "JSONDecoding", code: 0, userInfo: nil)
+        }
+        try self.init(data: data)
+    }
+
+    init(fromURL url: URL) throws {
+        try self.init(data: try Data(contentsOf: url))
+    }
+
+    func with(
+        schemaVersion: Int? = nil,
+        sessionID: String? = nil,
+        steps: [GuideSuggestionStep]? = nil,
+        summary: String? = nil,
+        title: String? = nil
+    ) -> AtriumCaptureGuideSuggestion {
+        return AtriumCaptureGuideSuggestion(
+            schemaVersion: schemaVersion ?? self.schemaVersion,
+            sessionID: sessionID ?? self.sessionID,
+            steps: steps ?? self.steps,
+            summary: summary ?? self.summary,
+            title: title ?? self.title
+        )
+    }
+
+    func jsonData() throws -> Data {
+        return try newJSONEncoder().encode(self)
+    }
+
+    func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
+        return String(data: try self.jsonData(), encoding: encoding)
+    }
+}
+
+// MARK: - GuideSuggestionStep
+public struct GuideSuggestionStep: Codable {
+    public let instruction: String
+    public let stepID: String
+    public let title: String
+
+    public enum CodingKeys: String, CodingKey {
+        case instruction = "instruction"
+        case stepID = "stepId"
+        case title = "title"
+    }
+
+    public init(instruction: String, stepID: String, title: String) {
+        self.instruction = instruction
+        self.stepID = stepID
+        self.title = title
+    }
+}
+
+// MARK: GuideSuggestionStep convenience initializers and mutators
+
+public extension GuideSuggestionStep {
+    init(data: Data) throws {
+        self = try newJSONDecoder().decode(GuideSuggestionStep.self, from: data)
+    }
+
+    init(_ json: String, using encoding: String.Encoding = .utf8) throws {
+        guard let data = json.data(using: encoding) else {
+            throw NSError(domain: "JSONDecoding", code: 0, userInfo: nil)
+        }
+        try self.init(data: data)
+    }
+
+    init(fromURL url: URL) throws {
+        try self.init(data: try Data(contentsOf: url))
+    }
+
+    func with(
+        instruction: String? = nil,
+        stepID: String? = nil,
+        title: String? = nil
+    ) -> GuideSuggestionStep {
+        return GuideSuggestionStep(
+            instruction: instruction ?? self.instruction,
+            stepID: stepID ?? self.stepID,
+            title: title ?? self.title
+        )
+    }
+
+    func jsonData() throws -> Data {
+        return try newJSONEncoder().encode(self)
+    }
+
+    func jsonString(encoding: String.Encoding = .utf8) throws -> String? {
+        return String(data: try self.jsonData(), encoding: encoding)
+    }
 }
 
 // MARK: - Helper functions for creating encoders and decoders

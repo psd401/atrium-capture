@@ -41,7 +41,9 @@ The Mac client omits `sourceOrigins`; Accessibility application/window details n
 
 Create two public clients at Atrium's administrator OAuth client screen. Select no client secret, require S256 PKCE, and allow:
 
-`openid profile offline_access content:read content:create content:update content:publish_internal`
+`openid profile offline_access content:read content:create content:update content:publish_internal assistants:execute`
+
+`assistants:execute` is used only by the AI guide writer.
 
 | Client profile      | Exact redirect                                                    | Production configuration                      |
 | ------------------- | ----------------------------------------------------------------- | --------------------------------------------- |
@@ -131,6 +133,21 @@ The browser keeps the token set in trusted-only `chrome.storage.local`, which
 survives browser and MV3 service-worker restarts on managed devices and is
 cleared on sign-out/revocation. The native app stores tokens in Keychain. Both
 rotate public-client refresh tokens and revoke/clear them on sign-out.
+
+## AI guide writer
+
+The clients run one approved assistant, "Capture Guide Writer", through
+`POST /api/v1/assistants/{id}/execute` with `Accept: application/json` and poll
+`GET /api/v1/jobs/{jobId}` until `completed`, `failed`, or `cancelled`. The
+request body is `{"inputs":{"steps":"<json string>"}}` and stays under 128 KiB.
+Polling honors the server `pollingInterval` (milliseconds, clamped to 1 to 10 s)
+inside a 120 s budget. The token needs `assistants:execute`.
+
+The assistant receives step metadata only: action, element role and accessible
+name, page title, policy-filtered origin, Mac app and window title, and the
+current instruction text. Screenshots, typed values, selectors, bounds, paths,
+and asset ids never leave the device for this feature. The assistant definition
+is committed at `docs/atrium/capture-guide-writer.assistant.json`.
 
 ## Recovery behavior
 

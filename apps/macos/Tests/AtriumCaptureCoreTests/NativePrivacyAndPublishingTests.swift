@@ -505,6 +505,52 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
         XCTAssertEqual(gateway.remoteCounts.assets, 1)
     }
 
+    func testPublishedMarkdownUsesSuggestedStepTitleAsHeading() async throws {
+        let repository = MemoryNativePublishRepository(assets: [
+            "assets/publishable.png": Data([1, 2, 3]),
+        ])
+        let gateway = MockNativeAtriumGateway()
+        let publisher = DurableNativePublisher(repository: repository, gateway: gateway)
+        let base = makeSession(
+            state: .publishable,
+            review: .approved,
+            assetState: .publishableLocal,
+            stepReview: .approved
+        )
+        let session = base.with(steps: [
+            base.steps[0].with(instruction: base.steps[0].instruction.with(title: "Open the form")),
+        ])
+        let job = try await publisher.enqueue(session: session)
+        _ = try await publisher.resume(jobID: job.jobID)
+
+        let markdown = try XCTUnwrap(gateway.capturedMarkdown)
+        XCTAssertTrue(markdown.contains("1. **Open the form** "))
+    }
+
+    func testPublishedMarkdownEscapesAsterisksAndBackslashesInStepTitleExactlyOnce() async throws {
+        let repository = MemoryNativePublishRepository(assets: [
+            "assets/publishable.png": Data([1, 2, 3]),
+        ])
+        let gateway = MockNativeAtriumGateway()
+        let publisher = DurableNativePublisher(repository: repository, gateway: gateway)
+        let base = makeSession(
+            state: .publishable,
+            review: .approved,
+            assetState: .publishableLocal,
+            stepReview: .approved
+        )
+        let session = base.with(steps: [
+            base.steps[0].with(
+                instruction: base.steps[0].instruction.with(title: "Open the *Settings* pane\\")
+            ),
+        ])
+        let job = try await publisher.enqueue(session: session)
+        _ = try await publisher.resume(jobID: job.jobID)
+
+        let markdown = try XCTUnwrap(gateway.capturedMarkdown)
+        XCTAssertTrue(markdown.contains("1. **Open the \\*Settings\\* pane\\\\** "))
+    }
+
     func testResumePendingRestoresTerminalDraftWithoutRepeatingRemoteWrites() async throws {
         let repository = MemoryNativePublishRepository(assets: [
             "assets/publishable.png": Data([1, 2, 3]),
@@ -581,6 +627,43 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
         XCTAssertEqual(gateway.remoteCounts.assets, 1)
     }
 
+    func testSuggestInstructionKeepsUserEditsAndMarksDistrictAI() throws {
+        var session = makeSession(
+            state: .review,
+            review: .inReview,
+            assetState: .publishableLocal,
+            stepReview: .notReviewed
+        )
+        let stepID = session.steps[0].stepID
+        session = try NativeReviewEditor.setInstruction(in: session, stepID: stepID, text: "My own words.")
+        session = try NativeReviewEditor.suggestInstruction(
+            in: session,
+            stepID: stepID,
+            text: "Select the synthetic button.",
+            title: "Open the form"
+        )
+
+        let step = session.steps[0]
+        XCTAssertEqual(step.instruction.editedText, "My own words.")
+        XCTAssertEqual(step.instruction.userEdited, true)
+        XCTAssertEqual(step.instruction.generatedText, "Select the synthetic button.")
+        XCTAssertEqual(step.instruction.title, "Open the form")
+        XCTAssertEqual(step.instruction.source, .districtAI)
+    }
+
+    func testSuggestInstructionRejectsBadInput() throws {
+        let session = makeSession(
+            state: .review,
+            review: .inReview,
+            assetState: .publishableLocal,
+            stepReview: .notReviewed
+        )
+        let stepID = session.steps[0].stepID
+        XCTAssertThrowsError(try NativeReviewEditor.suggestInstruction(in: session, stepID: stepID, text: "  ", title: "T"))
+        XCTAssertThrowsError(try NativeReviewEditor.suggestInstruction(in: session, stepID: stepID, text: "ok", title: String(repeating: "x", count: 121)))
+        XCTAssertThrowsError(try NativeReviewEditor.suggestInstruction(in: session, stepID: "missing", text: "ok", title: "T"))
+    }
+
     private func makeSession(
         state: AtriumCaptureSessionState,
         review: ReviewStatus,
@@ -645,6 +728,7 @@ final class NativePrivacyAndPublishingTests: XCTestCase {
                     editedText: nil,
                     generatedText: "Select the synthetic control.",
                     source: .rules,
+                    title: nil,
                     userEdited: false
                 ),
                 occurredAt: now,

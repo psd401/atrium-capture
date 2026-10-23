@@ -191,6 +191,7 @@ Use synthetic names and empty test documents only:
 10. Add an opaque redaction to every flagged input screenshot, prepare publishable images, and verify the session becomes `publishable` with only deleted or `publishable_local` assets.
 11. With `ATRIUM_CAPTURE_LOCAL_MOCK=1`, create a private draft, terminate after any injected phase in tests, retry, and confirm one object/asset/version. Rename before and after draft readiness; confirm one object has the latest title, title editing remains available, and step/image controls are frozen for that version. Do not use real district content.
 12. For authenticated acceptance, use the bundled public native client, sign in to AI Studio, create one synthetic private draft, and exercise the separate internal-publication button. Use the `AtriumOAuthClientId` MDM preference only to target a separately approved test client.
+13. With `ATRIUM_CAPTURE_LOCAL_MOCK=1`, record two synthetic steps, approve both, then select **Write with AI**. Confirm the title becomes "Synthetic written guide" and each step gains a title.
 
 The committed `capture-session-macos-v1.json` fixture provides the automated language-neutral equivalent and decodes in TypeScript and Swift.
 
@@ -297,6 +298,8 @@ native client UUID. Employees do not configure it. MDM may supply:
 
 - `AtriumOAuthClientId`: optional approved test-client override.
 - `AtriumDefaultCollectionId`: optional documented collection UUID.
+- `AtriumGuideWriterAssistantId`: optional positive integer ID of the district's "Capture Guide Writer" assistant. Unset hides **Write with AI**.
+- `AtriumAIGuideWriting`: `on` (default) or `off`. Off hides the button and never calls the assistant.
 
 For local synthetic testing, the equivalent public-only environment variables are `ATRIUM_CAPTURE_OAUTH_CLIENT_ID` and `ATRIUM_CAPTURE_DEFAULT_COLLECTION_ID`. Tokens remain in Keychain, are refreshed through the public-client rotation flow, and never enter native messaging or local diagnostics.
 

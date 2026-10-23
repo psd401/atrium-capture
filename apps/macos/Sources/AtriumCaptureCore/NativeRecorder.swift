@@ -249,6 +249,7 @@ public final class NativeRecorder: @unchecked Sendable {
                 editedText: nil,
                 generatedText: Self.instruction(for: event.action, name: cleanName),
                 source: .rules,
+                title: nil,
                 userEdited: false
             ),
             occurredAt: event.occurredAt,

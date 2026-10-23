@@ -69,4 +69,21 @@ final class ContractFixtureTests: XCTestCase {
         XCTAssertNil(text.range(of: "bearer", options: .caseInsensitive))
         XCTAssertNil(text.range(of: "access_token", options: .caseInsensitive))
     }
+
+    func testDecodesSharedGuideSuggestionFixture() throws {
+        let suggestion = try AtriumContractCodec.makeDecoder().decode(
+            AtriumCaptureGuideSuggestion.self,
+            from: fixtureData(named: "guide-suggestion-v1.json")
+        )
+        let session = try AtriumContractCodec.makeDecoder().decode(
+            AtriumCaptureSession.self,
+            from: fixtureData(named: "capture-session-v1.json")
+        )
+
+        XCTAssertEqual(suggestion.schemaVersion, 1)
+        XCTAssertEqual(suggestion.sessionID, session.sessionID)
+        XCTAssertEqual(suggestion.steps.count, session.steps.count)
+        XCTAssertEqual(session.steps[0].instruction.title, "Begin the request")
+        XCTAssertNil(session.steps[1].instruction.title)
+    }
 }

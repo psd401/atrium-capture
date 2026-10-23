@@ -154,6 +154,7 @@ export interface Instruction {
   editedText?: string;
   generatedText: string;
   source: Source;
+  title?: string;
   userEdited: boolean;
 }
 
@@ -273,4 +274,22 @@ export enum Phase {
   Queued = 'queued',
   ReadyAsDraft = 'ready_as_draft',
   UploadingAssets = 'uploading_assets',
+}
+
+/**
+ * Assistant-written title, summary, and per-step text for a reviewed capture session. Text
+ * only; never images, selectors, or typed values.
+ */
+export interface AtriumCaptureGuideSuggestion {
+  schemaVersion: number;
+  sessionId: string;
+  steps: [GuideSuggestionStep, ...GuideSuggestionStep[]];
+  summary: string;
+  title: string;
+}
+
+export interface GuideSuggestionStep {
+  instruction: string;
+  stepId: string;
+  title: string;
 }

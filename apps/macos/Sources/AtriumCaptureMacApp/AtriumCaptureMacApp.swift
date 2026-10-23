@@ -54,6 +54,7 @@ final class CaptureAppModel: ObservableObject {
     @Published private(set) var captureDiagnostics = MacCaptureDiagnostics()
     @Published var recordingScopeChooserPresented = false
     @Published var manualInstruction = ""
+    @Published private(set) var guideWriterInProgress = false
 
     private let recorder: NativeRecorder
     private let repository: FileNativePublishRepository
@@ -75,6 +76,7 @@ final class CaptureAppModel: ObservableObject {
     private let shortcuts = GlobalCaptureShortcuts()
     private var permissionTimer: Timer?
     private var screenshotImageCache: [String: ScreenshotPreviewCacheEntry] = [:]
+    private var guideWriterForbidden = false
 
     var currentSessionHasPublishJob: Bool {
         guard let session else { return false }
@@ -593,6 +595,57 @@ final class CaptureAppModel: ObservableObject {
 
     var atriumConfigured: Bool {
         localMockEnabled || productionSettings != nil
+    }
+
+    var guideWriterAvailable: Bool {
+        guard !guideWriterForbidden else { return false }
+        guard localMockEnabled || productionSettings?.aiGuideWritingEnabled == true else { return false }
+        guard localMockEnabled || productionSettings?.guideWriterAssistantID != nil else { return false }
+        return publisher.capabilities.guideWriter && (localMockEnabled || atriumAuthentication == .signedIn)
+    }
+
+    var canWriteGuideWithAI: Bool {
+        guard guideWriterAvailable, !guideWriterInProgress, canEditGuideContent, let session else { return false }
+        return (try? NativeReviewEditor.validatePrivacyAnnotations(in: session)) != nil
+            && session.steps.allSatisfy { $0.privacyReview == .approved }
+    }
+
+    func writeGuideWithAI() {
+        guard canWriteGuideWithAI, let current = recorder.snapshot() else { return }
+        let assistantID = localMockEnabled ? 1 : (productionSettings?.guideWriterAssistantID ?? 0)
+        guideWriterInProgress = true
+        statusCode = "WRITING_GUIDE_WITH_AI"
+        Task { @MainActor in
+            defer { guideWriterInProgress = false }
+            do {
+                let steps = try NativeGuideWriter.buildRequest(for: current)
+                let result = try await publisher.gateway.executeGuideWriter(assistantID: assistantID, steps: steps)
+                let latestSnapshot = recorder.snapshot()
+                guard NativeGuideWriter.canApplyResult(
+                    forSessionID: current.sessionID,
+                    latestSessionID: latestSnapshot?.sessionID,
+                    guideContentFrozen: currentGuideContentFrozen
+                ), let latest = latestSnapshot else {
+                    statusCode = "GUIDE_WRITER_FAILED"
+                    return
+                }
+                let suggestion = try NativeGuideWriter.validate(text: result.text, session: latest)
+                let updated = try NativeGuideWriter.apply(suggestion, to: latest)
+                try recorder.replaceReviewedSession(updated)
+                try repository.saveSession(updated)
+                session = updated
+                refreshGuides()
+                statusCode = "GUIDE_WRITTEN_WITH_AI"
+            } catch NativeGuideWriterError.requestTooLarge {
+                statusCode = "GUIDE_WRITER_REQUEST_TOO_LARGE"
+            } catch let failure as NativeGatewayFailure where failure.code == "ATRIUM_HTTP_403" || failure.code == "INSUFFICIENT_SCOPE" {
+                // Stays set for the rest of this app session; only a relaunch re-checks policy.
+                guideWriterForbidden = true
+                statusCode = "GUIDE_WRITER_POLICY_OFF"
+            } catch {
+                statusCode = "GUIDE_WRITER_FAILED"
+            }
+        }
     }
 
     func openAtriumDraft() {

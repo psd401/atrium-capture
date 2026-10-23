@@ -27,6 +27,7 @@
         "@atrium-capture/capture-core": "workspace:*",
         "@atrium-capture/contracts": "workspace:*",
         "@atrium-capture/editor-model": "workspace:*",
+        "@atrium-capture/guide-writer": "workspace:*",
         "@atrium-capture/privacy": "workspace:*",
         "idb": "8.0.3",
         "react": "19.2.8",
@@ -71,6 +72,15 @@
       "name": "fx-runner",
       "version": "1.4.0-atrium-disabled",
     },
+    "packages/guide-writer": {
+      "name": "@atrium-capture/guide-writer",
+      "version": "0.1.0",
+      "dependencies": {
+        "@atrium-capture/atrium-client": "workspace:*",
+        "@atrium-capture/contracts": "workspace:*",
+        "@atrium-capture/editor-model": "workspace:*",
+      },
+    },
     "packages/privacy": {
       "name": "@atrium-capture/privacy",
       "version": "0.0.0",
@@ -106,6 +116,8 @@
     "@atrium-capture/contracts": ["@atrium-capture/contracts@workspace:packages/contracts"],
 
     "@atrium-capture/editor-model": ["@atrium-capture/editor-model@workspace:packages/editor-model"],
+
+    "@atrium-capture/guide-writer": ["@atrium-capture/guide-writer@workspace:packages/guide-writer"],
 
     "@atrium-capture/privacy": ["@atrium-capture/privacy@workspace:packages/privacy"],
 

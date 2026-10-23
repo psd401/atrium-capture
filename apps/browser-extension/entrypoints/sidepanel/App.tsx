@@ -56,6 +56,8 @@ export function App() {
   const [titleDraft, setTitleDraft] = useState('');
   const [instructionDraft, setInstructionDraft] = useState('');
   const [manualDraft, setManualDraft] = useState('');
+  const [guideWriterError, setGuideWriterError] = useState<string>();
+  const [writingGuide, setWritingGuide] = useState(false);
   const [textDraft, setTextDraft] = useState('Note');
   const [drawingStart, setDrawingStart] = useState<{ x: number; y: number }>();
   const imageRef = useRef<HTMLImageElement>(null);
@@ -153,6 +155,10 @@ export function App() {
     ? session?.assets.find((asset) => asset.assetId === selectedStep.screenshotAssetId)
     : undefined;
   const issues = useMemo(() => (session ? reviewIssues(session) : []), [session]);
+  const guideWriterVisible =
+    diagnostics?.managedPolicy.aiGuideWriting !== 'off' &&
+    diagnostics?.managedPolicy.guideWriterConfigured === true &&
+    publication?.capabilities.guideWriter === true;
   const flags = useMemo(() => (session ? sensitiveRegionFlags(session) : []), [session]);
   const selectedFlag = flags.find((flag) => flag.stepId === selectedStepId);
   const selectedSensitiveIssue = issues.some(
@@ -270,6 +276,26 @@ export function App() {
       setError('Publishable images could not be prepared. No source image was uploaded.');
     } finally {
       setPending(false);
+    }
+  };
+
+  const writeGuide = async () => {
+    setWritingGuide(true);
+    setGuideWriterError(undefined);
+    try {
+      const outcome = (await browser.runtime.sendMessage({
+        kind: 'editor.write-guide',
+        payload: { commandId: crypto.randomUUID() },
+      })) as { ok: true; session: AtriumCaptureSession } | { errorCode: string; ok: false };
+      if (!outcome?.ok) {
+        setGuideWriterError(guideWriterFailureMessage(outcome?.errorCode));
+        return;
+      }
+      setSession(outcome.session);
+    } catch {
+      setGuideWriterError(guideWriterFailureMessage('guide_writer_failed'));
+    } finally {
+      setWritingGuide(false);
     }
   };
 
@@ -651,7 +677,10 @@ export function App() {
                 >
                   <span className="sequence">{step.sequence + 1}</span>
                   <span>
-                    <strong>{step.instruction.editedText ?? step.instruction.generatedText}</strong>
+                    <strong>
+                      {step.instruction.title && <strong>{step.instruction.title}. </strong>}
+                      {step.instruction.editedText ?? step.instruction.generatedText}
+                    </strong>
                     <small>
                       {step.action} · {privacyLabel(step, issues)}
                     </small>
@@ -905,9 +934,35 @@ export function App() {
             </button>
           </div>
 
+          {guideWriterVisible && (
+            <div className="guide-writer-row">
+              <button
+                aria-busy={writingGuide}
+                disabled={pending || writingGuide || issues.length > 0}
+                onClick={() => void writeGuide()}
+                type="button"
+              >
+                {writingGuide ? 'Writing step titles and instructions' : 'Write with AI'}
+              </button>
+              <small>
+                {issues.length > 0
+                  ? 'Approve every step first. The AI writer sees step metadata, never screenshots.'
+                  : 'Fills the title and each step from step metadata. You can edit everything after.'}
+              </small>
+              {guideWriterError && (
+                <p className="error" role="alert">
+                  {guideWriterError}{' '}
+                  <button onClick={() => void writeGuide()} type="button">
+                    Retry
+                  </button>
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="finalize-row">
             <button
-              disabled={pending || issues.length > 0}
+              disabled={pending || writingGuide || issues.length > 0}
               onClick={() => void finalize()}
               type="button"
             >
@@ -1328,4 +1383,19 @@ function renderAnnotationPreview(annotation: AnnotationElement) {
       y={geometry.y}
     />
   );
+}
+
+function guideWriterFailureMessage(code: string | undefined): string {
+  switch (code) {
+    case 'guide_request_too_large':
+      return 'This guide has too many steps for the AI writer. Split it into smaller guides.';
+    case 'policy_off':
+      return 'AI guide writing is turned off by district policy.';
+    case 'privacy_review_incomplete':
+      return 'Approve every step before writing with AI.';
+    case 'write_in_progress':
+      return 'Already writing with AI. Wait for it to finish.';
+    default:
+      return 'The AI writer could not finish. Your current text is unchanged. Try again.';
+  }
 }

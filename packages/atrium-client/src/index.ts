@@ -14,6 +14,7 @@ import {
 export interface AtriumCapabilities {
   collectionDiscovery: boolean;
   contentUpdates: boolean;
+  guideWriter: boolean;
   idempotentWrites: boolean;
   immutableAssets: boolean;
   internalPublication: boolean;
@@ -78,6 +79,7 @@ export interface AtriumGateway {
     request: CreateMarkdownVersionRequest,
   ): Promise<{ readerUrl: string; versionId: string }>;
   createPrivateObject(request: CreatePrivateObjectRequest): Promise<{ contentObjectId: string }>;
+  executeGuideWriter(request: ExecuteGuideWriterRequest): Promise<ExecuteGuideWriterResult>;
   formatAssetMarkdown(remoteAssetId: string, altText: string): string;
   listCollections(): Promise<AtriumCollection[]>;
   publishInternal(request: {
@@ -107,6 +109,17 @@ export interface CreatePublishJobOptions {
   now?: Date;
 }
 
+export interface ExecuteGuideWriterRequest {
+  assistantId: number;
+  signal?: AbortSignal;
+  steps: string;
+}
+
+export interface ExecuteGuideWriterResult {
+  jobId: string;
+  text: string;
+}
+
 export class GatewayError extends Error {
   constructor(
     public readonly code: string,
@@ -124,6 +137,7 @@ export class UnavailableAtriumGateway implements AtriumGateway {
     return {
       collectionDiscovery: false,
       contentUpdates: false,
+      guideWriter: false,
       idempotentWrites: false,
       immutableAssets: false,
       internalPublication: false,
@@ -141,6 +155,10 @@ export class UnavailableAtriumGateway implements AtriumGateway {
 
   async createPrivateObject(): Promise<never> {
     return unavailable();
+  }
+
+  async executeGuideWriter(): Promise<ExecuteGuideWriterResult> {
+    throw new GatewayError('atrium_guide_writer_unavailable', false);
   }
 
   formatAssetMarkdown(): never {
@@ -562,7 +580,9 @@ export function generateMarkdown(
   const lines = ['## Steps', ''];
   for (const step of session.steps) {
     lines.push(
-      `## Step ${step.sequence + 1}`,
+      step.instruction.title
+        ? `## Step ${step.sequence + 1}: ${escapeMarkdown(step.instruction.title)}`
+        : `## Step ${step.sequence + 1}`,
       '',
       escapeMarkdown(step.instruction.editedText ?? step.instruction.generatedText),
       '',

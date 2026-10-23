@@ -144,6 +144,46 @@ final class ProductionNativeGatewayTests: XCTestCase {
         )
     }
 
+    func testProductionSettingsParseGuideWriterAssistantIDAndAIGuideWritingFlag() throws {
+        let settings = try XCTUnwrap(
+            NativeAtriumProductionSettings.load(
+                environment: [
+                    "ATRIUM_CAPTURE_GUIDE_WRITER_ASSISTANT_ID": "7",
+                    "ATRIUM_CAPTURE_AI_GUIDE_WRITING": "off",
+                ],
+                defaults: try XCTUnwrap(UserDefaults(suiteName: "ProductionNativeGatewayGuideWriterTests")),
+                bundle: Bundle(for: Self.self)
+            )
+        )
+
+        XCTAssertEqual(settings.guideWriterAssistantID, 7)
+        XCTAssertFalse(settings.aiGuideWritingEnabled)
+    }
+
+    func testProductionSettingsTreatInvalidAIGuideWritingValueAsOff() throws {
+        let settings = try XCTUnwrap(
+            NativeAtriumProductionSettings.load(
+                environment: ["ATRIUM_CAPTURE_AI_GUIDE_WRITING": "maybe"],
+                defaults: UserDefaults(suiteName: "ProductionNativeGatewayInvalidAIGuideWritingTests")!,
+                bundle: Bundle(for: Self.self)
+            )
+        )
+
+        XCTAssertFalse(settings.aiGuideWritingEnabled)
+    }
+
+    func testProductionSettingsTreatMalformedAssistantIDAsUnconfigured() throws {
+        let settings = try XCTUnwrap(
+            NativeAtriumProductionSettings.load(
+                environment: ["ATRIUM_CAPTURE_GUIDE_WRITER_ASSISTANT_ID": "not-a-number"],
+                defaults: UserDefaults(suiteName: "ProductionNativeGatewayMalformedAssistantIDTests")!,
+                bundle: Bundle(for: Self.self)
+            )
+        )
+
+        XCTAssertNil(settings.guideWriterAssistantID)
+    }
+
     func testProductionSettingsUseBundledPublicClientWithoutUserConfiguration() throws {
         let suite = try XCTUnwrap(UserDefaults(suiteName: "ProductionNativeGatewayBundledTests"))
         suite.removePersistentDomain(forName: "ProductionNativeGatewayBundledTests")
@@ -235,6 +275,100 @@ final class ProductionNativeGatewayTests: XCTestCase {
         let requests = await transport.requests
         XCTAssertTrue(requests.isEmpty)
     }
+
+    func testScopesIncludeAssistantExecute() {
+        XCTAssertTrue(atriumOAuthScopes.contains("assistants:execute"))
+    }
+
+    func testGuideWriterExecutesThenPollsToCompletion() async throws {
+        let transport = SyntheticAtriumTransport()
+        let gateway = try ProductionNativeAtriumGateway(
+            transport: transport,
+            sleep: { _ in },
+            accessToken: { "synthetic-token" }
+        )
+        let result = try await gateway.executeGuideWriter(assistantID: 42, steps: "{\"schemaVersion\":1}")
+        XCTAssertEqual(result, NativeGuideWriterResult(jobID: "job-1", text: "{\"schemaVersion\":1}"))
+        let requests = await transport.requests
+        XCTAssertEqual(requests.first?.url?.path, "/api/v1/assistants/42/execute")
+        XCTAssertEqual(requests.first?.value(forHTTPHeaderField: "Accept"), "application/json")
+        let body = try XCTUnwrap(requests.first?.httpBody)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: Any])
+        XCTAssertEqual((json["inputs"] as? [String: Any])?["steps"] as? String, "{\"schemaVersion\":1}")
+        XCTAssertEqual(requests.filter { $0.url?.path == "/api/v1/jobs/job-1" }.count, 2)
+        XCTAssertEqual(requests.first?.timeoutInterval, 30)
+    }
+
+    func testGuideWriterMapsCancelledJobLikeFailed() async throws {
+        let cancelled = SyntheticAtriumTransport(jobStatus: "cancelled")
+        let gateway = try ProductionNativeAtriumGateway(transport: cancelled, sleep: { _ in }, accessToken: { "t" })
+        await XCTAssertThrowsErrorAsync(try await gateway.executeGuideWriter(assistantID: 42, steps: "{}")) { error in
+            XCTAssertEqual((error as? NativeGatewayFailure)?.code, "ATRIUM_JOB_CANCELLED")
+            XCTAssertEqual((error as? NativeGatewayFailure)?.retryable, true)
+        }
+    }
+
+    func testGuideWriterMapsForbiddenExecuteToTheCodeTheAppLatchesOn() async throws {
+        let gateway = try ProductionNativeAtriumGateway(
+            transport: SyntheticNonJSONFailureTransport(),
+            sleep: { _ in },
+            accessToken: { "t" }
+        )
+        await XCTAssertThrowsErrorAsync(try await gateway.executeGuideWriter(assistantID: 42, steps: "{}")) { error in
+            XCTAssertEqual((error as? NativeGatewayFailure)?.code, "ATRIUM_HTTP_403")
+            XCTAssertFalse((error as? NativeGatewayFailure)?.retryable ?? true)
+        }
+    }
+
+    func testGuideWriterRequestHasA30SecondDeadline() async throws {
+        let transport = SyntheticAtriumTransport()
+        let gateway = try ProductionNativeAtriumGateway(transport: transport, sleep: { _ in }, accessToken: { "t" })
+        _ = try await gateway.executeGuideWriter(assistantID: 42, steps: "{}")
+        let requests = await transport.requests
+        XCTAssertTrue(requests.allSatisfy { $0.timeoutInterval == 30 })
+    }
+
+    func testGuideWriterMapsFailedJobAndBudget() async throws {
+        let failing = SyntheticAtriumTransport(jobStatus: "failed")
+        let gateway = try ProductionNativeAtriumGateway(transport: failing, sleep: { _ in }, accessToken: { "t" })
+        await XCTAssertThrowsErrorAsync(try await gateway.executeGuideWriter(assistantID: 42, steps: "{}")) { error in
+            XCTAssertEqual((error as? NativeGatewayFailure)?.code, "ATRIUM_JOB_FAILED")
+            XCTAssertEqual((error as? NativeGatewayFailure)?.retryable, true)
+        }
+
+        nonisolated(unsafe) var now: TimeInterval = 0
+        let slow = SyntheticAtriumTransport(jobStatus: "processing")
+        let budgeted = try ProductionNativeAtriumGateway(
+            transport: slow,
+            clock: { now },
+            sleep: { seconds in now += seconds },
+            accessToken: { "t" }
+        )
+        await XCTAssertThrowsErrorAsync(try await budgeted.executeGuideWriter(assistantID: 42, steps: "{}")) { error in
+            XCTAssertEqual((error as? NativeGatewayFailure)?.code, "ATRIUM_JOB_TIMEOUT")
+        }
+        // The budget check runs before each sleep, so it stops within one poll
+        // interval of the budget rather than crossing it.
+        XCTAssertLessThan(now, 120)
+        XCTAssertGreaterThanOrEqual(now + 10, 120)
+        // No poll request is issued once the budget check rejects before a sleep.
+        let pollRequests = await slow.requests.filter { $0.url?.path == "/api/v1/jobs/job-1" }.count
+        XCTAssertEqual(pollRequests, 12)
+    }
+}
+
+func XCTAssertThrowsErrorAsync<T>(
+    _ expression: @autoclosure () async throws -> T,
+    _ errorHandler: (_ error: Error) -> Void = { _ in },
+    file: StaticString = #filePath,
+    line: UInt = #line
+) async {
+    do {
+        _ = try await expression()
+        XCTFail("Expected an error to be thrown.", file: file, line: line)
+    } catch {
+        errorHandler(error)
+    }
 }
 
 private actor SyntheticFailureTransport: NativeHTTPTransport {
@@ -278,6 +412,12 @@ private actor SyntheticNonJSONFailureTransport: NativeHTTPTransport {
 
 private actor SyntheticAtriumTransport: NativeHTTPTransport {
     private(set) var requests: [URLRequest] = []
+    private let jobStatus: String
+    private var polls = 0
+
+    init(jobStatus: String = "completed") {
+        self.jobStatus = jobStatus
+    }
 
     func data(for request: URLRequest) async throws -> (Data, URLResponse) {
         requests.append(request)
@@ -336,6 +476,19 @@ private actor SyntheticAtriumTransport: NativeHTTPTransport {
                     "publishedVersionId": versionID,
                 ],
             ])
+        case ("POST", "/api/v1/assistants/42/execute"):
+            return response(url: url, status: 202, body: [
+                "data": ["jobId": "job-1", "status": "pending", "pollUrl": "/api/v1/jobs/job-1"],
+            ])
+        case ("GET", "/api/v1/jobs/job-1"):
+            polls += 1
+            if jobStatus == "completed" && polls < 2 {
+                return response(url: url, status: 200, body: ["data": ["status": "processing", "pollingInterval": 1]])
+            }
+            var data: [String: Any] = ["status": jobStatus, "pollingInterval": 10_000]
+            if jobStatus == "completed" { data["responseData"] = ["text": "{\"schemaVersion\":1}"] }
+            if jobStatus == "failed" { data["errorMessage"] = "synthetic" }
+            return response(url: url, status: 200, body: ["data": data])
         default:
             return response(url: url, status: 404, body: [
                 "error": ["code": "NOT_FOUND", "message": "Synthetic route missing."],

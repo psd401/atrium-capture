@@ -17,6 +17,7 @@ import {
 import { CaptureRepository } from '../src/database.js';
 import { DiagnosticsService } from '../src/diagnostics-service.js';
 import { EditorService } from '../src/editor-service.js';
+import { GuideWriterService } from '../src/guide-writer-service.js';
 import { ManagedPolicyProvider } from '../src/managed-policy.js';
 import { parseIncomingMessage } from '../src/messages.js';
 import {
@@ -89,6 +90,9 @@ export default defineBackground(() => {
     () => managedPolicy.load(),
   );
   const editor = new EditorService(repository, broadcastChanged);
+  const guideWriter = new GuideWriterService(repository, editor, atriumGateway, () =>
+    managedPolicy.load(),
+  );
   const publication = new BrowserPublicationService(
     repository,
     atriumGateway,
@@ -193,6 +197,16 @@ export default defineBackground(() => {
               : 'delete_after_submit';
           return editor.finalize(message.payload.commandId, retention);
         }
+      case 'editor.write-guide': {
+        if (!isExtensionSender(sender)) {
+          throw new Error('content_cannot_write_guide');
+        }
+        const outcome = await guideWriter.write(message.payload.commandId);
+        if (outcome.ok) {
+          await publication.syncTitleForSession(outcome.session.sessionId);
+        }
+        return outcome;
+      }
       case 'editor.asset':
         if (!isExtensionSender(sender)) {
           throw new Error('content_cannot_read_asset');

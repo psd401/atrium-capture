@@ -144,6 +144,23 @@ describe('runtime message boundary', () => {
     ).toBeUndefined();
   });
 
+  it('accepts a suggest_instruction editor command', () => {
+    expect(
+      parseIncomingMessage({
+        kind: 'editor.command',
+        payload: {
+          command: {
+            kind: 'suggest_instruction',
+            stepId: crypto.randomUUID(),
+            text: 'Select the synthetic button.',
+            title: 'Open the form',
+          },
+          commandId: crypto.randomUUID(),
+        },
+      }),
+    ).toBeTruthy();
+  });
+
   it('accepts publication control metadata but rejects tokens and screenshot bytes', () => {
     expect(parseIncomingMessage({ kind: 'publisher.sign-in' })).toBeTruthy();
     expect(parseIncomingMessage({ kind: 'publisher.sign-out' })).toBeTruthy();
@@ -202,6 +219,15 @@ describe('runtime message boundary', () => {
         payload: { confirmation: 'yes' },
       }),
     ).toBeUndefined();
+  });
+
+  it('accepts an editor.write-guide message', () => {
+    expect(
+      parseIncomingMessage({
+        kind: 'editor.write-guide',
+        payload: { commandId: '40000000-0000-4000-8000-000000000002' },
+      }),
+    ).toBeDefined();
   });
 
   it('allows only bounded native bridge controls', () => {

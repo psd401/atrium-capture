@@ -26,10 +26,12 @@ export interface SupportDiagnostics {
     events: Array<{ code: string; occurredAt: string; severity: string }>;
   };
   managedPolicy: {
+    aiGuideWriting: string;
     allowedOriginCount: number;
     configured: boolean;
     defaultCollectionConfigured: boolean;
     deniedOriginCount: number;
+    guideWriterConfigured: boolean;
     issues: string[];
     maxSessionSteps: number;
     maxStorageBytes: number;
@@ -114,10 +116,12 @@ export class DiagnosticsService {
         })),
       },
       managedPolicy: {
+        aiGuideWriting: managed.policy.aiGuideWriting,
         allowedOriginCount: managed.policy.allowedOrigins?.length ?? 0,
         configured: managed.configured,
         defaultCollectionConfigured: Boolean(managed.policy.defaultCollectionId),
         deniedOriginCount: managed.policy.deniedOrigins?.length ?? 0,
+        guideWriterConfigured: Boolean(managed.policy.atriumGuideWriterAssistantId),
         issues: managed.issues.map(sanitizePolicyIssue),
         maxSessionSteps: managed.policy.maxSessionSteps,
         maxStorageBytes: managed.policy.maxStorageBytes,

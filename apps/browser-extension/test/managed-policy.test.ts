@@ -70,6 +70,31 @@ describe('managed policy boundary', () => {
     );
   });
 
+  it('defaults AI guide writing on with no assistant configured', () => {
+    const snapshot = parseManagedPolicy({});
+    expect(snapshot.policy.aiGuideWriting).toBe('on');
+    expect(snapshot.policy.atriumGuideWriterAssistantId).toBeUndefined();
+  });
+
+  it('accepts the guide writer policy keys and rejects bad values', () => {
+    expect(
+      parseManagedPolicy({
+        aiGuideWriting: 'off',
+        atriumGuideWriterAssistantId: 42,
+        schemaVersion: 1,
+      }).policy,
+    ).toMatchObject({ aiGuideWriting: 'off', atriumGuideWriterAssistantId: 42 });
+    expect(parseManagedPolicy({ aiGuideWriting: 'maybe', schemaVersion: 1 }).issues).toContain(
+      'ai_guide_writing_invalid',
+    );
+    expect(
+      parseManagedPolicy({ atriumGuideWriterAssistantId: 0, schemaVersion: 1 }).issues,
+    ).toContain('atrium_guide_writer_assistant_id_invalid');
+    expect(
+      parseManagedPolicy({ atriumGuideWriterAssistantId: '42', schemaVersion: 1 }).issues,
+    ).toContain('atrium_guide_writer_assistant_id_invalid');
+  });
+
   it('fails closed when managed storage cannot be read', async () => {
     const provider = new ManagedPolicyProvider({
       async get() {

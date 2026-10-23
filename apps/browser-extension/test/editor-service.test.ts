@@ -91,6 +91,69 @@ describe('durable review and asset lifecycle', () => {
     ).rejects.toThrow('guide_content_frozen_after_publish');
   });
 
+  it('applies a command list atomically, writing nothing when a later command throws', async () => {
+    await repository.startSession('Synthetic batch original title', '0.1.0');
+    await repository.applyEvent({
+      action: Action.Click,
+      eventId: '40000000-0000-4000-8000-000000000019',
+      occurredAt: new Date(1),
+    });
+    await repository.transition('stop');
+    const before = await repository.getActiveSession();
+    if (!before) {
+      throw new Error('synthetic_session_missing');
+    }
+    const firstStepId = before.steps[0]!.stepId;
+    await repository.putPublishJob({
+      attemptCount: 0,
+      createdAt: new Date(1),
+      createIdempotencyKey: 'synthetic-batch-key',
+      jobId: '40000000-0000-4000-8000-000000000020',
+      phase: Phase.Queued,
+      schemaVersion: SchemaVersion.The10,
+      sessionId: before.sessionId,
+      updatedAt: new Date(1),
+    });
+
+    await expect(
+      repository.applyEditorCommands('40000000-0000-4000-8000-000000000021', before.revision, [
+        { kind: 'update_title', title: 'Synthetic batch new title' },
+        {
+          kind: 'suggest_instruction',
+          stepId: firstStepId,
+          text: 'Suggested instruction.',
+          title: 'Suggested title',
+        },
+      ]),
+    ).rejects.toThrow('guide_content_frozen_after_publish');
+
+    expect((await repository.getActiveSession())?.title).toBe('Synthetic batch original title');
+    expect(
+      (await repository.getPublishJob('40000000-0000-4000-8000-000000000020'))?.createTitle,
+    ).toBeUndefined();
+  });
+
+  it('refuses to apply a command list when the session revision has moved on', async () => {
+    await repository.startSession('Synthetic revision guard', '0.1.0');
+    await repository.transition('stop');
+    const before = await repository.getActiveSession();
+    if (!before) {
+      throw new Error('synthetic_session_missing');
+    }
+    await repository.applyEditorCommand('40000000-0000-4000-8000-000000000022', {
+      kind: 'update_title',
+      title: 'Synthetic concurrent edit',
+    });
+
+    await expect(
+      repository.applyEditorCommands('40000000-0000-4000-8000-000000000023', before.revision, [
+        { kind: 'update_title', title: 'Synthetic stale edit' },
+      ]),
+    ).rejects.toThrow('session_revision_changed');
+
+    expect((await repository.getActiveSession())?.title).toBe('Synthetic concurrent edit');
+  });
+
   it('atomically stores publishable derivatives and deletes raw bytes after privacy approval', async () => {
     await repository.startSession('Synthetic image lifecycle', '0.1.0');
     await repository.applyEvent(

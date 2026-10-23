@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { GatewayError } from '../src/index.js';
 import {
   ATRIUM_BROWSER_PRODUCTION_OAUTH_CLIENT_ID,
+  GUIDE_WRITER_BUDGET_MS,
   ProductionAtriumGateway,
 } from '../src/live-gateway.js';
 
@@ -562,6 +563,203 @@ describe('production Atrium v1 gateway', () => {
     });
 
     await expect(gateway.listCollections()).resolves.toEqual([]);
+  });
+
+  it('requests the execute scope', async () => {
+    const { ATRIUM_OAUTH_SCOPES } = await import('../src/live-gateway.js');
+    expect(ATRIUM_OAUTH_SCOPES).toContain('assistants:execute');
+  });
+
+  it('executes the guide writer assistant and polls the job to completion', async () => {
+    const calls: Array<{ body?: unknown; headers: Headers; method: string; url: string }> = [];
+    let polls = 0;
+    const gateway = new ProductionAtriumGateway({
+      accessToken: async () => 'synthetic-access-token',
+      configured: async () => true,
+      request: async (input, init) => {
+        const url = String(input);
+        const method = init?.method ?? 'GET';
+        const headers = new Headers(init?.headers);
+        const body =
+          typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : init?.body;
+        calls.push({ ...(body === undefined ? {} : { body }), headers, method, url });
+        if (url.endsWith('/api/v1/assistants/42/execute') && method === 'POST') {
+          return json(
+            { data: { jobId: 'job-1', pollUrl: '/api/v1/jobs/job-1', status: 'pending' } },
+            202,
+          );
+        }
+        if (url.endsWith('/api/v1/jobs/job-1') && method === 'GET') {
+          polls += 1;
+          if (polls < 2) {
+            return json({
+              data: { pollingInterval: 1, shouldContinuePolling: true, status: 'processing' },
+            });
+          }
+          return json({
+            data: {
+              partialContent: '',
+              pollingInterval: 1,
+              responseData: { text: '{"schemaVersion":1}' },
+              shouldContinuePolling: false,
+              status: 'completed',
+            },
+          });
+        }
+        return json({ error: { code: 'not_found' } }, 404);
+      },
+      sleep: async () => undefined,
+    });
+
+    const result = await gateway.executeGuideWriter({
+      assistantId: 42,
+      steps: '{"schemaVersion":1,"steps":[]}',
+    });
+
+    expect(result).toEqual({ jobId: 'job-1', text: '{"schemaVersion":1}' });
+    const execute = calls[0];
+    expect(execute?.headers.get('accept')).toBe('application/json');
+    expect(execute?.headers.get('authorization')).toBe('Bearer synthetic-access-token');
+    expect(execute?.body).toEqual({ inputs: { steps: '{"schemaVersion":1,"steps":[]}' } });
+    expect(polls).toBe(2);
+  });
+
+  it('maps failed and cancelled jobs to retryable gateway errors', async () => {
+    for (const status of ['failed', 'cancelled'] as const) {
+      const gateway = new ProductionAtriumGateway({
+        accessToken: async () => 'synthetic-access-token',
+        configured: async () => true,
+        request: async (input, init) => {
+          const url = String(input);
+          if (init?.method === 'POST') {
+            return json({ data: { jobId: 'job-2', status: 'pending' } }, 202);
+          }
+          if (url.endsWith('/api/v1/jobs/job-2')) {
+            return json({ data: { errorMessage: 'synthetic', status } });
+          }
+          return json({ error: { code: 'not_found' } }, 404);
+        },
+        sleep: async () => undefined,
+      });
+      await expect(
+        gateway.executeGuideWriter({ assistantId: 42, steps: '{}' }),
+      ).rejects.toMatchObject({ code: `atrium_job_${status}`, retryable: true });
+    }
+  });
+
+  it('surfaces a 403 on execute as a non-retryable error without polling', async () => {
+    let polled = false;
+    const gateway = new ProductionAtriumGateway({
+      accessToken: async () => 'synthetic-access-token',
+      configured: async () => true,
+      request: async (_input, init) => {
+        if (init?.method === 'POST') {
+          return json({ error: { code: 'insufficient_scope', message: 'nope' } }, 403);
+        }
+        polled = true;
+        return json({});
+      },
+      sleep: async () => undefined,
+    });
+    await expect(
+      gateway.executeGuideWriter({ assistantId: 42, steps: '{}' }),
+    ).rejects.toMatchObject({
+      code: 'insufficient_scope',
+      retryable: false,
+    });
+    expect(polled).toBe(false);
+  });
+
+  it('aborts polling when the overall budget is exhausted', async () => {
+    let now = 0;
+    let polls = 0;
+    const gateway = new ProductionAtriumGateway({
+      accessToken: async () => 'synthetic-access-token',
+      clock: () => now,
+      configured: async () => true,
+      request: async (_input, init) => {
+        if (init?.method === 'POST') {
+          return json({ data: { jobId: 'job-3', status: 'pending' } }, 202);
+        }
+        polls += 1;
+        return json({ data: { pollingInterval: 10_000, status: 'processing' } });
+      },
+      sleep: async (ms) => {
+        now += ms;
+      },
+    });
+    await expect(
+      gateway.executeGuideWriter({ assistantId: 42, steps: '{}' }),
+    ).rejects.toMatchObject({
+      code: 'atrium_job_timeout',
+      retryable: true,
+    });
+    // The budget check runs before each sleep, so it stops within one poll
+    // interval of the budget rather than crossing it.
+    expect(now).toBeLessThan(GUIDE_WRITER_BUDGET_MS);
+    expect(now + 10_000).toBeGreaterThanOrEqual(GUIDE_WRITER_BUDGET_MS);
+    // No poll request is issued once the budget check rejects before a sleep.
+    expect(polls).toBe(12);
+  });
+
+  it('clamps the server polling interval to the documented range', async () => {
+    const sleeps: number[] = [];
+    let polls = 0;
+    const gateway = new ProductionAtriumGateway({
+      accessToken: async () => 'synthetic-access-token',
+      configured: async () => true,
+      request: async (_input, init) => {
+        if (init?.method === 'POST') {
+          return json({ data: { jobId: 'job-4', status: 'pending' } }, 202);
+        }
+        polls += 1;
+        if (polls === 1) {
+          return json({ data: { pollingInterval: 50, status: 'processing' } });
+        }
+        if (polls === 2) {
+          return json({ data: { pollingInterval: 60_000, status: 'processing' } });
+        }
+        return json({ data: { responseData: { text: 'ok' }, status: 'completed' } });
+      },
+      sleep: async (ms) => {
+        sleeps.push(ms);
+      },
+    });
+    await gateway.executeGuideWriter({ assistantId: 42, steps: '{}' });
+    // Sleep happens before every poll, using the most recently known interval:
+    // the first sleep uses the default (no interval on the 202 body), the
+    // second reflects the first poll's clamped 50ms, and the third reflects
+    // the second poll's clamped 60s.
+    expect(sleeps).toEqual([1_000, 1_000, 10_000]);
+  });
+
+  it('aborts the poll loop when the caller signal fires during a sleep', async () => {
+    const controller = new AbortController();
+    let polls = 0;
+    const gateway = new ProductionAtriumGateway({
+      accessToken: async () => 'synthetic-access-token',
+      configured: async () => true,
+      request: async (_input, init) => {
+        if (init?.method === 'POST') {
+          return json({ data: { jobId: 'job-6', status: 'pending' } }, 202);
+        }
+        polls += 1;
+        return json({ data: { status: 'processing' } });
+      },
+      sleep: async (_milliseconds, signal) => {
+        controller.abort();
+        signal?.throwIfAborted();
+      },
+    });
+
+    await expect(
+      gateway.executeGuideWriter({
+        assistantId: 42,
+        signal: controller.signal,
+        steps: '{}',
+      }),
+    ).rejects.toMatchObject({ code: 'atrium_request_aborted', retryable: false });
+    expect(polls).toBe(0);
   });
 });
 

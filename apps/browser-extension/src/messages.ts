@@ -64,6 +64,11 @@ export interface EditorFinalizeMessage {
   };
 }
 
+export interface EditorWriteGuideMessage {
+  kind: 'editor.write-guide';
+  payload: { commandId: string };
+}
+
 export interface EditorAssetMessage {
   kind: 'editor.asset';
   payload: { assetId: string };
@@ -123,6 +128,7 @@ export type IncomingMessage =
   | ContentStateMessage
   | EditorCommandMessage
   | EditorFinalizeMessage
+  | EditorWriteGuideMessage
   | EditorAssetMessage
   | PublisherSnapshotMessage
   | PublisherSignInMessage
