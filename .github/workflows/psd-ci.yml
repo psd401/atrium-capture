@@ -1,13 +1,12 @@
 name: PSD CI
 on:
+  # pull_request only: a check doesn't re-run after the merge (psd-dev-standards standards/06 §4, Runner minutes).
   pull_request:
-  push:
-    branches: [main]
 permissions:
   contents: read
 jobs:
   psd-ci:
-    uses: PSD401/.github/.github/workflows/reusable-psd-ci.yml@1aa5f5351a78b15f5c71668037f5d35b9613ae41 # v1.0.0
+    uses: PSD401/.github/.github/workflows/reusable-psd-ci.yml@78358a20608aa2f4de77e23f183c3ec7e1bbe795 # v1.12.0
     with:
       # Same checks as ci.yml browser-and-contracts, minus Playwright
       # (test:extension), browser packaging and the network-dependent bun audit.
