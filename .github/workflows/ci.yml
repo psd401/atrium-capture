@@ -1,12 +1,27 @@
 name: CI
 
+# pull_request only: checks don't re-run after the merge (psd-dev-standards
+# standards/06 §4, Runner minutes).
+#
+# Skipped when every changed file is Markdown or the OpenWiki bot's metadata
+# file, so docs don't spend macOS minutes on swift-contracts. Any other file
+# runs it. None of these jobs is a required check; psd-ci / psd-ci (psd-ci.yml)
+# still runs on docs PRs, including format:check and openwiki:check, the only
+# checks here that read .md files. If a job here ever becomes a required check,
+# replace paths-ignore with a skip inside the job: a workflow skipped this way
+# reports no status, so a required check would wait forever.
 on:
   pull_request:
-  push:
-    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+      - openwiki/.last-update.json
 
 permissions:
   contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   browser-and-contracts:
@@ -34,6 +49,7 @@ jobs:
 
   swift-contracts:
     runs-on: macos-15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: swift test --package-path apps/macos

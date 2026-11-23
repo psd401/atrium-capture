@@ -1,8 +1,8 @@
 name: OpenWiki Update
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
+  # No push trigger: since PSD401/.github v1.2.1 the reusable skips push runs
+  # unless the caller passes run_on_push: true, so the Monday run rebuilds the wiki.
   schedule:
     - cron: '0 8 * * 1'
 jobs:
@@ -10,7 +10,7 @@ jobs:
     permissions:
       contents: write # rolling docs PR + self-merge; caller must grant (org default is read-only)
       pull-requests: write
-    uses: PSD401/.github/.github/workflows/reusable-openwiki.yml@1aa5f5351a78b15f5c71668037f5d35b9613ae41 # v1.0.0
+    uses: PSD401/.github/.github/workflows/reusable-openwiki.yml@78358a20608aa2f4de77e23f183c3ec7e1bbe795 # v1.12.0
     with:
       base_branch: main
     secrets:
