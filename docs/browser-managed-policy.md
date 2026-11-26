@@ -6,17 +6,19 @@ Chrome's current managed-storage documentation is the platform source: <https://
 
 ## Version 1 keys
 
-| Key                   | Type / bounds                                    | Unmanaged default      | Effect                                                                                 |
-| --------------------- | ------------------------------------------------ | ---------------------- | -------------------------------------------------------------------------------------- |
-| `schemaVersion`       | integer `1`                                      | not configured         | Required whenever any managed key is present.                                          |
-| `allowedOrigins`      | up to 1,000 HTTP(S) origins or `*.domain` values | all HTTP(S) origins    | When present, recording is active only on matching origins. An empty list disables it. |
-| `deniedOrigins`       | up to 1,000 HTTP(S) origins or `*.domain` values | empty                  | Evaluated before the allow list.                                                       |
-| `sourceUrlRetention`  | `none`, `origin`, or `full`                      | `origin`               | `full` still stores only origin and pathname—never query or fragment.                  |
-| `rawImageRetention`   | `delete_after_flatten` or `delete_after_submit`  | `delete_after_flatten` | Raw bytes never enter the outbox; retained bytes are deleted after draft success.      |
-| `atriumOAuthClientId` | UUID                                             | bundled production ID  | Optional approved test-client override; employees never configure this value.          |
-| `defaultCollectionId` | UUID                                             | none                   | Replaces collection discovery only when live discovery is unavailable.                 |
-| `maxStorageBytes`     | 16 MiB through 4 GiB                             | 512 MiB                | Internal image budget, even though Chrome grants `unlimitedStorage`.                   |
-| `maxSessionSteps`     | 10 through 10,000                                | 1,000                  | Pauses recording before another step would exceed the limit.                           |
+| Key                            | Type / bounds                                    | Unmanaged default      | Effect                                                                                 |
+| ------------------------------ | ------------------------------------------------ | ---------------------- | -------------------------------------------------------------------------------------- |
+| `schemaVersion`                | integer `1`                                      | not configured         | Required whenever any managed key is present.                                          |
+| `allowedOrigins`               | up to 1,000 HTTP(S) origins or `*.domain` values | all HTTP(S) origins    | When present, recording is active only on matching origins. An empty list disables it. |
+| `deniedOrigins`                | up to 1,000 HTTP(S) origins or `*.domain` values | empty                  | Evaluated before the allow list.                                                       |
+| `sourceUrlRetention`           | `none`, `origin`, or `full`                      | `origin`               | `full` still stores only origin and pathname—never query or fragment.                  |
+| `rawImageRetention`            | `delete_after_flatten` or `delete_after_submit`  | `delete_after_flatten` | Raw bytes never enter the outbox; retained bytes are deleted after draft success.      |
+| `atriumOAuthClientId`          | UUID                                             | bundled production ID  | Optional approved test-client override; employees never configure this value.          |
+| `defaultCollectionId`          | UUID                                             | none                   | Replaces collection discovery only when live discovery is unavailable.                 |
+| `aiGuideWriting`               | `on` or `off`                                    | `on`                   | Shows or hides "Write with AI" in review. Off never calls the assistant.               |
+| `atriumGuideWriterAssistantId` | positive integer                                 | none                   | Atrium assistant id for the Capture Guide Writer. Unset hides the button.              |
+| `maxStorageBytes`              | 16 MiB through 4 GiB                             | 512 MiB                | Internal image budget, even though Chrome grants `unlimitedStorage`.                   |
+| `maxSessionSteps`              | 10 through 10,000                                | 1,000                  | Pauses recording before another step would exceed the limit.                           |
 
 The synthetic example at
 `apps/browser-extension/policy/example-managed-policy.json` contains no district
@@ -24,6 +26,15 @@ identifiers and is safe for local validation. Administrators substitute approved
 origins and any documented default collection UUID. They should omit
 `atriumOAuthClientId` for production; use it only when intentionally targeting a
 separately approved test client.
+
+## AI guide writer
+
+"Write with AI" runs the district-approved Capture Guide Writer assistant over
+reviewed step metadata only: action type, element role and accessible name,
+page title, and the policy-filtered origin. No screenshot leaves the device.
+The call requires the `assistants:execute` OAuth scope, stays under a 128 KiB
+request limit, and runs under a 120 second budget. District policy can turn
+the feature off at any time with `aiGuideWriting: off`.
 
 ## Enforcement behavior
 

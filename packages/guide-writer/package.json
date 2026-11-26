@@ -1,0 +1,16 @@
+{
+  "name": "@atrium-capture/guide-writer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": "./src/index.ts",
+  "dependencies": {
+    "@atrium-capture/atrium-client": "workspace:*",
+    "@atrium-capture/contracts": "workspace:*",
+    "@atrium-capture/editor-model": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}

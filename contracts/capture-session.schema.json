@@ -132,6 +132,7 @@
       "properties": {
         "generatedText": { "type": "string", "minLength": 1, "maxLength": 2000 },
         "editedText": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
         "source": { "type": "string", "enum": ["rules", "user", "district_ai"] },
         "userEdited": { "type": "boolean" }
       }

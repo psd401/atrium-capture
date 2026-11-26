@@ -23,7 +23,7 @@ replayed. Completion is idempotent once an asset is ready.
 - Administrators register two public clients with no secret:
   - `browser_extension` → `https://eomlblaiglafndhplfhilmdcaofhkkbj.chromiumapp.org/atrium`
   - `native` → `org.psd401.atrium-capture:/oauth/callback`
-- Requested scopes are `openid profile offline_access content:read content:create content:update content:publish_internal`.
+- Requested scopes are `openid profile offline_access content:read content:create content:update content:publish_internal assistants:execute`. `assistants:execute` is used only by the AI guide writer.
 - Browser and native authorization requests include the Atrium issuer as the RFC
   8707 `resource` indicator, matching Atrium's resource-server token profile.
 - Production builds bundle the approved browser and Mac public client UUIDs. No

@@ -4,6 +4,8 @@ import type {
   AtriumGateway,
   CreateMarkdownVersionRequest,
   CreatePrivateObjectRequest,
+  ExecuteGuideWriterRequest,
+  ExecuteGuideWriterResult,
   UpdateContentTitleRequest,
   UploadImmutableAssetRequest,
 } from './index.js';
@@ -51,6 +53,7 @@ export interface MockAtriumSnapshot {
 export interface MockAtriumGatewayOptions {
   collections?: AtriumCollection[];
   failAfterCommit?: readonly MockFailurePoint[];
+  guideWriter?: { fail?: 'cancelled' | 'failed' | 'forbidden'; text?: string };
 }
 
 const DEFAULT_COLLECTIONS: AtriumCollection[] = [
@@ -66,6 +69,7 @@ export class MockAtriumGateway implements AtriumGateway {
   private readonly collections: AtriumCollection[];
   private readonly failedPoints = new Set<MockFailurePoint>();
   private readonly failurePlan: Set<MockFailurePoint>;
+  private readonly guideWriter: MockAtriumGatewayOptions['guideWriter'];
   private readonly objectsByKey = new Map<string, MockObject>();
   private readonly requestCounts = new Map<string, number>();
   private readonly versionsByKey = new Map<string, MockVersion>();
@@ -74,12 +78,14 @@ export class MockAtriumGateway implements AtriumGateway {
   constructor(options: MockAtriumGatewayOptions = {}) {
     this.collections = options.collections ?? DEFAULT_COLLECTIONS;
     this.failurePlan = new Set(options.failAfterCommit ?? []);
+    this.guideWriter = options.guideWriter;
   }
 
   async capabilities(): Promise<AtriumCapabilities> {
     return {
       collectionDiscovery: true,
       contentUpdates: true,
+      guideWriter: true,
       idempotentWrites: true,
       immutableAssets: true,
       internalPublication: true,
@@ -135,6 +141,37 @@ export class MockAtriumGateway implements AtriumGateway {
     this.objectsByKey.set(request.idempotencyKey, object);
     this.failOnceAfterCommit('create_object');
     return { contentObjectId };
+  }
+
+  async executeGuideWriter(request: ExecuteGuideWriterRequest): Promise<ExecuteGuideWriterResult> {
+    const jobId = `mock-job-${this.sequence++}`;
+    if (this.guideWriter?.fail === 'forbidden') {
+      throw new GatewayError('insufficient_scope', false, 'Mock token lacks assistants:execute.');
+    }
+    if (this.guideWriter?.fail) {
+      throw new GatewayError(`atrium_job_${this.guideWriter.fail}`, true);
+    }
+    if (this.guideWriter?.text !== undefined) {
+      return { jobId, text: this.guideWriter.text };
+    }
+    const parsed = JSON.parse(request.steps) as {
+      sessionId: string;
+      steps: Array<{ instruction: string; sequence: number; stepId: string }>;
+    };
+    return {
+      jobId,
+      text: JSON.stringify({
+        schemaVersion: 1,
+        sessionId: parsed.sessionId,
+        steps: parsed.steps.map((step) => ({
+          instruction: `${step.instruction} (AI)`,
+          stepId: step.stepId,
+          title: `Step ${step.sequence + 1}`,
+        })),
+        summary: 'Synthetic summary written by the mock guide writer.',
+        title: 'Synthetic written guide',
+      }),
+    };
   }
 
   formatAssetMarkdown(remoteAssetId: string, altText: string): string {

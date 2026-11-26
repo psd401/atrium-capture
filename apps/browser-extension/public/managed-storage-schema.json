@@ -22,6 +22,8 @@
     },
     "defaultCollectionId": { "type": "string" },
     "maxStorageBytes": { "type": "integer", "minimum": 16777216, "maximum": 4294967296 },
-    "maxSessionSteps": { "type": "integer", "minimum": 10, "maximum": 10000 }
+    "maxSessionSteps": { "type": "integer", "minimum": 10, "maximum": 10000 },
+    "aiGuideWriting": { "type": "string", "enum": ["on", "off"] },
+    "atriumGuideWriterAssistantId": { "type": "integer", "minimum": 1 }
   }
 }

@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "sessionId": "10000000-0000-4000-8000-000000000001",
+  "title": "Request a synthetic library card",
+  "summary": "Open the synthetic request form, enter the requested details, and submit the request. The guide ends on the confirmation page.",
+  "steps": [
+    {
+      "stepId": "20000000-0000-4000-8000-000000000001",
+      "title": "Begin the request",
+      "instruction": "Select Begin synthetic request to open the form."
+    },
+    {
+      "stepId": "20000000-0000-4000-8000-000000000002",
+      "title": "Enter the request label",
+      "instruction": "Enter the requested value in the Synthetic request label field."
+    },
+    {
+      "stepId": "20000000-0000-4000-8000-000000000003",
+      "title": "Finish the request",
+      "instruction": "Continue to the Synthetic request complete page to finish."
+    }
+  ]
+}

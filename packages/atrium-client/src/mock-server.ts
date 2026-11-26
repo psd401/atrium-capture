@@ -67,6 +67,15 @@ async function route(
       });
       return json(response, 201, result);
     }
+    const executeMatch = /^\/assistants\/([^/]+)\/execute$/.exec(relativePath);
+    if (request.method === 'POST' && executeMatch?.[1]) {
+      const body = requireRecord(await readJson(request));
+      const result = await gateway.executeGuideWriter({
+        assistantId: Number(decodeURIComponent(executeMatch[1])),
+        steps: requireString(body, 'steps'),
+      });
+      return json(response, 200, result);
+    }
     const objectMatch = /^\/objects\/([^/]+)$/.exec(relativePath);
     if (request.method === 'PATCH' && objectMatch?.[1]) {
       const body = requireRecord(await readJson(request));

@@ -135,6 +135,77 @@ describe('editor commands', () => {
     ]);
   });
 
+  it('suggest_instruction fills generated text and title without touching user edits', () => {
+    let session = fixtureSession();
+    const before = session.steps.find((step) => step.stepId === secondStepId);
+    session = applyEditorCommand(session, {
+      kind: 'update_instruction',
+      stepId: firstStepId,
+      text: 'My own words.',
+    });
+    session = applyEditorCommand(session, {
+      kind: 'suggest_instruction',
+      stepId: firstStepId,
+      text: 'Select the synthetic button.',
+      title: 'Open the form',
+    });
+    session = applyEditorCommand(session, {
+      kind: 'suggest_instruction',
+      stepId: secondStepId,
+      text: 'Enter the requested value.',
+      title: 'Fill the field',
+    });
+
+    const first = session.steps.find((step) => step.stepId === firstStepId);
+    const second = session.steps.find((step) => step.stepId === secondStepId);
+    expect(first?.instruction.editedText).toBe('My own words.');
+    expect(first?.instruction.userEdited).toBe(true);
+    expect(first?.instruction.generatedText).toBe('Select the synthetic button.');
+    expect(first?.instruction.title).toBe('Open the form');
+    expect(first?.instruction.source).toBe(Source.DistrictAI);
+    expect(second?.instruction.editedText).toBeUndefined();
+    expect(second?.instruction.userEdited).toBe(false);
+    expect(second?.instruction.generatedText).toBe('Enter the requested value.');
+    expect(second?.instruction.source).toBe(Source.DistrictAI);
+    expect(second?.privacyReview).toBe(before?.privacyReview);
+  });
+
+  it('suggest_instruction rejects empty or oversize text and unknown steps', () => {
+    const session = fixtureSession();
+    expect(() =>
+      applyEditorCommand(session, {
+        kind: 'suggest_instruction',
+        stepId: firstStepId,
+        text: '   ',
+        title: 'Title',
+      }),
+    ).toThrow('invalid_instruction');
+    expect(() =>
+      applyEditorCommand(session, {
+        kind: 'suggest_instruction',
+        stepId: firstStepId,
+        text: 'x'.repeat(2_001),
+        title: 'Title',
+      }),
+    ).toThrow('invalid_instruction');
+    expect(() =>
+      applyEditorCommand(session, {
+        kind: 'suggest_instruction',
+        stepId: firstStepId,
+        text: 'Fine.',
+        title: 'x'.repeat(121),
+      }),
+    ).toThrow('invalid_title');
+    expect(() =>
+      applyEditorCommand(session, {
+        kind: 'suggest_instruction',
+        stepId: '10000000-0000-4000-8000-000000000099',
+        text: 'Fine.',
+        title: 'Title',
+      }),
+    ).toThrow('step_not_found');
+  });
+
   it('preserves arrow direction and rejects it on other annotation kinds', () => {
     const arrow = applyEditorCommand(fixtureSession(), {
       annotation: {

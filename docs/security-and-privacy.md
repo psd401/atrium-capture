@@ -50,3 +50,11 @@ The optional Chrome-to-Mac bridge requests its warning-bearing permission from a
 ## Network boundary
 
 Atrium is the only production data destination. The authored-asset flow sends reviewed bytes directly to an Atrium-issued S3 URL, using only its constrained headers and never the bearer token. No analytics, external AI provider, private image host, or crash reporter may receive capture content without a separate approved privacy decision.
+
+The AI guide writer sends step metadata only to one approved district assistant
+at Atrium: action, element role and accessible name, page title, policy-filtered
+origin, Mac app and window title, and the current instruction text. Screenshots,
+typed values, selectors, bounds, paths, and asset ids never leave the device for
+this feature. The feature is enabled per client by the Chrome managed policy
+`atriumGuideWriterAssistantId` and the Mac preference
+`AtriumGuideWriterAssistantId`; leaving either unset disables it.

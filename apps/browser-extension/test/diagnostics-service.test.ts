@@ -59,6 +59,8 @@ describe('privacy-safe support diagnostics', () => {
 
     expect(snapshot.capture).toMatchObject({ state: 'recording', stepCount: 1 });
     expect(snapshot.privacy).toEqual({ captureContentIncluded: false, telemetryEnabled: false });
+    expect(snapshot.managedPolicy.aiGuideWriting).toBe('on');
+    expect(snapshot.managedPolicy.guideWriterConfigured).toBe(false);
     expect(snapshot.health.events).toEqual([
       {
         code: 'screenshot_capture_failed',

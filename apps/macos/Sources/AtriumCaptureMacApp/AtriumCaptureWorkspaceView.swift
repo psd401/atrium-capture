@@ -291,6 +291,22 @@ struct AtriumCaptureWorkspaceView: View {
             .buttonStyle(AtriumPrimaryButtonStyle())
             .disabled(model.session?.state != .review)
 
+            if model.guideWriterAvailable {
+                Button {
+                    model.writeGuideWithAI()
+                } label: {
+                    Label(
+                        model.guideWriterInProgress ? "Writing step titles and instructions" : "Write with AI",
+                        systemImage: "sparkles"
+                    )
+                }
+                .buttonStyle(AtriumSecondaryButtonStyle())
+                .disabled(!model.canWriteGuideWithAI)
+                Text("Fills the title and each step from step metadata. Screenshots never leave this Mac.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(AtriumCaptureTheme.inkSoft)
+            }
+
             HStack(spacing: 8) {
                 TextField("Add a manual step", text: $model.manualInstruction)
                     .textFieldStyle(.roundedBorder)
@@ -594,6 +610,10 @@ struct AtriumCaptureWorkspaceView: View {
                     .clipShape(Circle())
 
                 VStack(alignment: .leading, spacing: 8) {
+                    if let title = step.instruction.title, !title.isEmpty {
+                        Text(title)
+                            .font(.system(size: 13, weight: .bold))
+                    }
                     TextField(
                         "Instruction",
                         text: Binding(

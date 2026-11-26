@@ -561,7 +561,8 @@ h1 {
 .empty,
 .error,
 footer,
-.finalize-row small {
+.finalize-row small,
+.guide-writer-row small {
   color: var(--atrium-muted);
 }
 
@@ -713,11 +714,13 @@ footer,
 }
 
 .review-actions,
-.finalize-row {
+.finalize-row,
+.guide-writer-row {
   margin-top: 1rem;
 }
 
-.finalize-row {
+.finalize-row,
+.guide-writer-row {
   display: grid;
   gap: 0.45rem;
 }

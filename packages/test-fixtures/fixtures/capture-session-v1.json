@@ -37,6 +37,7 @@
       },
       "instruction": {
         "generatedText": "Select Begin synthetic request.",
+        "title": "Begin the request",
         "source": "rules",
         "userEdited": false
       },

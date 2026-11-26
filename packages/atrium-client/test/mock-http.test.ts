@@ -69,6 +69,25 @@ describe('versioned mock Atrium HTTP boundary', () => {
     }
   });
 
+  it('round-trips the guide writer execute route', async () => {
+    const server = await startMockAtriumServer();
+    try {
+      const gateway = new HttpMockAtriumGateway(server.baseUrl);
+      const result = await gateway.executeGuideWriter({
+        assistantId: 1,
+        steps: JSON.stringify({
+          schemaVersion: 1,
+          sessionId: '00000000-0000-4000-8000-000000000001',
+          steps: [{ instruction: 'Select Start.', sequence: 0, stepId: 'step-a' }],
+          title: 'Guide',
+        }),
+      });
+      expect(JSON.parse(result.text)).toMatchObject({ schemaVersion: 1 });
+    } finally {
+      await server.close();
+    }
+  });
+
   it('rejects non-mock routes to avoid implying undocumented production APIs', () => {
     expect(() => new HttpMockAtriumGateway('https://atrium.example.test/api')).toThrow(
       'mock_gateway_url_required',

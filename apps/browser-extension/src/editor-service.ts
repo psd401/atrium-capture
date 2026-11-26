@@ -25,6 +25,22 @@ export class EditorService {
     });
   }
 
+  commands(
+    commandId: string,
+    expectedRevision: number,
+    commands: readonly EditorCommand[],
+  ): Promise<AtriumCaptureSession> {
+    return this.queue.enqueue(async () => {
+      const session = await this.repository.applyEditorCommands(
+        commandId,
+        expectedRevision,
+        commands,
+      );
+      await this.onChanged();
+      return session;
+    });
+  }
+
   finalize(commandId: string, rawRetention: RawImageRetention): Promise<AtriumCaptureSession> {
     return this.queue.enqueue(async () => {
       const existing = await this.repository.getEditorCommandReceipt(commandId);

@@ -133,6 +133,22 @@
       "additionalProperties": false,
       "required": ["kind", "payload"],
       "properties": {
+        "kind": { "const": "editor.write-guide" },
+        "payload": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["commandId"],
+          "properties": {
+            "commandId": { "type": "string", "format": "uuid" }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "payload"],
+      "properties": {
         "kind": { "const": "editor.asset" },
         "payload": {
           "type": "object",
@@ -293,6 +309,17 @@
             "kind": { "const": "update_instruction" },
             "stepId": { "type": "string", "format": "uuid" },
             "text": { "type": "string", "minLength": 1, "maxLength": 2000 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "stepId", "text", "title"],
+          "properties": {
+            "kind": { "const": "suggest_instruction" },
+            "stepId": { "type": "string", "format": "uuid" },
+            "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+            "title": { "type": "string", "minLength": 1, "maxLength": 120 }
           }
         },
         {
